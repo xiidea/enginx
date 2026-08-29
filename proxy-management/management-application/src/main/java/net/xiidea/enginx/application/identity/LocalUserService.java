@@ -3,6 +3,7 @@ package net.xiidea.enginx.application.identity;
 import net.xiidea.enginx.application.permission.SitePermissionService;
 import net.xiidea.enginx.application.shared.ActorProvider;
 import net.xiidea.enginx.application.shared.AuditRecorder;
+import net.xiidea.enginx.application.shared.IdentityMirror;
 import net.xiidea.enginx.application.shared.SubjectProvider;
 import net.xiidea.enginx.domain.audit.AuditAction;
 import net.xiidea.enginx.domain.identity.LocalUser;
@@ -39,17 +40,20 @@ public class LocalUserService {
     private final SubjectProvider subjects;
     private final ActorProvider actors;
     private final AuditRecorder audit;
+    private final IdentityMirror mirror;
     private final Clock clock;
 
     public LocalUserService(LocalUserRepository users, PasswordHasher passwords,
                             SitePermissionService permissions, SubjectProvider subjects,
-                            ActorProvider actors, AuditRecorder audit, Clock clock) {
+                            ActorProvider actors, AuditRecorder audit, IdentityMirror mirror,
+                            Clock clock) {
         this.users = users;
         this.passwords = passwords;
         this.permissions = permissions;
         this.subjects = subjects;
         this.actors = actors;
         this.audit = audit;
+        this.mirror = mirror;
         this.clock = clock;
     }
 
@@ -159,6 +163,10 @@ public class LocalUserService {
 
         Map<String, Object> before = snapshot(user);
         users.deleteById(id);
+        // The mirror is a list of everyone ever seen, and nothing else prunes it. Left behind,
+        // this subject keeps appearing in the grant picker as a person you can grant to -- and a
+        // grant made to it would silently do nothing, because no token will ever carry it again.
+        mirror.forget(user.subjectRef());
         audit.success(AuditAction.LOCAL_USER_DELETED, RESOURCE_TYPE, id, before, null);
     }
 

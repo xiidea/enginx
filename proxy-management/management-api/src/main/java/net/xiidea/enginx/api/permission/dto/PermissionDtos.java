@@ -62,8 +62,22 @@ public final class PermissionDtos {
     }
 
     /** A candidate subject for a grant, drawn from the Keycloak mirror. */
-    @Schema(name = "SubjectResponse", description = "A grantable subject.", requiredProperties = {"subjectType", "subjectRef", "displayName"})
-    public record SubjectResponse(String subjectType, String subjectRef, String displayName) {
+    /**
+     * @param username the name they sign in with, shown alongside the display name because two
+     *                 people can share one display name and a grant is permanent
+     * @param present  false for a subject the platform knows no longer resolves to an account.
+     *                 Shown rather than hidden: a grant may still name it, and "no longer present"
+     *                 explains a stale row that silently omitting it would not.
+     */
+    @Schema(name = "SubjectResponse", description = "A grantable subject.",
+            requiredProperties = {"subjectType", "subjectRef", "displayName", "present"})
+    public record SubjectResponse(String subjectType, String subjectRef, String displayName,
+                                  String username, boolean present) {
+
+        /** For subjects the platform cannot judge the presence of, such as a group. */
+        public SubjectResponse(String subjectType, String subjectRef, String displayName) {
+            this(subjectType, subjectRef, displayName, null, true);
+        }
     }
 
     /**

@@ -26,6 +26,12 @@ import {
   UpstreamCheck,
 } from './models';
 
+export interface SubjectQuery {
+  search?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface SiteQuery {
   search?: string;
   status?: SiteStatus[];
@@ -254,8 +260,14 @@ export class PermissionsApi {
     return this.api.get('/permissions/effective', { siteId });
   }
 
-  users(): Observable<Subject[]> {
-    return this.api.get('/users');
+  /**
+   * Searches the people who have signed in.
+   *
+   * Paged and searched on the server: this index gains a row for every person who ever signs in,
+   * so on a real directory it is far past what a dropdown can hold by the time anyone notices.
+   */
+  users(query: SubjectQuery = {}): Observable<Page<Subject>> {
+    return this.api.get('/users', { search: query.search, page: query.page, size: query.size });
   }
 
   groups(): Observable<Subject[]> {

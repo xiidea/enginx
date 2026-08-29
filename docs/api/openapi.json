@@ -938,6 +938,33 @@
         },
         "type": "object"
       },
+      "PageResponseSubjectResponse": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectResponse"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalElements": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "PermissionGrantResponse": {
         "description": "One permission grant.",
         "properties": {
@@ -1422,15 +1449,22 @@
           "displayName": {
             "type": "string"
           },
+          "present": {
+            "type": "boolean"
+          },
           "subjectRef": {
             "type": "string"
           },
           "subjectType": {
             "type": "string"
+          },
+          "username": {
+            "type": "string"
           }
         },
         "required": [
           "displayName",
+          "present",
           "subjectRef",
           "subjectType"
         ],
@@ -4228,17 +4262,44 @@
     },
     "/api/v1/users": {
       "get": {
-        "description": "A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token.",
+        "description": "A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token. Paged and searchable because this gains a row for every person who ever signs in and loses one only when the platform deletes an account it owns.",
         "operationId": "users",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "*/*": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SubjectResponse"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/PageResponseSubjectResponse"
                 }
               }
             },
@@ -4255,7 +4316,7 @@
             "description": "Unauthorized"
           }
         },
-        "summary": "List users who have signed in",
+        "summary": "Search users who have signed in",
         "tags": [
           "Identity"
         ]

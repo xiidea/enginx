@@ -1,0 +1,79 @@
+.picker { position: relative; }
+
+.clear {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm);
+}
+.clear:hover { color: var(--ink-1); background: var(--surface-2); }
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  /* Tall enough to show a useful number of results, short enough to leave the form visible --
+     and scrollable, because that scroll is what asks the server for the next page. */
+  max-height: 17rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink-1);
+}
+.option.highlighted { background: var(--accent-wash); }
+.option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.name { display: flex; align-items: baseline; gap: 0.4rem; }
+.who { font-size: 0.78rem; color: var(--ink-3); flex: none; }
+
+.gone {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+}
+
+.more {
+  width: 100%;
+  padding: 0.4rem;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  background: var(--surface-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.note { margin: 0; padding: 0.5rem 0.65rem; font-size: 0.8rem; color: var(--ink-3); }
+.note.danger { color: var(--danger); }
+.note.count { border-top: 1px solid var(--rule); }

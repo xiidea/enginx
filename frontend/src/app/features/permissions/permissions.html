@@ -19,20 +19,19 @@
             </div>
             <div>
               <label for="subjectRef">{{ subjectType() === 'USER' ? 'Person' : 'Team' }}</label>
-              <select id="subjectRef" [ngModel]="subjectRef()" (ngModelChange)="subjectRef.set($event)">
-                <option value="">Select…</option>
-                @if (subjectType() === 'USER') {
-                  @for (user of users(); track user.subjectRef) {
-                    <option [value]="user.subjectRef">{{ user.displayName }}</option>
-                  }
-                } @else {
+              @if (subjectType() === 'USER') {
+                <app-user-picker
+                  inputId="subjectRef"
+                  [value]="subjectRef()"
+                  (selected)="subjectRef.set($event)" />
+                <p class="hint">People appear here once they have signed in at least once.</p>
+              } @else {
+                <select id="subjectRef" [ngModel]="subjectRef()" (ngModelChange)="subjectRef.set($event)">
+                  <option value="">Select…</option>
                   @for (group of directoryGroups(); track group.subjectRef) {
                     <option [value]="group.subjectRef">{{ group.subjectRef }}</option>
                   }
-                }
-              </select>
-              @if (subjectType() === 'USER' && !users().length) {
-                <p class="hint">People appear here once they have signed in at least once.</p>
+                </select>
               }
             </div>
           </div>

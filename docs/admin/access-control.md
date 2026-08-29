@@ -123,3 +123,26 @@ A few behaviours are worth knowing before you rely on them:
 - **Deleting an account does not remove its grants.** They are keyed by subject, and a subject that
   no longer resolves grants nothing; but recreating a username issues a new id, so the old grants
   do not come back with it.
+
+## The subject directory
+
+`GET /api/v1/users` lists everyone who has ever presented a token, so a grant can be addressed by
+name instead of by pasting a subject claim. It is a convenience index and never an authorization
+input: every access decision reads roles and groups from the caller's own token, so a stale or
+missing entry changes nothing about what anybody may do.
+
+It is paged and searchable (`search`, `page`, `size`), because it gains a row for every person who
+signs in and is not a list this platform controls the size of. Search matches username and display
+name, case-insensitively.
+
+Two things keep it honest about who still exists:
+
+- **Deleting a local account removes its entry.** Otherwise the picker keeps offering somebody who
+  can no longer authenticate, and a grant made to them silently does nothing.
+- **A local subject with no account is marked `present: false`** rather than hidden — from an
+  account deleted before pruning existed, for instance. A grant may still name it, and saying it is
+  gone explains a stale row that quietly omitting it would not.
+
+Subjects from an external identity provider are always reported present. This platform cannot ask
+that provider whether an account still exists, and guessing would mean reporting every federated
+user as departed.

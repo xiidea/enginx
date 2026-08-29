@@ -14,12 +14,13 @@ import {
 import { AuthService } from '../../core/auth/auth.service';
 import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
+import { UserPicker } from '../../shared/user-picker';
 import { DateTimePipe } from '../../shared/formatting';
 
 @Component({
   selector: 'app-permissions',
   standalone: true,
-  imports: [FormsModule, PageHeader, EmptyState, DateTimePipe],
+  imports: [FormsModule, PageHeader, EmptyState, DateTimePipe, UserPicker],
   templateUrl: './permissions.html',
   styleUrl: './permissions.css',
 })
@@ -37,7 +38,6 @@ export class Permissions implements OnInit {
   readonly grants = signal<PermissionGrant[]>([]);
   readonly groups = signal<DomainGroup[]>([]);
   readonly sites = signal<SiteSummary[]>([]);
-  readonly users = signal<Subject[]>([]);
   readonly directoryGroups = signal<Subject[]>([]);
   readonly canSeeAllGrants = signal(true);
 
@@ -87,10 +87,6 @@ export class Permissions implements OnInit {
     this.sitesApi.list({ size: 200, sort: ['DOMAIN,asc'] }).subscribe({
       next: (page) => this.sites.set(page.content),
       error: () => this.sites.set([]),
-    });
-    this.api.users().subscribe({
-      next: (users) => this.users.set(users),
-      error: () => this.users.set([]),
     });
     this.api.groups().subscribe({
       next: (groups) => this.directoryGroups.set(groups),

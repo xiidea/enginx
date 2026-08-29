@@ -1,8 +1,13 @@
 package net.xiidea.enginx.infrastructure.persistence.repository;
 
 import net.xiidea.enginx.infrastructure.persistence.entity.AppUserEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,5 +16,30 @@ public interface AppUserJpaRepository extends JpaRepository<AppUserEntity, UUID>
 
     Optional<AppUserEntity> findByKeycloakSubject(String keycloakSubject);
 
-    List<AppUserEntity> findAllByOrderByUsernameAsc();
+    void deleteByKeycloakSubject(String keycloakSubject);
+
+    List<AppUserEntity> findByKeycloakSubjectIn(Collection<String> subjects);
+
+    /** Most recently seen first: one username can belong to more than one subject. */
+    List<AppUserEntity> findByUsernameIgnoreCaseOrderByLastLoginAtDesc(String username);
+
+    /**
+     * Users whose username or display name contains the pattern.
+     *
+     * <p>The pattern arrives already lowercased and wrapped in wildcards, so a blank search is
+     * just {@code %} and needs no separate query. {@code escape} matters because the search text
+     * is typed by a person: without it a stray {@code %} silently becomes a wildcard and an
+     * underscore matches any character.
+     *
+     * <p>The escape character is {@code !} rather than the conventional backslash, because a
+     * backslash inside a JPQL string literal is itself ambiguous -- it has to survive the Java
+     * source, the JPQL parser and the dialect, and the failure is silent: the escape stops
+     * working and the search quietly returns everyone.
+     */
+    @Query("""
+            select u from AppUserEntity u
+            where lower(u.username) like :pattern escape '!'
+               or lower(coalesce(u.displayName, '')) like :pattern escape '!'
+            """)
+    Page<AppUserEntity> search(@Param("pattern") String pattern, Pageable pageable);
 }

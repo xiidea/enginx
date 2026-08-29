@@ -867,8 +867,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List users who have signed in
-         * @description A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token.
+         * Search users who have signed in
+         * @description A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token. Paged and searchable because this gains a row for every person who ever signs in and loses one only when the platform deletes an account it owns.
          */
         get: operations["users"];
         put?: never;
@@ -1194,6 +1194,17 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
+        PageResponseSubjectResponse: {
+            content?: components["schemas"]["SubjectResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
         /** @description One permission grant. */
         PermissionGrantResponse: {
             domainPattern?: string;
@@ -1356,8 +1367,10 @@ export interface components {
         /** @description A grantable subject. */
         SubjectResponse: {
             displayName: string;
+            present: boolean;
             subjectRef: string;
             subjectType: string;
+            username?: string;
         };
         TokenResponse: {
             accessToken: string;
@@ -3257,7 +3270,11 @@ export interface operations {
     };
     users: {
         parameters: {
-            query?: never;
+            query?: {
+                search?: string;
+                page?: number;
+                size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3270,7 +3287,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SubjectResponse"][];
+                    "*/*": components["schemas"]["PageResponseSubjectResponse"];
                 };
             };
             /** @description Unauthorized */

@@ -42,13 +42,16 @@ public class RecipientResolver {
     }
 
     /**
-     * The mirror stores what Keycloak last reported. A user who has never signed in, or who has no
-     * email address on their account, simply is not reachable — the operator list still is, so the
-     * notification goes out rather than being dropped for want of one recipient.
+     * The mirror stores what the identity provider last reported. A user who has never signed in,
+     * or who has no email address on their account, simply is not reachable — the operator list
+     * still is, so the notification goes out rather than being dropped for want of one recipient.
+     *
+     * <p>A username can match more than one subject, since two providers may both have an
+     * {@code admin}. The mirror returns them most recently seen first, and the first with a
+     * usable address wins: any choice is a guess, and the freshest one is the best guess.
      */
     private java.util.Optional<String> emailFor(String username) {
-        return mirror.listUsers().stream()
-                .filter(user -> username.equalsIgnoreCase(user.username()))
+        return mirror.findByUsername(username).stream()
                 .map(IdentityMirror.MirroredUser::email)
                 .filter(email -> email != null && email.contains("@"))
                 .map(email -> email.toLowerCase(Locale.ROOT))

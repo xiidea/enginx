@@ -1,0 +1,69 @@
+<div class="picker">
+  <input
+    #field
+    [id]="inputId()"
+    type="text"
+    role="combobox"
+    autocomplete="off"
+    aria-autocomplete="list"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="inputId() + '-list'"
+    [attr.aria-activedescendant]="highlighted() >= 0 ? inputId() + '-option-' + highlighted() : null"
+    placeholder="Search by name or username"
+    [value]="query()"
+    (input)="onInput($any($event.target).value)"
+    (focus)="onFocus()"
+    (keydown)="onKeydown($event)"
+  />
+
+  @if (chosen()) {
+    <button class="clear" type="button" (click)="clear()" aria-label="Clear the selected person">×</button>
+  }
+
+  @if (open()) {
+    <div class="menu" [id]="inputId() + '-list'" role="listbox" #menu (scroll)="onScroll(menu)">
+      @if (failed()) {
+        <p class="note danger" role="alert">Could not reach the directory.</p>
+      } @else if (!results().length && !loading()) {
+        <p class="note">
+          @if (query()) { Nobody matches “{{ query() }}”. } @else { Nobody has signed in yet. }
+        </p>
+      } @else {
+        @for (user of results(); track user.subjectRef; let i = $index) {
+          <button
+            class="option"
+            type="button"
+            role="option"
+            [id]="inputId() + '-option-' + i"
+            [attr.aria-selected]="user.subjectRef === value()"
+            [class.highlighted]="i === highlighted()"
+            (mouseenter)="highlighted.set(i)"
+            (click)="choose(user)"
+          >
+            <span class="name">
+              {{ user.displayName }}
+              @if (!user.present) {
+                <!-- Shown rather than hidden: a grant may already name this subject, and saying
+                     it is gone explains a stale row that silently omitting it would not. -->
+                <span class="gone" title="This account no longer exists">no longer present</span>
+              }
+            </span>
+            @if (user.username && user.username !== user.displayName) {
+              <span class="who mono">{{ user.username }}</span>
+            }
+          </button>
+        }
+
+        @if (hasMore() && !loading()) {
+          <button class="more" type="button" (click)="loadMore()">Load more</button>
+        }
+      }
+
+      @if (loading()) {
+        <p class="note">Searching…</p>
+      } @else if (results().length) {
+        <p class="note count">{{ summary() }}</p>
+      }
+    </div>
+  }
+</div>
