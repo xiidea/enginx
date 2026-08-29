@@ -277,19 +277,36 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
+
+          # Pulled explicitly, both of them. buildx pushes straight to the registry without
+          # leaving anything in the local store, so `docker inspect` on a just-pushed image finds
+          # nothing — which is exactly how this step failed the first time it ran for real. The
+          # agent check only appeared to work because `docker run` pulls as a side effect, and a
+          # check that passes by accident is one nobody can rely on.
+          agent="ghcr.io/${OWNER}/enginx-agent:${VERSION}"
+          management="ghcr.io/${OWNER}/enginx-management:${VERSION}"
+          docker pull --quiet --platform linux/amd64 "$agent"
+          docker pull --quiet --platform linux/amd64 "$management"
+
           reported=$(docker run --rm --platform linux/amd64 \
-            --entrypoint /usr/local/bin/enginx-agent \
-            "ghcr.io/${OWNER}/enginx-agent:${VERSION}" -version)
+            --entrypoint /usr/local/bin/enginx-agent "$agent" -version)
           echo "agent image reports: $reported"
           case "$reported" in
             "enginx-agent ${VERSION} "*) ;;
             *) echo "::error::agent image reports '$reported', expected ${VERSION}"; exit 1;;
           esac
 
-          labelled=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
-            "ghcr.io/${OWNER}/enginx-management:${VERSION}")
+          # The label and the jar inside it, because the label is written by the Dockerfile while
+          # the jar is built by Gradle: they take the version by two different routes and only
+          # agree if both were passed it.
+          labelled=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$management")
           echo "management image labelled: $labelled"
           [ "$labelled" = "$VERSION" ] || { echo "::error::label says '$labelled'"; exit 1; }
+
+          built=$(docker run --rm --platform linux/amd64 --entrypoint sh "$management" \
+            -c 'unzip -p /app/app.jar META-INF/build-info.properties' | grep '^build.version=' | cut -d= -f2)
+          echo "management jar reports: $built"
+          [ "$built" = "$VERSION" ] || { echo "::error::jar says '$built', expected ${VERSION}"; exit 1; }
 
   publish:
     name: Publish the release
