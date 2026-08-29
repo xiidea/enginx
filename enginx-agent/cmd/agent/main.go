@@ -21,6 +21,7 @@ import (
 	"github.com/xiidea/enginx/enginx-agent/internal/config"
 	"github.com/xiidea/enginx/enginx-agent/internal/defaulttls"
 	"github.com/xiidea/enginx/enginx-agent/internal/nginx"
+	"github.com/xiidea/enginx/enginx-agent/internal/runner"
 	"github.com/xiidea/enginx/enginx-agent/internal/version"
 )
 
@@ -79,9 +80,17 @@ func main() {
 
 	server := api.NewServer(cfg, controller, bundle.NewStore(cfg.ReleasesDir))
 	serverErr := make(chan error, 1)
-	go func() { serverErr <- server.Run(ctx) }()
 
-	slog.Info("agent listening", "mtls", cfg.ListenAddr, "health", cfg.HealthAddr, "expectedClientCN", cfg.ClientCN)
+	if cfg.PullMode() {
+		// No listener at all. That is the point of pull mode: this host needs no inbound
+		// connectivity, so opening a port would only widen its surface for nothing.
+		go func() { serverErr <- runner.New(cfg, server).Run(ctx) }()
+		slog.Info("agent running in pull mode", "server", cfg.ServerURL, "instance", cfg.InstanceName)
+	} else {
+		go func() { serverErr <- server.Run(ctx) }()
+		slog.Info("agent listening", "mtls", cfg.ListenAddr, "health", cfg.HealthAddr,
+			"expectedClientCN", cfg.ClientCN)
+	}
 
 	select {
 	case err := <-serverErr:

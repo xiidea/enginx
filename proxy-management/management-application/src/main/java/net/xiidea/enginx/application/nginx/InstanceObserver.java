@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -48,32 +49,67 @@ public class InstanceObserver {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean poll(NginxInstance instance) {
+        if (instance.connectivityMode().isPull()) {
+            // Nothing to dial. A pull host reports itself, and its silence is judged elsewhere by
+            // how long ago it last called in.
+            return instance.status() == InstanceStatus.ONLINE;
+        }
         try {
-            AgentStatus status = agent.status(instance);
-
-            // Reachable but not serving is its own state. Reporting DEGRADED rather than ONLINE is
-            // what stops a host with a dead NGINX from counting as healthy merely because the
-            // agent beside it still answers.
-            boolean serving = status.nginxRunning() && status.configTestOk();
-
-            // Serving the wrong configuration is also DEGRADED. The host is up and answering, so
-            // OFFLINE would be a lie, but what it serves is not what the platform believes it put
-            // there, and treating that as healthy is what lets drift go unnoticed indefinitely.
-            Optional<DriftDetector.Drift> drifted = drift.detect(instance, status);
-            drifted.ifPresent(drift::record);
-
-            InstanceStatus observed = serving && drifted.isEmpty()
-                    ? InstanceStatus.ONLINE
-                    : InstanceStatus.DEGRADED;
-
-            instance.observed(observed, status.nginxVersion(), status.agentVersion(), clock.instant());
-            instances.save(instance);
+            record(instance, agent.status(instance));
             return true;
         } catch (RuntimeException e) {
             markOffline(instance);
             log.warn("Instance {} ({}) did not answer: {}", instance.name(), instance.hostname(), e.toString());
             return false;
         }
+    }
+
+    /**
+     * Applies a status to an instance, however it was obtained.
+     *
+     * <p>Shared between the push poll above and a pull host's own heartbeat on purpose. What a
+     * status <em>means</em> — whether the host counts as serving, whether it has drifted — must not
+     * depend on which end of the connection asked, or the two models would slowly disagree about
+     * what healthy is.
+     *
+     * <p>Runs in the caller's transaction, deliberately unannotated. {@link #poll} calls it
+     * directly, and a {@code @Transactional} here would be a proxy annotation that self-invocation
+     * bypasses — an isolation guarantee that reads as present and is not.
+     */
+    public void record(NginxInstance instance, AgentStatus status) {
+        // Reachable but not serving is its own state. Reporting DEGRADED rather than ONLINE is
+        // what stops a host with a dead NGINX from counting as healthy merely because the
+        // agent beside it still answers.
+        boolean serving = status.nginxRunning() && status.configTestOk();
+
+        // Serving the wrong configuration is also DEGRADED. The host is up and answering, so
+        // OFFLINE would be a lie, but what it serves is not what the platform believes it put
+        // there, and treating that as healthy is what lets drift go unnoticed indefinitely.
+        Optional<DriftDetector.Drift> drifted = drift.detect(instance, status);
+        drifted.ifPresent(drift::record);
+
+        InstanceStatus observed = serving && drifted.isEmpty()
+                ? InstanceStatus.ONLINE
+                : InstanceStatus.DEGRADED;
+
+        instance.observed(observed, status.nginxVersion(), status.agentVersion(), clock.instant());
+        instances.save(instance);
+    }
+
+    /**
+     * Marks a pull host offline once it has gone quiet for longer than the threshold.
+     *
+     * <p>The mirror image of a failed dial: a host that calls in is proving it is there, so the
+     * absence of calls is the only evidence available that it is not.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean recordSilence(NginxInstance instance, java.time.Duration threshold) {
+        Instant lastSeen = instance.lastSeenAt();
+        boolean overdue = lastSeen == null || lastSeen.plus(threshold).isBefore(clock.instant());
+        if (overdue) {
+            markOffline(instance);
+        }
+        return !overdue;
     }
 
     /**

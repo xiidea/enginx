@@ -1,6 +1,151 @@
 {
   "components": {
     "schemas": {
+      "AgentHeartbeatRequest": {
+        "properties": {
+          "activeBundleId": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "agentVersion": {
+            "maxLength": 32,
+            "minLength": 0,
+            "type": "string"
+          },
+          "configTestOk": {
+            "type": "boolean"
+          },
+          "configTestOutput": {
+            "maxLength": 4096,
+            "minLength": 0,
+            "type": "string"
+          },
+          "nginxRunning": {
+            "type": "boolean"
+          },
+          "nginxVersion": {
+            "maxLength": 32,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "configTestOk",
+          "nginxRunning"
+        ],
+        "type": "object"
+      },
+      "AgentRegisterRequest": {
+        "properties": {
+          "environment": {
+            "maxLength": 32,
+            "minLength": 0,
+            "type": "string"
+          },
+          "hostname": {
+            "maxLength": 253,
+            "minLength": 0,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          },
+          "registrationToken": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostname",
+          "name",
+          "registrationToken"
+        ],
+        "type": "object"
+      },
+      "AgentRegisterResponse": {
+        "properties": {
+          "agentToken": {
+            "type": "string"
+          },
+          "instanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentToken",
+          "instanceId",
+          "name"
+        ],
+        "type": "object"
+      },
+      "AgentRegistrationTokenCreatedResponse": {
+        "properties": {
+          "registrationToken": {
+            "$ref": "#/components/schemas/AgentRegistrationTokenResponse"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "registrationToken",
+          "token"
+        ],
+        "type": "object"
+      },
+      "AgentRegistrationTokenResponse": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxUses": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "uses": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "createdBy",
+          "id",
+          "usable",
+          "uses"
+        ],
+        "type": "object"
+      },
       "AuditResponse": {
         "properties": {
           "action": {
@@ -321,6 +466,24 @@
             "format": "int32",
             "maximum": 89,
             "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAgentRegistrationTokenRequest": {
+        "properties": {
+          "description": {
+            "maxLength": 256,
+            "minLength": 0,
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "maxUses": {
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -907,6 +1070,9 @@
           "agentVersion": {
             "type": "string"
           },
+          "connectivityMode": {
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -940,8 +1106,7 @@
           }
         },
         "required": [
-          "agentBaseUrl",
-          "agentCertFingerprint",
+          "connectivityMode",
           "createdAt",
           "environment",
           "hostname",
@@ -1734,6 +1899,204 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/agent-registration-tokens": {
+      "get": {
+        "description": "Never returns a token, only what is known about it. The secret exists in clear exactly once, in the response that created it.",
+        "operationId": "list_6",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentRegistrationTokenResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "List registration tokens",
+        "tags": [
+          "Agent registration"
+        ]
+      },
+      "post": {
+        "description": "The response carries the token in clear. It is not stored and cannot be shown again; a lost token is replaced rather than recovered.",
+        "operationId": "create_3",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRegistrationTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRegistrationTokenCreatedResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Mint a registration token",
+        "tags": [
+          "Agent registration"
+        ]
+      }
+    },
+    "/api/v1/agent-registration-tokens/{id}": {
+      "delete": {
+        "description": "Stops it enrolling anything further. Hosts already enrolled with it keep working: they hold agent tokens of their own, issued separately.",
+        "operationId": "revoke_2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Revoke a registration token",
+        "tags": [
+          "Agent registration"
+        ]
+      }
+    },
+    "/api/v1/agents/heartbeat": {
+      "post": {
+        "description": "Replaces the status call the platform makes to a push-mode host. The reported values are interpreted identically, so ONLINE and DEGRADED mean the same thing whichever end of the connection asked.",
+        "operationId": "heartbeat",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Report this host's state",
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/api/v1/agents/register": {
+      "post": {
+        "description": "Presents a registration token and receives a long-lived agent token. The agent token is returned once and is never retrievable again \u2014 the platform stores only its digest.",
+        "operationId": "register_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRegisterResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Enrol this host",
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
     "/api/v1/audit-logs": {
       "get": {
         "description": "Requires global ADMIN: the trail spans every domain in the estate. Narrow the time range where possible \u2014 it lets PostgreSQL skip whole monthly partitions.",
@@ -2369,7 +2732,7 @@
     },
     "/api/v1/deployments": {
       "get": {
-        "operationId": "list_6",
+        "operationId": "list_7",
         "parameters": [
           {
             "in": "query",
@@ -4549,8 +4912,16 @@
       "name": "Deployments"
     },
     {
+      "description": "Enrolment and reporting for hosts that call the platform",
+      "name": "Agents"
+    },
+    {
       "description": "Managed NGINX hosts",
       "name": "NGINX instances"
+    },
+    {
+      "description": "Credentials that let a host enrol itself",
+      "name": "Agent registration"
     },
     {
       "description": "TLS certificate lifecycle",

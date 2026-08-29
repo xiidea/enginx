@@ -74,7 +74,9 @@ public class NginxInstanceController {
                 instance.id(),
                 instance.name(),
                 instance.hostname(),
-                instance.agentBaseUrl().toString(),
+                instance.connectivityMode().name(),
+                // Null for a pull host: it is never dialled, so there is no URL and nothing to pin.
+                instance.agentBaseUrl() == null ? null : instance.agentBaseUrl().toString(),
                 instance.agentCertFingerprint(),
                 instance.environment(),
                 instance.status().name(),

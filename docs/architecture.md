@@ -24,6 +24,11 @@ Two deployable applications plus three infrastructure services. No microservices
 Infrastructure: PostgreSQL 16, NGINX OSS (co-located with each agent), and an OIDC provider —
 Keycloak 26 in development, and optional: the platform can authenticate its own accounts instead.
 
+A host reaches the platform in one of two directions. **Push** is the original: the management
+server dials the agent and pins its certificate, which needs a route to the host. **Pull** inverts
+it — the agent enrols with a token and calls in — so a host behind NAT is managed like any other.
+The mode is a property of the host and is recorded on the instance.
+
 ### 1.2 Six architectural decisions that shape everything else
 
 **AD-1 — Modular monolith, package-by-domain, dependency-inverted.**

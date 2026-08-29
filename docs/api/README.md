@@ -39,6 +39,10 @@ URI, never on the human-readable `detail`.
 | `GET` | `/api/v1/deployments`, `/deployments/{id}` | READ on the instance |
 | `POST` | `/api/v1/deployments/{id}/rollback` | global ADMIN |
 | `GET` | `/api/v1/nginx-instances/{id}/bundles`, `/config-bundles/{id}` | READ on the instance |
+| `POST` | `/api/v1/agents/register` | a registration token — the caller is a host nobody has met |
+| `POST` | `/api/v1/agents/heartbeat` | an agent token |
+| `GET`/`POST` | `/api/v1/agent-registration-tokens` | global admin |
+| `DELETE` | `/api/v1/agent-registration-tokens/{id}` | global admin |
 | `GET` | `/api/v1/auth/methods` | none — this is what a caller reads before it has a token |
 | `POST` | `/api/v1/auth/login` | none — rate limited as a sensitive operation |
 | `GET`/`POST` | `/api/v1/local-users` | global admin |

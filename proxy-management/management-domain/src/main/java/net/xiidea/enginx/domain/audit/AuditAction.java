@@ -38,6 +38,14 @@ public enum AuditAction {
     /** A subject removed from the identity directory. The account, if any, is untouched. */
     IDENTITY_SUBJECT_FORGOTTEN,
 
+    /** A credential minted so a host can enrol itself. */
+    AGENT_REGISTRATION_TOKEN_CREATED,
+    AGENT_REGISTRATION_TOKEN_REVOKED,
+    /** A host enrolled itself and was issued a token. Recorded whether or not it succeeded. */
+    AGENT_REGISTERED,
+    AGENT_REGISTRATION_REFUSED,
+    AGENT_TOKEN_REVOKED,
+
     PERMISSION_GRANTED,
     PERMISSION_REVOKED,
 

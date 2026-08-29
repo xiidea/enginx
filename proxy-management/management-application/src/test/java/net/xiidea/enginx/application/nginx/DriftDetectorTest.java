@@ -44,7 +44,8 @@ class DriftDetectorTest {
 
         instance = NginxInstance.rehydrate(INSTANCE_ID, "nginx-1", "nginx-1.example.com",
                 java.net.URI.create("https://nginx-1.example.com:8443"),
-                "A".repeat(64), "PRODUCTION", net.xiidea.enginx.domain.nginx.InstanceStatus.ONLINE,
+                "A".repeat(64), net.xiidea.enginx.domain.nginx.ConnectivityMode.PUSH,
+                "PRODUCTION", net.xiidea.enginx.domain.nginx.InstanceStatus.ONLINE,
                 "1.27.5", "0.1.0", Instant.now(), Instant.now(), Instant.now(), 0L);
     }
 

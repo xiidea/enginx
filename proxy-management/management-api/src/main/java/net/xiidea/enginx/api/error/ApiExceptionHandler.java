@@ -18,6 +18,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -132,11 +133,15 @@ public class ApiExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class,
-            HttpMessageNotReadableException.class})
+            MissingRequestHeaderException.class, HttpMessageNotReadableException.class})
     public ProblemDetail handleMalformedRequest(Exception e, HttpServletRequest request) {
-        String detail = e instanceof MethodArgumentTypeMismatchException mismatch
-                ? "'" + mismatch.getName() + "' is not in the expected format"
-                : "The request body or parameters could not be read";
+        String detail = switch (e) {
+            case MethodArgumentTypeMismatchException mismatch ->
+                    "'" + mismatch.getName() + "' is not in the expected format";
+            case MissingRequestHeaderException missing ->
+                    "The '" + missing.getHeaderName() + "' header is required";
+            default -> "The request body or parameters could not be read";
+        };
         return problem(HttpStatus.BAD_REQUEST, "malformed-request", "Malformed request", detail, request);
     }
 

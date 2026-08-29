@@ -4,8 +4,10 @@ import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -19,6 +21,10 @@ import java.util.List;
  * <p>The poll is a status call rather than a ping: it reports whether NGINX is actually running
  * and whether its configuration still passes {@code nginx -t}, which is the difference between an
  * agent that answers and a host that is serving.
+ *
+ * <p>A pull host is not dialled — there is nothing to dial. For those this sweep does the opposite
+ * job: it looks at how long ago the host last called in and marks it offline once that exceeds the
+ * silence threshold. Same question, asked from the only end that can ask it.
  */
 @Service
 public class InstanceHeartbeatService {
@@ -27,10 +33,13 @@ public class InstanceHeartbeatService {
 
     private final NginxInstanceRepository instances;
     private final InstanceObserver observer;
+    private final Duration silenceThreshold;
 
-    public InstanceHeartbeatService(NginxInstanceRepository instances, InstanceObserver observer) {
+    public InstanceHeartbeatService(NginxInstanceRepository instances, InstanceObserver observer,
+                                    @Value("${enginx.observability.agent-silence:5m}") Duration silenceThreshold) {
         this.instances = instances;
         this.observer = observer;
+        this.silenceThreshold = silenceThreshold;
     }
 
     /**
@@ -42,7 +51,10 @@ public class InstanceHeartbeatService {
         List<NginxInstance> all = instances.findAll();
         int reachable = 0;
         for (NginxInstance instance : all) {
-            if (observer.poll(instance)) {
+            boolean healthy = instance.connectivityMode().isPull()
+                    ? observer.recordSilence(instance, silenceThreshold)
+                    : observer.poll(instance);
+            if (healthy) {
                 reachable++;
             }
         }

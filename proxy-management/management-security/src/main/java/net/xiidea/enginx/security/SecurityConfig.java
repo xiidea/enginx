@@ -7,6 +7,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -14,6 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -51,6 +53,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @Order(2)
     SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/**")
@@ -87,6 +90,43 @@ public class SecurityConfig {
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31_536_000)));
+        return http.build();
+    }
+
+    /**
+     * The chain for hosts that call in, which the API chain would reject outright.
+     *
+     * <p>Agents authenticate with a token, not a JWT, so this chain permits the requests and lets
+     * the controller resolve the credential. That reads as a hole and is not: {@code /register}
+     * is unauthenticated by necessity — the caller is a machine nobody has met, and the
+     * registration token is the whole of its claim — and every other path here resolves its bearer
+     * token to an instance before doing anything, refusing with 403 if it cannot.
+     *
+     * <p>Declared before the API chain by {@code @Order}, because {@code /api/v1/agents/**} would
+     * otherwise be swallowed by that chain's {@code /api/**} matcher and demand a JWT.
+     *
+     * <p>Both paths are rate limited as sensitive operations: {@code /register} is open, so
+     * guessing a registration token must be expensive.
+     */
+    @Bean
+    @Order(1)
+    SecurityFilterChain agentFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/v1/agents/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Ahead of the chain proper: an unauthenticated endpoint that mints a credential
+                // must not be free to hammer.
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                // Bearer tokens and no cookies, so there is no CSRF surface here either.
+                .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentSecurityPolicy(csp ->
+                                csp.policyDirectives("default-src 'none'; frame-ancestors 'none'"))
+                        .referrerPolicy(referrer ->
+                                referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)));
         return http.build();
     }
 

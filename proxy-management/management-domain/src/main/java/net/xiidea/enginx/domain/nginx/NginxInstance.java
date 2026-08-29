@@ -9,11 +9,18 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * A managed NGINX host, addressed through its agent.
+ * A managed NGINX host, reached through its agent.
  *
- * <p>The agent's certificate fingerprint is pinned here rather than trusted through the CA alone:
- * a CA-signed certificate proves only that some agent is speaking, not that it is <em>this</em>
- * host (risk R1 of the agent protocol).
+ * <p>Two ways round, and the aggregate holds which one applies. A {@link ConnectivityMode#PUSH}
+ * host is dialled at {@code agentBaseUrl}, and its certificate fingerprint is pinned here rather
+ * than trusted through the CA alone: a CA-signed certificate proves only that some agent is
+ * speaking, not that it is <em>this</em> host (risk R1 of the agent protocol). A
+ * {@link ConnectivityMode#PULL} host is never dialled, so it has neither field — it authenticates
+ * itself when it calls in.
+ *
+ * <p>The two field sets are mutually exclusive, and enforced as such in both directions. A row
+ * carrying a URL it will never be dialled at, or lacking one it needs, describes a host nobody
+ * can reach.
  */
 public final class NginxInstance {
 
@@ -25,6 +32,7 @@ public final class NginxInstance {
     private String hostname;
     private URI agentBaseUrl;
     private String agentCertFingerprint;
+    private final ConnectivityMode connectivityMode;
     private String environment;
     private InstanceStatus status;
     private String nginxVersion;
@@ -35,13 +43,15 @@ public final class NginxInstance {
     private final long version;
 
     private NginxInstance(UUID id, String name, String hostname, URI agentBaseUrl, String agentCertFingerprint,
-                          String environment, InstanceStatus status, String nginxVersion, String agentVersion,
+                          ConnectivityMode connectivityMode, String environment, InstanceStatus status,
+                          String nginxVersion, String agentVersion,
                           Instant lastSeenAt, Instant createdAt, Instant updatedAt, long version) {
         this.id = id;
         this.name = name;
         this.hostname = hostname;
         this.agentBaseUrl = agentBaseUrl;
         this.agentCertFingerprint = agentCertFingerprint;
+        this.connectivityMode = connectivityMode == null ? ConnectivityMode.PUSH : connectivityMode;
         this.environment = environment;
         this.status = status;
         this.nginxVersion = nginxVersion;
@@ -52,6 +62,7 @@ public final class NginxInstance {
         this.version = version;
     }
 
+    /** A host the platform will dial. Needs a URL to dial and a certificate to pin. */
     public static NginxInstance register(UUID id, String name, String hostname, String agentBaseUrl,
                                          String agentCertFingerprint, String environment, Instant now) {
         return new NginxInstance(id,
@@ -59,16 +70,43 @@ public final class NginxInstance {
                 validHostname(hostname),
                 validAgentUrl(agentBaseUrl),
                 validFingerprint(agentCertFingerprint),
-                environment == null || environment.isBlank() ? "PRODUCTION" : environment.trim().toUpperCase(Locale.ROOT),
+                ConnectivityMode.PUSH,
+                normalisedEnvironment(environment),
                 InstanceStatus.UNKNOWN, null, null, null, now, now, 0L);
     }
 
+    /**
+     * A host that will dial the platform, created by the host itself as it enrols.
+     *
+     * <p>No URL and no fingerprint, and not merely because they are unknown: accepting either
+     * would leave a field that looks like it means something and does not. What identifies this
+     * host is the token it presents, which the enrolment service issues alongside this.
+     */
+    public static NginxInstance registerPull(UUID id, String name, String hostname, String environment,
+                                             Instant now) {
+        return new NginxInstance(id,
+                validName(name),
+                validHostname(hostname),
+                null,
+                null,
+                ConnectivityMode.PULL,
+                normalisedEnvironment(environment),
+                InstanceStatus.UNKNOWN, null, null, null, now, now, 0L);
+    }
+
+    private static String normalisedEnvironment(String environment) {
+        return environment == null || environment.isBlank()
+                ? "PRODUCTION"
+                : environment.trim().toUpperCase(Locale.ROOT);
+    }
+
     public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
-                                          String agentCertFingerprint, String environment, InstanceStatus status,
+                                          String agentCertFingerprint, ConnectivityMode connectivityMode,
+                                          String environment, InstanceStatus status,
                                           String nginxVersion, String agentVersion, Instant lastSeenAt,
                                           Instant createdAt, Instant updatedAt, long version) {
-        return new NginxInstance(id, name, hostname, agentBaseUrl, agentCertFingerprint, environment, status,
-                nginxVersion, agentVersion, lastSeenAt, createdAt, updatedAt, version);
+        return new NginxInstance(id, name, hostname, agentBaseUrl, agentCertFingerprint, connectivityMode,
+                environment, status, nginxVersion, agentVersion, lastSeenAt, createdAt, updatedAt, version);
     }
 
     private static String validName(String name) {
@@ -129,6 +167,11 @@ public final class NginxInstance {
      * not a traffic one — the host keeps serving throughout, it simply cannot be changed.
      */
     public void agentCertificateRotated(String newFingerprint, Instant now) {
+        if (connectivityMode.isPull()) {
+            throw new ValidationException("agentCertFingerprint",
+                    "This host connects to the platform rather than being dialled, so it has no "
+                            + "certificate to pin. Reissue its agent token instead.");
+        }
         String normalised = validFingerprint(newFingerprint);
         if (normalised.equals(this.agentCertFingerprint)) {
             throw new ValidationException("agentCertFingerprint",
@@ -168,6 +211,10 @@ public final class NginxInstance {
 
     public String agentCertFingerprint() {
         return agentCertFingerprint;
+    }
+
+    public ConnectivityMode connectivityMode() {
+        return connectivityMode;
     }
 
     public String environment() {

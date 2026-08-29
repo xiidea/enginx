@@ -53,7 +53,13 @@ holds the desired state and is the only thing operators talk to. It is not in th
 any proxied site: if it is down, every site keeps serving, and only changes stop.
 
 **The agent** runs on every host that serves proxied traffic, in the same container as the NGINX it
-manages. It has to be the same container because the agent signals the NGINX process to reload, and
+manages. It reaches the platform one of two ways, chosen per host:
+
+- **Push** — the management plane dials the agent on 8443 and pins its certificate. Stronger
+  authentication of the host, and it needs a route to it.
+- **Pull** — the agent enrols with a registration token and calls the platform. No inbound
+  connectivity at all, so a host behind NAT or in another network can be managed. See
+  [Enrolling a host that calls in](#enrolling-a-host-that-calls-in). It has to be the same container because the agent signals the NGINX process to reload, and
 a process in another container cannot be signalled.
 
 ```
@@ -573,3 +579,51 @@ The Kubernetes shape follows from the same properties: the management plane is a
 Deployment with the liveness and readiness probes above; agents are a DaemonSet on the nodes that
 serve traffic; secrets become Secrets mounted as files, which is already how the config tree reads
 them.
+
+---
+
+## Enrolling a host that calls in
+
+A push host needs an address the management plane can reach and a port open to it. A host behind
+NAT, in another cloud, or on a network nobody routes to can offer neither. Pull mode inverts the
+connection so that no inbound path is required.
+
+Mint a registration token — console, **NGINX instances**, or the API:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"description":"edge hosts","maxUses":1}' \
+  "$API/agent-registration-tokens"
+```
+
+The response carries the token in clear. That is the only time it exists anywhere but as a digest;
+a lost token is replaced, not recovered.
+
+Then run the agent with it. There is no certificate to generate and no port to open:
+
+```bash
+docker run -d --name enginx-agent \
+  -e ENGINX_SERVER_URL=https://enginx.example.com/api/v1 \
+  -e ENGINX_REGISTRATION_TOKEN=enginx-reg-… \
+  -e ENGINX_INSTANCE_NAME=nginx-edge-01 \
+  -v /var/lib/enginx:/var/lib/enginx \
+  -p 80:80 -p 443:443 \
+  xiidea/enginx-agent:latest
+```
+
+Only 80 and 443 are published, and both are for the traffic the host serves — nothing is published
+for the control plane.
+
+**Bound the token.** `maxUses: 1` is right for one known host. It travels into a manifest, a
+provisioning script, a chat message; the useful question is not whether it leaks but how long a
+leaked one is worth anything. Revoking it stops further enrolment and leaves hosts it already
+enrolled working, because those hold credentials of their own.
+
+**The agent token is written to `/var/lib/enginx/agent-token`, mode 0600.** Keep that path on a
+volume: without it every restart enrols again, and a single-use token would be spent by a reboot.
+Anything on the host that can read the file can collect every site's private key, since a
+configuration bundle contains them — the same exposure a push host's private key already has.
+
+**Revoking a host's own token** stops it collecting work without deleting the instance, so its
+deployment history and the sites pointing at it survive. The host re-enrols with a fresh
+registration token.

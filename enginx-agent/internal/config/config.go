@@ -33,6 +33,32 @@ type Config struct {
 
 	CommandTimeout time.Duration
 	AgentVersion   string
+
+	// --- pull mode ---
+	//
+	// When ServerURL is set the agent dials the management server instead of waiting to be
+	// dialled, and needs no inbound connectivity at all. That is the point: a host behind NAT
+	// can satisfy no listener contract, but it can always make an outbound call.
+
+	// ServerURL is the management API base, e.g. https://enginx.example.com/api/v1. Empty
+	// means push mode, which is the original behaviour and stays the default.
+	ServerURL string
+	// RegistrationToken enrols this host the first time it runs. Spent once and then unused:
+	// what the agent presents thereafter is the token it was issued in exchange.
+	RegistrationToken string
+	// TokenFile is where the issued agent token is kept between restarts. Written 0600.
+	TokenFile string
+	// InstanceName is how this host will be known. Defaults to the hostname, which is almost
+	// always what an operator would have typed anyway.
+	InstanceName string
+	Environment  string
+
+	HeartbeatInterval time.Duration
+}
+
+// PullMode reports whether this agent calls the platform rather than being called.
+func (c Config) PullMode() bool {
+	return strings.TrimSpace(c.ServerURL) != ""
 }
 
 func Load() (Config, error) {
@@ -48,25 +74,57 @@ func Load() (Config, error) {
 		NginxConf:      env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
 		CommandTimeout: 30 * time.Second,
 		AgentVersion:   env("AGENT_VERSION", version.Version),
+
+		ServerURL:         strings.TrimRight(env("ENGINX_SERVER_URL", ""), "/"),
+		RegistrationToken: env("ENGINX_REGISTRATION_TOKEN", ""),
+		TokenFile:         env("ENGINX_TOKEN_FILE", "/var/lib/enginx/agent-token"),
+		InstanceName:      env("ENGINX_INSTANCE_NAME", ""),
+		Environment:       env("ENGINX_ENVIRONMENT", "PRODUCTION"),
+		HeartbeatInterval: envDuration("ENGINX_HEARTBEAT_INTERVAL", 60*time.Second),
 	}
 
-	for name, path := range map[string]string{
-		"AGENT_TLS_CERT":  cfg.TLSCertFile,
-		"AGENT_TLS_KEY":   cfg.TLSKeyFile,
-		"AGENT_CLIENT_CA": cfg.ClientCAFile,
-	} {
-		if _, err := os.Stat(path); err != nil {
-			return Config{}, fmt.Errorf("%s: %s is not readable: %w", name, path, err)
+	if cfg.PullMode() {
+		if cfg.InstanceName == "" {
+			host, err := os.Hostname()
+			if err != nil {
+				return Config{}, fmt.Errorf("ENGINX_INSTANCE_NAME is unset and the hostname is unreadable: %w", err)
+			}
+			cfg.InstanceName = strings.ToLower(host)
 		}
-	}
-	if strings.TrimSpace(cfg.ClientCN) == "" {
-		return Config{}, fmt.Errorf("AGENT_CLIENT_CN must name the expected management certificate CN")
+	} else {
+		// Push mode needs its listener identity up front. Pull mode does not open a listener at
+		// all, so requiring these would make a certificate a precondition for a model that has
+		// no use for one.
+		for name, path := range map[string]string{
+			"AGENT_TLS_CERT":  cfg.TLSCertFile,
+			"AGENT_TLS_KEY":   cfg.TLSKeyFile,
+			"AGENT_CLIENT_CA": cfg.ClientCAFile,
+		} {
+			if _, err := os.Stat(path); err != nil {
+				return Config{}, fmt.Errorf("%s: %s is not readable: %w", name, path, err)
+			}
+		}
+		if strings.TrimSpace(cfg.ClientCN) == "" {
+			return Config{}, fmt.Errorf("AGENT_CLIENT_CN must name the expected management certificate CN")
+		}
 	}
 	if _, err := os.Stat(cfg.NginxBinary); err != nil {
 		return Config{}, fmt.Errorf("AGENT_NGINX_BINARY: %s not found: %w", cfg.NginxBinary, err)
 	}
 
 	return cfg, nil
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(strings.TrimSpace(raw))
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func env(key, fallback string) string {

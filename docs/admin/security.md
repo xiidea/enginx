@@ -41,6 +41,14 @@ The properties the platform holds, and why each one is arranged the way it is.
 - The agent runs NGINX with a fixed argument vector through `exec.Command`, never a shell.
 - The agent verifies the management client certificate against the CA **and** pins its common
   name. Trusting the CA alone would let any certificate it ever signed drive the host.
+- A host that calls in instead of being dialled authenticates with a token, which is **weaker than
+  a pinned certificate and is treated as such**: it is 256 bits from a CSPRNG, stored only as a
+  digest, revocable, and stamped on every use so a dormant credential is visible. Issuing agent
+  certificates is what replaces it.
+- The credential that enrols a host is bounded three independent ways — expiry, use count and
+  revocation — because it is the one secret that travels into manifests and provisioning scripts.
+  Every refused enrolment is audited with its reason, in its own transaction, since a burst of
+  them is what guessing looks like.
 - Sensitive operations are rate limited by what they can damage, not by HTTP method, and the
   sensitive path list is matched by prefix so a new endpoint under it is covered on the day it is
   written rather than the day someone notices it was not.

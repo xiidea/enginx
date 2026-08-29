@@ -39,6 +39,10 @@ final class SensitivePaths {
             // Bulk removal from the shared identity directory. Not destructive to access, but
             // repeated at speed it would empty the list every grant author picks names from.
             "/api/v1/users/cleanup",
+            // Enrolment. /register is necessarily open, and a registration token brings a host
+            // into the estate -- which means it receives bundles carrying every site's key.
+            "/api/v1/agents/**",
+            "/api/v1/agent-registration-tokens/**",
             // Registering an instance introduces a new host, and its trusted agent fingerprint.
             "/api/v1/nginx-instances/**");
 

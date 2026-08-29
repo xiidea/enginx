@@ -71,8 +71,14 @@
               </td>
               <td><app-status-pill [status]="instance.status" /></td>
               <td class="mono small">
-                {{ instance.agentBaseUrl }}
-                <div class="muted">{{ instance.agentCertFingerprint.slice(0, 16) }}…</div>
+                @if (instance.connectivityMode === 'PULL') {
+                  <!-- Nothing to show, and that is the point: this host is never dialled, so it
+                       has no address the platform needs and no certificate to pin. -->
+                  <span class="tag">calls in</span>
+                } @else {
+                  {{ instance.agentBaseUrl }}
+                  <div class="muted">{{ instance.agentCertFingerprint?.slice(0, 16) }}…</div>
+                }
               </td>
               <td class="mono small">{{ instance.nginxVersion ?? '—' }}</td>
               <td class="small nowrap">{{ instance.lastSeenAt | datetime }}</td>

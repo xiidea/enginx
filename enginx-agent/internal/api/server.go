@@ -92,12 +92,21 @@ func (s *Server) TLSConfig() (*tls.Config, error) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	test := s.nginx.Test(r.Context())
+	writeJSON(w, http.StatusOK, s.Status(r.Context()))
+}
+
+// Status describes this host right now.
+//
+// Exported because a pull-mode agent reports the same thing on its own schedule rather than
+// waiting to be asked. One implementation, so the two connectivity models cannot drift into
+// disagreeing about what this host looks like.
+func (s *Server) Status(ctx context.Context) StatusResponse {
+	test := s.nginx.Test(ctx)
 	bundleID, since := activeBundle(s.cfg.ReleasesDir)
 
-	writeJSON(w, http.StatusOK, StatusResponse{
+	return StatusResponse{
 		AgentVersion:     s.cfg.AgentVersion,
-		NginxVersion:     s.nginx.Version(r.Context()),
+		NginxVersion:     s.nginx.Version(ctx),
 		NginxRunning:     s.nginx.Running(),
 		NginxMasterPID:   s.nginx.MasterPID(),
 		ActiveBundleID:   bundleID,
@@ -107,7 +116,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		ConfigTestOutput: test.Output,
 		UptimeSeconds:    int64(time.Since(s.startedAt).Seconds()),
 		Certificates:     inspectCertificates(s.cfg.ReleasesDir, time.Now()),
-	})
+	}
 }
 
 // handleTest returns 200 whether or not the configuration is valid: the caller asked a question

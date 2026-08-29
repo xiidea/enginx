@@ -1,5 +1,6 @@
 package net.xiidea.enginx.infrastructure.persistence.entity;
 
+import net.xiidea.enginx.domain.nginx.ConnectivityMode;
 import net.xiidea.enginx.domain.nginx.InstanceStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -26,11 +27,17 @@ public class NginxInstanceEntity {
     @Column(name = "hostname", nullable = false, length = 253)
     private String hostname;
 
-    @Column(name = "agent_base_url", nullable = false, length = 512)
+    // Nullable: only a push host is dialled, so only a push host has a URL or a pinned
+    // certificate. A database check constraint holds the two field sets mutually exclusive.
+    @Column(name = "agent_base_url", length = 512)
     private String agentBaseUrl;
 
-    @Column(name = "agent_cert_fingerprint", nullable = false, length = 64)
+    @Column(name = "agent_cert_fingerprint", length = 64)
     private String agentCertFingerprint;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "connectivity_mode", nullable = false, length = 8)
+    private ConnectivityMode connectivityMode = ConnectivityMode.PUSH;
 
     @Column(name = "environment", nullable = false, length = 32)
     private String environment;
@@ -95,6 +102,14 @@ public class NginxInstanceEntity {
 
     public String getAgentCertFingerprint() {
         return agentCertFingerprint;
+    }
+
+    public ConnectivityMode getConnectivityMode() {
+        return connectivityMode;
+    }
+
+    public void setConnectivityMode(ConnectivityMode connectivityMode) {
+        this.connectivityMode = connectivityMode;
     }
 
     public void setAgentCertFingerprint(String agentCertFingerprint) {

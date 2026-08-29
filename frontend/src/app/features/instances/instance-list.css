@@ -1,3 +1,16 @@
 .form-card { margin-bottom: 1rem; }
 tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
 .right { text-align: right; }
+
+/* Marks a host that connects to the platform rather than being connected to. Deliberately quiet:
+   it is a property of the network, not a state anyone needs to act on. */
+.tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+}
