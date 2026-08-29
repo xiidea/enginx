@@ -21,7 +21,9 @@ URI, never on the human-readable `detail`.
 | `DELETE` | `/api/v1/proxy-sites/{id}/expiration` | `OPERATOR` |
 | `GET` | `/api/v1/nginx-instances` | any |
 | `POST` | `/api/v1/nginx-instances` | `SUPER_ADMIN` |
-| `GET`/`POST` | `/api/v1/domain-groups` | READ / MANAGE on the parent |
+| `GET` | `/api/v1/domain-groups?siteId=` | READ. With `siteId`, only the groups that site is in |
+| `POST` | `/api/v1/domain-groups` | MANAGE on the parent |
+| `GET` | `/api/v1/domain-groups/{id}/members` | READ on the group. Returns each site's domain |
 | `PUT`/`DELETE` | `/api/v1/domain-groups/{id}` | MANAGE / ADMIN on the group |
 | `POST`/`DELETE` | `/api/v1/domain-groups/{id}/members/{siteId}` | MANAGE on **both** |
 | `GET`/`POST` | `/api/v1/permissions` | ADMIN on the scope |

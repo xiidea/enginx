@@ -19,8 +19,10 @@ cd frontend && npm install && npm start   # http://localhost:4200 against a loca
 expired, failed deployments, certificates approaching renewal — and says so explicitly when
 nothing does. **Proxy sites** filters and sorts in the query, so the page count is honest.
 **Site detail** carries the configuration preview, which renders the exact NGINX directives a
-deployment would produce without touching live traffic. **Certificates**, **Deployments** with
-per-phase history, **Permissions** with domain groups, and **NGINX instances**. **Local users**
+deployment would produce without touching live traffic, and the groups the site is filed under —
+the same question as who else can reach it, since a group grant reaches everything beneath it. **Certificates**, **Deployments** with
+per-phase history, **Permissions** with domain groups — expandable to manage which sites each one
+contains — and **NGINX instances**. **Local users**
 appears only when the platform authenticates people itself, and only for a global admin.
 
 ### Hidden actions are a courtesy, not a control

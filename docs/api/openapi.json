@@ -658,6 +658,30 @@
         ],
         "type": "object"
       },
+      "GroupMemberResponse": {
+        "description": "A site filed under a domain group.",
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
       "HeaderDto": {
         "description": "A header rule.",
         "properties": {
@@ -2432,7 +2456,19 @@
     },
     "/api/v1/domain-groups": {
       "get": {
+        "description": "With siteId, only the groups that site is filed under \u2014 which is what a site's own page needs, and cannot otherwise be answered without asking every group in turn.",
         "operationId": "list_4",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "siteId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2633,6 +2669,7 @@
     },
     "/api/v1/domain-groups/{id}/members": {
       "get": {
+        "description": "Returns each site's domain, not only its id: a caller given bare ids has to resolve every one of them to show a list, and is the party least able to do that in a single query.",
         "operationId": "members",
         "parameters": [
           {
@@ -2651,8 +2688,7 @@
               "*/*": {
                 "schema": {
                   "items": {
-                    "format": "uuid",
-                    "type": "string"
+                    "$ref": "#/components/schemas/GroupMemberResponse"
                   },
                   "type": "array"
                 }

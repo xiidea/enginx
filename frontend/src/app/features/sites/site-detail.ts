@@ -1,17 +1,19 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { CertificatesApi, DeploymentsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
-import { Certificate, Deployment, EffectivePermission, Preview, Site, UpstreamCheck } from '../../core/api/models';
+import { CertificatesApi, DeploymentsApi, GroupsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
+import { Certificate, Deployment, DomainGroup, EffectivePermission, Preview, Site, UpstreamCheck } from '../../core/api/models';
+import { groupSource } from '../../core/api/suggestions';
 import { Notifications } from '../../shared/notifications';
 import { PageHeader } from '../../shared/page';
 import { StatusPill } from '../../shared/status-pill';
+import { Typeahead } from '../../shared/typeahead';
 import { BytesPipe, DateTimePipe, RelativePipe } from '../../shared/formatting';
 
 @Component({
   selector: 'app-site-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, PageHeader, StatusPill, RelativePipe, DateTimePipe, BytesPipe],
+  imports: [RouterLink, FormsModule, PageHeader, StatusPill, RelativePipe, DateTimePipe, BytesPipe, Typeahead],
   templateUrl: './site-detail.html',
   styleUrl: './site-detail.css',
 })
@@ -23,6 +25,7 @@ export class SiteDetail implements OnInit {
   private readonly certificatesApi = inject(CertificatesApi);
   private readonly deploymentsApi = inject(DeploymentsApi);
   private readonly permissionsApi = inject(PermissionsApi);
+  private readonly groupsApi = inject(GroupsApi);
   private readonly notifications = inject(Notifications);
   private readonly router = inject(Router);
 
@@ -34,6 +37,18 @@ export class SiteDetail implements OnInit {
   readonly upstreamChecks = signal<UpstreamCheck[] | null>(null);
   readonly checkingUpstreams = signal(false);
   readonly loading = signal(true);
+
+  /**
+   * The groups this site is filed under.
+   *
+   * Worth showing on the site rather than only on the groups page: a grant made over a group
+   * reaches this site, so "which groups am I in" is the same question as "who else can reach me".
+   */
+  readonly groups = signal<DomainGroup[]>([]);
+  readonly groupsLoading = signal(true);
+  readonly groupToAdd = signal('');
+  readonly addingGroup = signal(false);
+  readonly groupChoices = groupSource(this.groupsApi);
 
   /**
    * What this user may do to this site, answered by the server.
@@ -50,6 +65,54 @@ export class SiteDetail implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadGroups();
+  }
+
+  private loadGroups(): void {
+    this.groupsLoading.set(true);
+    this.groupsApi.list(this.id()).subscribe({
+      next: (groups) => {
+        this.groups.set(groups);
+        this.groupsLoading.set(false);
+      },
+      error: () => {
+        this.groups.set([]);
+        this.groupsLoading.set(false);
+      },
+    });
+  }
+
+  addToGroup(): void {
+    const groupId = this.groupToAdd();
+    if (!groupId) {
+      return;
+    }
+    this.addingGroup.set(true);
+    this.groupsApi.addMember(groupId, this.id()).subscribe({
+      next: () => {
+        this.addingGroup.set(false);
+        this.groupToAdd.set('');
+        this.notifications.success('Added to group', 'Grants on that group now reach this site.');
+        this.loadGroups();
+      },
+      error: (problem) => {
+        this.addingGroup.set(false);
+        this.notifications.problem(problem);
+      },
+    });
+  }
+
+  removeFromGroup(group: DomainGroup): void {
+    if (!confirm(`Remove this site from ${group.path}? Access granted through that group ends.`)) {
+      return;
+    }
+    this.groupsApi.removeMember(group.id, this.id()).subscribe({
+      next: () => {
+        this.notifications.success('Removed from group', group.path);
+        this.loadGroups();
+      },
+      error: (problem) => this.notifications.problem(problem),
+    });
   }
 
   private load(): void {

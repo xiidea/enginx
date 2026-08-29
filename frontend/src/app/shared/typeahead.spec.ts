@@ -2,7 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { environment } from '../../environments/environment';
-import { UserPicker } from './user-picker';
+import { Typeahead } from './typeahead';
+import { peopleSource } from '../core/api/suggestions';
+import { PermissionsApi } from '../core/api/resources';
 
 function page(content: { username: string; present?: boolean }[], total: number, index = 0) {
   return {
@@ -20,9 +22,9 @@ function page(content: { username: string; present?: boolean }[], total: number,
   };
 }
 
-describe('UserPicker', () => {
-  let fixture: ComponentFixture<UserPicker>;
-  let picker: UserPicker;
+describe('Typeahead', () => {
+  let fixture: ComponentFixture<Typeahead>;
+  let picker: Typeahead;
   let http: HttpTestingController;
 
   beforeEach(() => {
@@ -30,8 +32,10 @@ describe('UserPicker', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
-    fixture = TestBed.createComponent(UserPicker);
+    fixture = TestBed.createComponent(Typeahead);
     picker = fixture.componentInstance;
+    // Pointed at people, so the spec exercises a real source rather than a stub of one.
+    fixture.componentRef.setInput('source', peopleSource(TestBed.inject(PermissionsApi)));
     http = TestBed.inject(HttpTestingController);
   });
 
@@ -56,7 +60,7 @@ describe('UserPicker', () => {
 
     expectSearch('ada').flush(page([{ username: 'ada' }], 1));
 
-    expect(picker.results().map((u) => u.username)).toEqual(['ada']);
+    expect(picker.results().map((u) => u.secondary)).toEqual(['ada']);
   });
 
   /**
@@ -91,7 +95,7 @@ describe('UserPicker', () => {
     second.flush(page([{ username: 'ada' }], 1));
     first.flush(page([{ username: 'stale' }, { username: 'other' }], 2));
 
-    expect(picker.results().map((u) => u.username)).toEqual(['ada']);
+    expect(picker.results().map((u) => u.secondary)).toEqual(['ada']);
   });
 
   it('appends the next page instead of replacing what is shown', () => {
@@ -102,13 +106,13 @@ describe('UserPicker', () => {
     picker.loadMore();
     expectSearch('', 1).flush(page([{ username: 'c' }], 3, 1));
 
-    expect(picker.results().map((u) => u.username)).toEqual(['a', 'b', 'c']);
+    expect(picker.results().map((u) => u.secondary)).toEqual(['a', 'b', 'c']);
     expect(picker.hasMore()).toBe(false);
   });
 
-  it('reports the selection to the parent and keeps the chosen person', () => {
-    const chosen: string[] = [];
-    picker.selected.subscribe((ref) => chosen.push(ref));
+  it('reports the selection to the parent and keeps the chosen item', () => {
+    const chosen: (string | null)[] = [];
+    picker.selected.subscribe((item) => chosen.push(item?.ref ?? null));
 
     picker.onFocus();
     expectSearch('').flush(page([{ username: 'ada' }], 1));
@@ -123,7 +127,7 @@ describe('UserPicker', () => {
     picker.onFocus();
     expectSearch('').flush(page([{ username: 'ghost', present: false }], 1));
 
-    expect(picker.results()[0].present).toBe(false);
+    expect(picker.results()[0].departed).toBe(true);
   });
 
   it('reports a failure instead of showing an empty directory', () => {

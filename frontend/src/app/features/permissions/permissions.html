@@ -20,10 +20,13 @@
             <div>
               <label for="subjectRef">{{ subjectType() === 'USER' ? 'Person' : 'Team' }}</label>
               @if (subjectType() === 'USER') {
-                <app-user-picker
+                <app-typeahead
                   inputId="subjectRef"
+                  placeholder="Search by name or username"
+                  [noun]="['person', 'people']"
+                  [source]="people"
                   [value]="subjectRef()"
-                  (selected)="subjectRef.set($event)" />
+                  (selected)="subjectRef.set($event?.ref ?? '')" />
                 <p class="hint">People appear here once they have signed in at least once.</p>
               } @else {
                 <select id="subjectRef" [ngModel]="subjectRef()" (ngModelChange)="subjectRef.set($event)">
@@ -251,11 +254,56 @@
                 @if (group.yourLevel) {
                   <span class="level mono small">{{ group.yourLevel }}</span>
                 }
+                <button class="btn btn-sm" type="button" (click)="toggleMembers(group)"
+                  [attr.aria-expanded]="expandedGroup() === group.id">
+                  {{ expandedGroup() === group.id ? 'Hide sites' : 'Sites' }}
+                </button>
                 @if (!auth.isReadOnly() && group.yourLevel === 'ADMIN') {
                   <button class="btn btn-sm btn-danger" type="button" (click)="deleteGroup(group)">Delete</button>
                 }
               </div>
             </div>
+
+            @if (expandedGroup() === group.id) {
+              <div class="members">
+                @if (membersLoading()) {
+                  <p class="muted small">Loading…</p>
+                } @else if (!members().length) {
+                  <p class="muted small">No sites yet. Grants on this group reach nothing until one is added.</p>
+                } @else {
+                  <ul class="member-list">
+                    @for (member of members(); track member.id) {
+                      <li>
+                        <a [routerLink]="['/sites', member.id]" class="mono">{{ member.domain }}</a>
+                        @if (!auth.isReadOnly() && group.yourLevel && group.yourLevel !== 'READ') {
+                          <button class="btn btn-sm" type="button" (click)="removeMember(group, member)">Remove</button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+
+                @if (!auth.isReadOnly() && group.yourLevel && group.yourLevel !== 'READ' && group.yourLevel !== 'OPERATE') {
+                  <div class="add-member">
+                    <app-typeahead
+                      [inputId]="'add-member-' + group.id"
+                      placeholder="Search sites by domain"
+                      [noun]="['site', 'sites']"
+                      [source]="siteChoices"
+                      [value]="memberToAdd()"
+                      (selected)="memberToAdd.set($event?.ref ?? '')" />
+                    <button class="btn btn-primary btn-sm" type="button"
+                      [disabled]="addingMember() || !memberToAdd()" (click)="addMember(group)">
+                      {{ addingMember() ? 'Adding…' : 'Add site' }}
+                    </button>
+                  </div>
+                  <!-- The server requires MANAGE on the site as well as the group: adding a site
+                       you have no rights to would otherwise hand you control of it through your
+                       own group grant. -->
+                  <p class="hint">You also need MANAGE on the site you add.</p>
+                }
+              </div>
+            }
           </li>
         }
       </ul>

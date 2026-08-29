@@ -156,6 +156,23 @@ public class DomainGroupService {
                 null);
     }
 
+    /**
+     * The sites filed under a group.
+     *
+     * <p>Returns the sites themselves rather than their ids: every caller wants a domain to show,
+     * and handing back bare ids only moves the lookup to whoever is least able to do it in one
+     * query. Reading the group is the authorisation — a group grant reaches everything under it,
+     * so being allowed to see the group is being allowed to see what is in it.
+     */
+    @Transactional(readOnly = true)
+    public List<ProxySite> membersOf(UUID groupId) {
+        DomainGroup group = load(groupId);
+        permissions.requireGroupPermission(group, PermissionLevel.READ);
+        return sites.findAllById(groups.memberSiteIds(groupId)).stream()
+                .sorted(java.util.Comparator.comparing(site -> site.spec().domain().value()))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<DomainGroup> groupsOfSite(UUID siteId) {
         ProxySite site = loadSite(siteId);

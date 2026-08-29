@@ -1,9 +1,11 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GroupsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
 import {
   GrantPreview,
   DomainGroup,
+  GroupMember,
   PermissionGrant,
   PermissionLevel,
   ScopeType,
@@ -14,13 +16,14 @@ import {
 import { AuthService } from '../../core/auth/auth.service';
 import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
-import { UserPicker } from '../../shared/user-picker';
+import { Typeahead } from '../../shared/typeahead';
+import { peopleSource, siteSource } from '../../core/api/suggestions';
 import { DateTimePipe } from '../../shared/formatting';
 
 @Component({
   selector: 'app-permissions',
   standalone: true,
-  imports: [FormsModule, PageHeader, EmptyState, DateTimePipe, UserPicker],
+  imports: [FormsModule, PageHeader, EmptyState, DateTimePipe, Typeahead, RouterLink],
   templateUrl: './permissions.html',
   styleUrl: './permissions.css',
 })
@@ -30,6 +33,10 @@ export class Permissions implements OnInit {
   private readonly sitesApi = inject(SitesApi);
   private readonly notifications = inject(Notifications);
   readonly auth = inject(AuthService);
+
+  /** Bound once, not rebuilt per change detection, so the typeahead's input stays identity-stable. */
+  readonly people = peopleSource(this.api);
+  readonly siteChoices = siteSource(this.sitesApi);
 
   readonly levels: PermissionLevel[] = ['READ', 'OPERATE', 'MANAGE', 'ADMIN'];
   readonly scopeTypes: ScopeType[] = ['GLOBAL', 'DOMAIN_GROUP', 'DOMAIN_PATTERN', 'SITE'];
@@ -52,6 +59,13 @@ export class Permissions implements OnInit {
   readonly domainPattern = signal('');
   readonly level = signal<PermissionLevel>('READ');
   readonly expiresAt = signal('');
+
+  /** The group whose members are on screen, and what it contains. */
+  readonly expandedGroup = signal<string | null>(null);
+  readonly members = signal<GroupMember[]>([]);
+  readonly membersLoading = signal(false);
+  readonly addingMember = signal(false);
+  readonly memberToAdd = signal('');
 
   readonly newGroupName = signal('');
   readonly newGroupSlug = signal('');
@@ -192,6 +206,80 @@ export class Permissions implements OnInit {
         this.reload();
       },
       error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
+  /**
+   * Shows or hides a group's members.
+   *
+   * Loaded on expansion rather than with the tree: most of the time nobody opens any of them, and
+   * a request per group would make the page cost proportional to how many groups exist.
+   */
+  toggleMembers(group: DomainGroup): void {
+    if (this.expandedGroup() === group.id) {
+      this.expandedGroup.set(null);
+      return;
+    }
+    this.expandedGroup.set(group.id);
+    this.memberToAdd.set('');
+    this.loadMembers(group.id);
+  }
+
+  private loadMembers(groupId: string): void {
+    this.membersLoading.set(true);
+    this.members.set([]);
+    this.groupsApi.members(groupId).subscribe({
+      next: (members) => {
+        this.members.set(members);
+        this.membersLoading.set(false);
+      },
+      error: (problem) => {
+        this.membersLoading.set(false);
+        this.notifications.problem(problem);
+      },
+    });
+  }
+
+  addMember(group: DomainGroup): void {
+    const siteId = this.memberToAdd();
+    if (!siteId) {
+      return;
+    }
+    this.addingMember.set(true);
+    this.groupsApi.addMember(group.id, siteId).subscribe({
+      next: () => {
+        this.addingMember.set(false);
+        this.memberToAdd.set('');
+        this.notifications.success('Site added', `Every grant on ${group.path} now reaches it.`);
+        this.loadMembers(group.id);
+        // The tree shows a member count, so it is now wrong.
+        this.reloadGroups();
+      },
+      error: (problem) => {
+        this.addingMember.set(false);
+        this.notifications.problem(problem);
+      },
+    });
+  }
+
+  removeMember(group: DomainGroup, member: GroupMember): void {
+    if (!confirm(`Remove ${member.domain} from ${group.path}? Access granted through this group ends.`)) {
+      return;
+    }
+    this.groupsApi.removeMember(group.id, member.id).subscribe({
+      next: () => {
+        this.notifications.success('Site removed', member.domain);
+        this.loadMembers(group.id);
+        this.reloadGroups();
+      },
+      error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
+  private reloadGroups(): void {
+    this.groupsApi.list().subscribe({
+      next: (groups) => this.groups.set(groups),
+      error: () => undefined,
     });
   }
 

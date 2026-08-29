@@ -19,6 +19,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,6 +62,14 @@ public class ProxySiteRepositoryAdapter implements ProxySiteRepository {
     @Override
     public Optional<ProxySite> findById(UUID id) {
         return repository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<ProxySite> findAllById(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return repository.findAllById(ids).stream().map(mapper::toDomain).toList();
     }
 
     @Override

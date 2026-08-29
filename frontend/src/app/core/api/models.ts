@@ -114,3 +114,5 @@ export type UpdateLocalUserRequest = Schemas['UpdateLocalUserRequest'];
 
 /** The roles a local account can carry. Domain-scoped permissions are granted separately. */
 export const GLOBAL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'READ_ONLY'] as const;
+
+export type GroupMember = Wire<Schemas['GroupMemberResponse']>;

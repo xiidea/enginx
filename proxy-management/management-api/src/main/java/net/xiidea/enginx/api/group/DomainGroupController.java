@@ -7,7 +7,9 @@ import net.xiidea.enginx.application.permission.SitePermissionService;
 import net.xiidea.enginx.domain.group.DomainGroup;
 import net.xiidea.enginx.domain.group.DomainGroupRepository;
 import net.xiidea.enginx.domain.permission.PermissionLevel;
+import net.xiidea.enginx.domain.proxy.ProxySite;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -43,9 +46,13 @@ public class DomainGroupController {
     }
 
     @GetMapping
-    @Operation(summary = "List domain groups visible to you")
-    public List<DomainGroupDtos.Response> list() {
-        return service.findVisible().stream().map(this::toResponse).toList();
+    @Operation(summary = "List domain groups visible to you",
+            description = "With siteId, only the groups that site is filed under — which is what "
+                    + "a site's own page needs, and cannot otherwise be answered without asking "
+                    + "every group in turn.")
+    public List<DomainGroupDtos.Response> list(@RequestParam(required = false) UUID siteId) {
+        List<DomainGroup> found = siteId == null ? service.findVisible() : service.groupsOfSite(siteId);
+        return found.stream().map(this::toResponse).toList();
     }
 
     @GetMapping("/{id}")
@@ -85,10 +92,15 @@ public class DomainGroupController {
     }
 
     @GetMapping("/{id}/members")
-    @Operation(summary = "List the sites in a group")
-    public List<UUID> members(@PathVariable UUID id) {
-        service.get(id);
-        return List.copyOf(groups.memberSiteIds(id));
+    @Operation(summary = "List the sites in a group",
+            description = "Returns each site's domain, not only its id: a caller given bare ids "
+                    + "has to resolve every one of them to show a list, and is the party least "
+                    + "able to do that in a single query.")
+    public List<MemberResponse> members(@PathVariable UUID id) {
+        return service.membersOf(id).stream()
+                .map(site -> new MemberResponse(site.id(), site.spec().domain().value(),
+                        site.spec().name(), site.status().name()))
+                .toList();
     }
 
     @PostMapping("/{id}/members/{siteId}")
@@ -105,6 +117,11 @@ public class DomainGroupController {
     public ResponseEntity<Void> removeMember(@PathVariable UUID id, @PathVariable UUID siteId) {
         service.removeMember(id, siteId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Schema(name = "GroupMemberResponse", description = "A site filed under a domain group.",
+            requiredProperties = {"id", "domain", "status"})
+    public record MemberResponse(UUID id, String domain, String name, String status) {
     }
 
     private DomainGroupDtos.Response toResponse(DomainGroup group) {

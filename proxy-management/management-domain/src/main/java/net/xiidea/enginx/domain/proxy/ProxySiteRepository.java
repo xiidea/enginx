@@ -5,6 +5,7 @@ import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.PageResult;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,15 @@ public interface ProxySiteRepository {
     ProxySite save(ProxySite site);
 
     Optional<ProxySite> findById(UUID id);
+
+    /**
+     * Several sites at once, for callers that already hold a set of ids.
+     *
+     * <p>Unscoped, unlike {@link #search}: the ids come from a relation the caller has already
+     * been authorised to read, so filtering again here would be a second, different answer to a
+     * question already settled. Callers holding ids from anywhere else must scope them first.
+     */
+    List<ProxySite> findAllById(Collection<UUID> ids);
 
     /**
      * @param excludeId a site to ignore, so an update can keep its own domain. May be null.

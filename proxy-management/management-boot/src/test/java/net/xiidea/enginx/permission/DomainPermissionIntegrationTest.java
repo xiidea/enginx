@@ -508,6 +508,79 @@ class DomainPermissionIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    /**
+     * Reading a group's contents, and a site's groups.
+     *
+     * <p>Both are what the console needs to let anyone manage membership at all: without the
+     * first it can only show a count, and without the second a site's own page cannot say which
+     * groups reach it without asking every group in turn.
+     */
+    @Nested
+    @DisplayName("membership, from either side")
+    class Membership {
+
+        @BeforeEach
+        void fileAppUnderProduction() {
+            caller.actAsSuperAdmin();
+        }
+
+        @Test
+        @DisplayName("a group lists its sites with their domains, not bare ids")
+        void membersCarryTheirDomain() {
+            groups.addMember(production.id(), apiSite.id());
+
+            assertThat(groups.membersOf(production.id()))
+                    .extracting(site -> site.spec().domain().value())
+                    .containsExactly("api.example.com");
+        }
+
+        @Test
+        @DisplayName("members are ordered by domain, so the list does not shuffle between reads")
+        void membersAreOrdered() {
+            groups.addMember(production.id(), testSite.id());
+            groups.addMember(production.id(), apiSite.id());
+
+            assertThat(groups.membersOf(production.id()))
+                    .extracting(site -> site.spec().domain().value())
+                    .containsExactly("api.example.com", "checkout.test.example.com");
+        }
+
+        @Test
+        @DisplayName("a site reports the groups it is filed under")
+        void siteReportsItsGroups() {
+            groups.addMember(production.id(), apiSite.id());
+
+            assertThat(groups.groupsOfSite(apiSite.id()))
+                    .extracting(group -> group.path().value())
+                    .containsExactly(production.path().value());
+            assertThat(groups.groupsOfSite(testSite.id())).isEmpty();
+        }
+
+        /**
+         * Membership is what a group grant acts through, so being able to read a group must not
+         * be enough to change what it contains.
+         */
+        @Test
+        @DisplayName("reading a group's members needs only READ; changing them needs more")
+        void readingIsNotWriting() {
+            grantToUser(ALICE, ScopeType.DOMAIN_GROUP, production.id(), null, null, PermissionLevel.READ);
+            caller.actAs(ALICE, Set.of(), GlobalRole.OPERATOR);
+
+            assertThat(groups.membersOf(production.id())).isEmpty();
+            assertThatThrownBy(() -> groups.addMember(production.id(), apiSite.id()))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("a group nobody has granted you is not readable at all")
+        void unreachableGroupIsRefused() {
+            caller.actAs(BOB, Set.of(), GlobalRole.OPERATOR);
+
+            assertThatThrownBy(() -> groups.membersOf(production.id()))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
     private ProxySite createSite(String domain) {
         return sites.create(new ProxySiteCommands.Create(specFor(domain), AdminState.ENABLED));
     }

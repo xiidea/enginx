@@ -304,7 +304,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List domain groups visible to you */
+        /**
+         * List domain groups visible to you
+         * @description With siteId, only the groups that site is filed under — which is what a site's own page needs, and cannot otherwise be answered without asking every group in turn.
+         */
         get: operations["list_4"];
         put?: never;
         /**
@@ -350,7 +353,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the sites in a group */
+        /**
+         * List the sites in a group
+         * @description Returns each site's domain, not only its id: a caller given bare ids has to resolve every one of them to show a list, and is the party least able to do that in a single query.
+         */
         get: operations["members"];
         put?: never;
         post?: never;
@@ -1100,6 +1106,14 @@ export interface components {
             scopeType: string;
             subjectRef: string;
             subjectType: string;
+        };
+        /** @description A site filed under a domain group. */
+        GroupMemberResponse: {
+            domain: string;
+            /** Format: uuid */
+            id: string;
+            name?: string;
+            status: string;
         };
         /** @description A header rule. */
         HeaderDto: {
@@ -1964,7 +1978,9 @@ export interface operations {
     };
     list_4: {
         parameters: {
-            query?: never;
+            query?: {
+                siteId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2136,7 +2152,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": string[];
+                    "*/*": components["schemas"]["GroupMemberResponse"][];
                 };
             };
             /** @description Unauthorized */

@@ -9,7 +9,7 @@
     [attr.aria-expanded]="open()"
     [attr.aria-controls]="inputId() + '-list'"
     [attr.aria-activedescendant]="highlighted() >= 0 ? inputId() + '-option-' + highlighted() : null"
-    placeholder="Search by name or username"
+    [placeholder]="placeholder()"
     [value]="query()"
     (input)="onInput($any($event.target).value)"
     (focus)="onFocus()"
@@ -17,39 +17,39 @@
   />
 
   @if (chosen()) {
-    <button class="clear" type="button" (click)="clear()" aria-label="Clear the selected person">×</button>
+    <button class="clear" type="button" (click)="clear()" aria-label="Clear the selection">×</button>
   }
 
   @if (open()) {
     <div class="menu" [id]="inputId() + '-list'" role="listbox" #menu (scroll)="onScroll(menu)">
       @if (failed()) {
-        <p class="note danger" role="alert">Could not reach the directory.</p>
+        <p class="note danger" role="alert">Could not reach the server.</p>
       } @else if (!results().length && !loading()) {
         <p class="note">
-          @if (query()) { Nobody matches “{{ query() }}”. } @else { Nobody has signed in yet. }
+          @if (query()) { Nothing matches “{{ query() }}”. } @else { Nothing to choose from yet. }
         </p>
       } @else {
-        @for (user of results(); track user.subjectRef; let i = $index) {
+        @for (item of results(); track item.ref; let i = $index) {
           <button
             class="option"
             type="button"
             role="option"
             [id]="inputId() + '-option-' + i"
-            [attr.aria-selected]="user.subjectRef === value()"
+            [attr.aria-selected]="item.ref === value()"
             [class.highlighted]="i === highlighted()"
             (mouseenter)="highlighted.set(i)"
-            (click)="choose(user)"
+            (click)="choose(item)"
           >
             <span class="name">
-              {{ user.displayName }}
-              @if (!user.present) {
+              {{ item.label }}
+              @if (item.departed) {
                 <!-- Shown rather than hidden: a grant may already name this subject, and saying
                      it is gone explains a stale row that silently omitting it would not. -->
                 <span class="gone" title="This account no longer exists">no longer present</span>
               }
             </span>
-            @if (user.username && user.username !== user.displayName) {
-              <span class="who mono">{{ user.username }}</span>
+            @if (item.secondary && item.secondary !== item.label) {
+              <span class="who mono">{{ item.secondary }}</span>
             }
           </button>
         }

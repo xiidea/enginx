@@ -145,6 +145,56 @@
 
     <div class="stack">
       <section class="card">
+        <div class="card-head"><h2>Domain groups</h2></div>
+        <div class="card-body">
+          <!-- Here because a grant made over a group reaches this site: "which groups is it in"
+               is the same question as "who else can reach it". -->
+          @if (groupsLoading()) {
+            <p class="muted small">Loading…</p>
+          } @else if (!groups().length) {
+            <p class="muted small">
+              Not in any group. Groups let one grant cover a set of sites that changes over time.
+            </p>
+          } @else {
+            <ul class="group-list">
+              @for (group of groups(); track group.id) {
+                <li>
+                  <span>
+                    <span class="mono">{{ group.path }}</span>
+                    @if (group.yourLevel) {
+                      <span class="muted small"> · you hold {{ group.yourLevel }}</span>
+                    }
+                  </span>
+                  @if (canManage() && group.yourLevel && group.yourLevel !== 'READ' && group.yourLevel !== 'OPERATE') {
+                    <button class="btn btn-sm" type="button" (click)="removeFromGroup(group)">Remove</button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (canManage()) {
+            <div class="add-group">
+              <app-typeahead
+                inputId="site-add-group"
+                placeholder="Search groups by path"
+                [noun]="['group', 'groups']"
+                [source]="groupChoices"
+                [value]="groupToAdd()"
+                (selected)="groupToAdd.set($event?.ref ?? '')" />
+              <button class="btn btn-primary btn-sm" type="button"
+                [disabled]="addingGroup() || !groupToAdd()" (click)="addToGroup()">
+                {{ addingGroup() ? 'Adding…' : 'Add to group' }}
+              </button>
+            </div>
+            <!-- The server requires MANAGE on the group as well as this site, so this can fail
+                 for a group the reader can see but does not administer. -->
+            <p class="hint">You also need MANAGE on the group.</p>
+          }
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>TLS</h2></div>
         <div class="card-body">
           @if (!site.sslEnabled) {

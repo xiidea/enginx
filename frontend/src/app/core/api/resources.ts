@@ -8,6 +8,7 @@ import {
   Deployment,
   DomainGroup,
   CreateLocalUserRequest,
+  GroupMember,
   EffectivePermission,
   LocalUser,
   NginxInstance,
@@ -187,8 +188,12 @@ export class CertificatesApi {
 export class GroupsApi {
   private readonly api = inject(ApiService);
 
-  list(): Observable<DomainGroup[]> {
-    return this.api.get('/domain-groups');
+  /**
+   * @param siteId when given, only the groups that site is filed under. Answered by the server
+   *               because the client would otherwise have to ask every group in turn.
+   */
+  list(siteId?: string): Observable<DomainGroup[]> {
+    return this.api.get('/domain-groups', { siteId });
   }
 
   create(body: { name: string; slug: string; description?: string; parentId?: string | null }): Observable<DomainGroup> {
@@ -203,7 +208,7 @@ export class GroupsApi {
     return this.api.delete(`/domain-groups/${id}`);
   }
 
-  members(id: string): Observable<string[]> {
+  members(id: string): Observable<GroupMember[]> {
     return this.api.get(`/domain-groups/${id}/members`);
   }
 

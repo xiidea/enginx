@@ -42,7 +42,9 @@ Each of these is a path a scoped permission system invites, and each has a test:
    Creation needs a global or pattern grant.
 2. **Adding a site to a group needs MANAGE on the site as well as the group.** Otherwise a group
    administrator could adopt a site they have no rights to and inherit control through their own
-   grant.
+   grant. In the console this is done from either side: expand a group on the **Permissions** page
+   and add a site, or open a site and add it to a group from its **Domain groups** section. Both
+   call the same endpoint and are refused the same way.
 3. **Nobody may grant more than they hold**, and delegating requires ADMIN on the scope —
    MANAGE is not enough.
 4. **A pattern grant may only be narrowed.** Holding `*.test.example.com` lets you delegate
