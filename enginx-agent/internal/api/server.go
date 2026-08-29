@@ -16,6 +16,7 @@ import (
 
 	"github.com/xiidea/enginx/enginx-agent/internal/bundle"
 	"github.com/xiidea/enginx/enginx-agent/internal/config"
+	"github.com/xiidea/enginx/enginx-agent/internal/defaulttls"
 	"github.com/xiidea/enginx/enginx-agent/internal/nginx"
 )
 
@@ -196,4 +197,28 @@ func (s *Server) Run(ctx context.Context) error {
 		_ = healthServer.Shutdown(shutdownCtx)
 		return nil
 	}
+}
+
+// StageBundle stores a bundle without changing what is served.
+//
+// Exported so a pull-mode runner performs exactly the operation the HTTP handler performs. Two
+// copies of staging and atomic activation is precisely the drift this platform exists to prevent,
+// and it would be invisible until the two connectivity models behaved differently on one host.
+func (s *Server) StageBundle(b bundle.Bundle) error {
+	return s.bundles.Stage(b)
+}
+
+// ActivateBundle validates the staged bundle, swaps it in and reloads.
+func (s *Server) ActivateBundle(ctx context.Context, bundleID string, reload bool) (bundle.Result, error) {
+	// Every rendered bundle points its HTTPS catch-all at this pair, and a host whose releases
+	// directory was wiped would otherwise fail validation citing a certificate nobody configured.
+	if err := defaulttls.Ensure(s.cfg.ReleasesDir); err != nil {
+		return bundle.Result{}, err
+	}
+	return s.bundles.Activate(ctx, bundleID, nginxForBundle{s.nginx}, reload)
+}
+
+// DiscardBundle removes a superseded bundle.
+func (s *Server) DiscardBundle(bundleID string) error {
+	return s.bundles.Delete(bundleID)
 }

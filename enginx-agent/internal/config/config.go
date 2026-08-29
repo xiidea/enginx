@@ -54,6 +54,8 @@ type Config struct {
 	Environment  string
 
 	HeartbeatInterval time.Duration
+	// PollWait is how long a request for work is held open when there is none.
+	PollWait time.Duration
 }
 
 // PullMode reports whether this agent calls the platform rather than being called.
@@ -81,6 +83,7 @@ func Load() (Config, error) {
 		InstanceName:      env("ENGINX_INSTANCE_NAME", ""),
 		Environment:       env("ENGINX_ENVIRONMENT", "PRODUCTION"),
 		HeartbeatInterval: envDuration("ENGINX_HEARTBEAT_INTERVAL", 60*time.Second),
+		PollWait:          envDuration("ENGINX_POLL_WAIT", 30*time.Second),
 	}
 
 	if cfg.PullMode() {

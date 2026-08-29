@@ -165,6 +165,44 @@ services:
         # Fixed so the local ACME server can be told where to send HTTP-01 validation.
         ipv4_address: 172.31.0.10
 
+  # A second NGINX host, reached the other way round: it calls the management server rather than
+  # being called. Under a profile because most development does not need two hosts.
+  #
+  #   docker compose --profile pull up -d nginx-pull
+  #
+  # The point of this service is what it does NOT declare. There is no 8443 published, no TLS
+  # certificate, no client CA and no fixed address, because nothing ever connects to it. Mint a
+  # registration token in the console and pass it as ENGINX_REGISTRATION_TOKEN.
+  nginx-pull:
+    profiles: [pull]
+    build:
+      context: ../enginx-agent
+      dockerfile: Dockerfile
+    container_name: enginx-nginx-pull
+    environment:
+      ENGINX_SERVER_URL: http://proxy-management:8080/api/v1
+      ENGINX_REGISTRATION_TOKEN: ${ENGINX_REGISTRATION_TOKEN:-}
+      ENGINX_INSTANCE_NAME: ${ENGINX_INSTANCE_NAME:-nginx-pull-01}
+      ENGINX_ENVIRONMENT: TEST
+      ENGINX_TOKEN_FILE: /var/lib/enginx/agent-token
+      ENGINX_HEARTBEAT_INTERVAL: 15s
+      ENGINX_POLL_WAIT: 20s
+      AGENT_RELEASES_DIR: /etc/nginx/enginx
+      AGENT_NGINX_BINARY: /usr/sbin/nginx
+      AGENT_NGINX_CONF: /etc/nginx/nginx.conf
+    ports:
+      # Only the traffic this host serves. Nothing is published for the control plane.
+      - "8091:80"
+      - "8454:443"
+    volumes:
+      - nginx-pull-releases:/etc/nginx/enginx
+      # Survives a restart: without it the agent enrols again, and a single-use registration
+      # token would be spent by a reboot.
+      - nginx-pull-state:/var/lib/enginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - enginx
+
   # The admin console. Served as static files; it talks to the management API from the browser,
   # which is why that API publishes a CORS policy naming this origin.
   console:
@@ -229,6 +267,8 @@ services:
 volumes:
   postgres-data:
   nginx-releases:
+  nginx-pull-releases:
+  nginx-pull-state:
 
 networks:
   enginx:

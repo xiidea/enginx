@@ -54,6 +54,7 @@ public class DeploymentDispatcher {
     private final NginxConfigRenderer renderer;
     private final CertificateMaterialProvider certificates;
     private final NginxAgentPort agent;
+    private final PullDeploymentCoordinator pullDeployments;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -64,6 +65,7 @@ public class DeploymentDispatcher {
                                 NginxConfigRenderer renderer,
                                 CertificateMaterialProvider certificates,
                                 NginxAgentPort agent,
+                                PullDeploymentCoordinator pullDeployments,
                                 AuditRecorder audit,
                                 Clock clock) {
         this.deployments = deployments;
@@ -73,6 +75,7 @@ public class DeploymentDispatcher {
         this.renderer = renderer;
         this.certificates = certificates;
         this.agent = agent;
+        this.pullDeployments = pullDeployments;
         this.audit = audit;
         this.clock = clock;
     }
@@ -178,6 +181,13 @@ public class DeploymentDispatcher {
     }
 
     private boolean applyBundle(Deployment deployment, NginxInstance instance, ConfigBundle bundle) {
+        if (instance.connectivityMode().isPull()) {
+            // Nothing to dial. The work is queued for the host to collect, and the deployment is
+            // carried from here by results arriving rather than by calls going out.
+            pullDeployments.begin(deployment, instance, bundle);
+            return true;
+        }
+
         Instant now = clock.instant();
         deployment.started(now);
         deployments.save(deployment);

@@ -48,6 +48,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/bundles/{bundleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a bundle this host has been told to apply
+         * @description Refused unless the bundle belongs to the calling host.
+         */
+        get: operations["bundle_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/heartbeat": {
         parameters: {
             query?: never;
@@ -62,6 +82,46 @@ export interface paths {
          * @description Replaces the status call the platform makes to a push-mode host. The reported values are interpreted identically, so ONLINE and DEGRADED mean the same thing whichever end of the connection asked.
          */
         post: operations["heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/jobs/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Collect the next job for this host
+         * @description Holds the request open for up to waitSeconds until work appears. 204 means there was nothing to do, which is the ordinary case.
+         */
+        get: operations["request_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/jobs/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report how a job went
+         * @description Advances the deployment the job belongs to. A host may only report on its own jobs.
+         */
+        post: operations["report"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1013,6 +1073,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AgentBundleFileResponse: {
+            content: string;
+            mode?: string;
+            path: string;
+            sensitive?: boolean;
+            sha256: string;
+        };
+        AgentBundleResponse: {
+            /** Format: uuid */
+            bundleId: string;
+            contentHash: string;
+            files: components["schemas"]["AgentBundleFileResponse"][];
+            /** Format: int64 */
+            sequence: number;
+        };
         AgentHeartbeatRequest: {
             activeBundleId?: string;
             agentVersion?: string;
@@ -1020,6 +1095,25 @@ export interface components {
             configTestOutput?: string;
             nginxRunning: boolean;
             nginxVersion?: string;
+        };
+        AgentJobResponse: {
+            /** Format: uuid */
+            bundleId: string;
+            idempotencyKey: string;
+            /** Format: uuid */
+            jobId: string;
+            reload?: boolean;
+            type: string;
+        };
+        AgentJobResultRequest: {
+            error?: string;
+            nginxVersion?: string;
+            noop?: boolean;
+            previousBundleId?: string;
+            rolledBack?: boolean;
+            succeeded: boolean;
+            testOutput?: string;
+            validationFailed?: boolean;
         };
         AgentRegisterRequest: {
             environment?: string;
@@ -1725,6 +1819,39 @@ export interface operations {
             };
         };
     };
+    bundle_1: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentBundleResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     heartbeat: {
         parameters: {
             query?: never;
@@ -1737,6 +1864,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentHeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    request_1: {
+        parameters: {
+            query?: {
+                waitSeconds?: number;
+            };
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentJobResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    report: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentJobResultRequest"];
             };
         };
         responses: {

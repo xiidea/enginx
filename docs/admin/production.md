@@ -627,3 +627,26 @@ configuration bundle contains them — the same exposure a push host's private k
 **Revoking a host's own token** stops it collecting work without deleting the instance, so its
 deployment history and the sites pointing at it survive. The host re-enrols with a fresh
 registration token.
+
+### How work reaches a pull host
+
+The agent long-polls `GET /agents/jobs/request`, and the server answers the moment a job appears —
+so a deployment reaches the host in about as long as a request takes rather than waiting out an
+interval. A deployment becomes two jobs, staged then activated, with the second queued only after
+the first succeeds: a host is never told to activate a bundle it has not stored.
+
+Three properties are worth knowing when reading `agent_jobs`:
+
+- **One job outstanding per host.** Two in flight against one NGINX would be two processes racing
+  to swap the same symlink. Enforced by a unique index, not only by the claim query.
+- **Jobs are leased, not assigned.** A host holds one for `AGENT_JOB_LEASE` (default 5m); if no
+  result arrives the job returns to the queue. An agent that dies mid-deployment strands nothing,
+  and replaying is safe because bundles are content-addressed and activation carries the
+  deployment's idempotency key.
+- **A failure cancels what was queued behind it.** Otherwise the host would collect an activation
+  for a deployment that already failed.
+
+**Verification is not available on a pull host yet.** A push deployment ends by asking the host
+whether it actually answers for the names just deployed; that is a question rather than queued
+work, and it is recorded as skipped rather than quietly omitted. The same applies to upstream
+checks and ACME HTTP-01, so **a pull host cannot issue HTTP-01 certificates**.

@@ -81,18 +81,25 @@ func (c *Client) Heartbeat(ctx context.Context, request HeartbeatRequest) error 
 var ErrUnauthorized = fmt.Errorf("the management server did not accept this agent's token")
 
 func (c *Client) call(ctx context.Context, method, path string, body any, out any) error {
+	_, err := c.callWithStatus(ctx, method, path, body, out)
+	return err
+}
+
+// callWithStatus is call, for the one endpoint where 204 is a meaningful answer rather than the
+// absence of one: no work to do is the ordinary result of asking for work.
+func (c *Client) callWithStatus(ctx context.Context, method, path string, body any, out any) (int, error) {
 	var payload io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("encoding the request: %w", err)
+			return 0, fmt.Errorf("encoding the request: %w", err)
 		}
 		payload = bytes.NewReader(encoded)
 	}
 
 	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, payload)
 	if err != nil {
-		return fmt.Errorf("building the request: %w", err)
+		return 0, fmt.Errorf("building the request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
@@ -102,25 +109,94 @@ func (c *Client) call(ctx context.Context, method, path string, body any, out an
 
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("calling %s: %w", path, err)
+		return 0, fmt.Errorf("calling %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return ErrUnauthorized
+		return response.StatusCode, ErrUnauthorized
 	}
 	if response.StatusCode >= 300 {
 		// Bounded: a problem document is small, and an HTML error page from something in the
 		// path should not be read into memory in full.
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-		return fmt.Errorf("%s returned %d: %s", path, response.StatusCode, strings.TrimSpace(string(detail)))
+		return response.StatusCode, fmt.Errorf("%s returned %d: %s",
+			path, response.StatusCode, strings.TrimSpace(string(detail)))
 	}
 
-	if out == nil {
-		return nil
+	if out == nil || response.StatusCode == http.StatusNoContent {
+		return response.StatusCode, nil
 	}
 	if err := json.NewDecoder(response.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding the response from %s: %w", path, err)
+		return response.StatusCode, fmt.Errorf("decoding the response from %s: %w", path, err)
 	}
-	return nil
+	return response.StatusCode, nil
+}
+
+// Job is one unit of work collected from the management server.
+type Job struct {
+	JobID          string `json:"jobId"`
+	Type           string `json:"type"`
+	BundleID       string `json:"bundleId"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	Reload         bool   `json:"reload"`
+}
+
+// JobResult is what this host reports back.
+type JobResult struct {
+	Succeeded        bool   `json:"succeeded"`
+	ValidationFailed bool   `json:"validationFailed"`
+	TestOutput       string `json:"testOutput,omitempty"`
+	NginxVersion     string `json:"nginxVersion,omitempty"`
+	PreviousBundleID string `json:"previousBundleId,omitempty"`
+	Noop             bool   `json:"noop"`
+	RolledBack       bool   `json:"rolledBack"`
+	Error            string `json:"error,omitempty"`
+}
+
+// BundleFile mirrors one file in a configuration bundle.
+type BundleFile struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	SHA256    string `json:"sha256"`
+	Sensitive bool   `json:"sensitive"`
+	Mode      string `json:"mode,omitempty"`
+}
+
+// Bundle is the configuration tree this host should serve.
+type Bundle struct {
+	BundleID    string       `json:"bundleId"`
+	Sequence    int64        `json:"sequence"`
+	ContentHash string       `json:"contentHash"`
+	Files       []BundleFile `json:"files"`
+}
+
+// RequestJob asks for work, holding the request open until some appears or the wait elapses.
+//
+// A nil job with a nil error means there was nothing to do, which is the ordinary case.
+func (c *Client) RequestJob(ctx context.Context, wait time.Duration) (*Job, error) {
+	var job Job
+	status, err := c.callWithStatus(ctx, http.MethodGet,
+		fmt.Sprintf("/agents/jobs/request?waitSeconds=%d", int(wait.Seconds())), nil, &job)
+	if err != nil {
+		return nil, err
+	}
+	if status == http.StatusNoContent {
+		return nil, nil
+	}
+	return &job, nil
+}
+
+func (c *Client) ReportJob(ctx context.Context, jobID string, result JobResult) error {
+	return c.call(ctx, http.MethodPost, "/agents/jobs/"+jobID+"/result", result, nil)
+}
+
+// FetchBundle downloads the configuration this host has been told to apply.
+//
+// Authorised to this host alone on the server side: a bundle carries every site's private key, so
+// holding a valid token is not enough to read one belonging to somebody else.
+func (c *Client) FetchBundle(ctx context.Context, bundleID string) (Bundle, error) {
+	var b Bundle
+	err := c.call(ctx, http.MethodGet, "/agents/bundles/"+bundleID, nil, &b)
+	return b, err
 }

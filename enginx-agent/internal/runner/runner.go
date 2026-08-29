@@ -44,6 +44,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	slog.Info("agent registered; reporting to the management server",
 		"server", r.cfg.ServerURL, "interval", r.cfg.HeartbeatInterval)
 
+	// Collecting work runs alongside reporting rather than between reports: a long-poll parks for
+	// up to half a minute, and a heartbeat that waited behind it would drift late enough to have
+	// the platform judge this host silent.
+	go r.collectWork(ctx, authenticated)
+
 	// Immediately, then on the interval: waiting a full interval before the first report leaves
 	// a freshly started host looking silent for exactly as long as the threshold that judges it.
 	r.report(ctx, authenticated)
