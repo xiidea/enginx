@@ -10,7 +10,10 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
-  align-items: start;
+  /* Stretch, so two cards sharing a row are the same height. Left to size themselves they end
+     ragged — TLS grows when HTTPS is enabled while Limits does not — and a row of mismatched
+     boxes reads as something having gone wrong rather than as two independent sections. */
+  align-items: stretch;
   /* A form is read down a column. Letting it fill a 27-inch monitor puts the label and its input
      an eye movement apart, and stretches a port field to 600px for no reason. */
   max-width: 74rem;
