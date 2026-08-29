@@ -1,5 +1,6 @@
 package net.xiidea.enginx.domain.notification;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -23,10 +24,25 @@ public record NotificationEvent(
         String fingerprint,
         String subject,
         String body,
-        String ownerUsername) {
+        String ownerUsername,
+        Set<String> subscribers) {
+
+    /**
+     * The four-argument shape, for the conditions that have no per-resource subscribers: an
+     * offline host or a dead outbox message belongs to the estate rather than to one site.
+     */
+    public NotificationEvent(NotificationKind kind, String resourceType, UUID resourceId,
+                             String threshold, String fingerprint, String subject, String body,
+                             String ownerUsername) {
+        this(kind, resourceType, resourceId, threshold, fingerprint, subject, body, ownerUsername,
+                Set.of());
+    }
 
     public NotificationEvent {
         threshold = threshold == null ? "" : threshold;
+        // Never part of the ledger key. Who is told is not what happened, so adding an address
+        // must not re-arm a notification that has already been sent.
+        subscribers = subscribers == null ? Set.of() : Set.copyOf(subscribers);
         if (kind == null || resourceId == null) {
             throw new IllegalArgumentException("kind and resourceId are required");
         }

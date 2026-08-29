@@ -23,6 +23,7 @@ import {
   Preview,
   ScopeType,
   Site,
+  SiteNotificationSettings,
   SiteRequest,
   SiteStatus,
   SiteSummary,
@@ -75,6 +76,22 @@ export class SitesApi {
 
   remove(id: string, version: number): Observable<void> {
     return this.api.delete(`/proxy-sites/${id}`, version);
+  }
+
+  notifications(id: string): Observable<SiteNotificationSettings> {
+    return this.api.get(`/proxy-sites/${id}/notifications`);
+  }
+
+  /**
+   * Replaces the settings wholesale, and never deploys.
+   *
+   * Whole-list because the console sends back what it displayed, so two people editing at once
+   * cannot produce a union neither of them chose. No version is sent: this is not a change to the
+   * site's configuration and must not contend with one.
+   */
+  configureNotifications(id: string, body: { expiryEnabled: boolean; subscribers: string[] }):
+      Observable<SiteNotificationSettings> {
+    return this.api.put(`/proxy-sites/${id}/notifications`, body);
   }
 
   enable(id: string): Observable<Site> {

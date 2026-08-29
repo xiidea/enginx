@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, input, signal } from '@angular/cor
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CertificatesApi, DeploymentsApi, GroupsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
-import { Certificate, Deployment, DomainGroup, EffectivePermission, Preview, Site, UpstreamCheck } from '../../core/api/models';
+import { Certificate, Deployment, DomainGroup, EffectivePermission, Preview, Site, SiteNotificationSettings, UpstreamCheck } from '../../core/api/models';
 import { groupSource } from '../../core/api/suggestions';
 import { Notifications } from '../../shared/notifications';
 import { PageHeader } from '../../shared/page';
@@ -51,6 +51,18 @@ export class SiteDetail implements OnInit {
   readonly groupChoices = groupSource(this.groupsApi);
 
   /**
+   * Who is told when this site is about to expire.
+   *
+   * Loaded separately from the site because it is not part of its configuration: changing an
+   * address must not take the site's optimistic lock or read as a configuration change.
+   */
+  readonly notificationSettings = signal<SiteNotificationSettings | null>(null);
+  readonly expiryNotifications = signal(true);
+  readonly subscribers = signal<string[]>([]);
+  readonly newSubscriber = signal('');
+  readonly savingNotifications = signal(false);
+
+  /**
    * What this user may do to this site, answered by the server.
    *
    * Used only to decide what to show. Every action is re-authorised on the request itself, so a
@@ -66,7 +78,71 @@ export class SiteDetail implements OnInit {
   ngOnInit(): void {
     this.load();
     this.loadGroups();
+    this.loadNotifications();
   }
+
+  private loadNotifications(): void {
+    this.api.notifications(this.id()).subscribe({
+      next: (settings) => {
+        this.notificationSettings.set(settings);
+        this.expiryNotifications.set(settings.expiryEnabled);
+        this.subscribers.set([...settings.subscribers]);
+      },
+      // Not fatal: the rest of the page is about what the site serves, and a section that could
+      // not load should not take the page down with it.
+      error: () => this.notificationSettings.set(null),
+    });
+  }
+
+  addSubscriber(): void {
+    const address = this.newSubscriber().trim().toLowerCase();
+    if (!address) {
+      return;
+    }
+    // Deduplicated here as well as on the server, so the list a person is looking at never shows
+    // the same address twice while they are still editing it.
+    if (!this.subscribers().includes(address)) {
+      this.subscribers.update((current) => [...current, address]);
+    }
+    this.newSubscriber.set('');
+  }
+
+  removeSubscriber(address: string): void {
+    this.subscribers.update((current) => current.filter((entry) => entry !== address));
+  }
+
+  /** True while the form differs from what the server last returned. */
+  notificationsChanged(): boolean {
+    const saved = this.notificationSettings();
+    if (!saved) {
+      return false;
+    }
+    const same = saved.subscribers.length === this.subscribers().length
+      && saved.subscribers.every((address) => this.subscribers().includes(address));
+    return saved.expiryEnabled !== this.expiryNotifications() || !same;
+  }
+
+  saveNotifications(): void {
+    this.savingNotifications.set(true);
+    this.api
+      .configureNotifications(this.id(), {
+        expiryEnabled: this.expiryNotifications(),
+        subscribers: this.subscribers(),
+      })
+      .subscribe({
+        next: (settings) => {
+          this.savingNotifications.set(false);
+          this.notificationSettings.set(settings);
+          this.subscribers.set([...settings.subscribers]);
+          this.notifications.success('Notification settings saved');
+        },
+        error: (problem) => {
+          this.savingNotifications.set(false);
+          this.notifications.problem(problem);
+        },
+      });
+  }
+
 
   private loadGroups(): void {
     this.groupsLoading.set(true);

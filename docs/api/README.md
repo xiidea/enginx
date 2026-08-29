@@ -34,6 +34,8 @@ URI, never on the human-readable `detail`.
 | `DELETE` | `/api/v1/users/{subjectRef}` | global admin. Removes a name, never access |
 | `POST` | `/api/v1/users/cleanup` | global admin. Removes every stale name |
 | `GET` | `/api/v1/groups` | ADMIN on any scope |
+| `GET` | `/api/v1/proxy-sites/{id}/notifications` | READ on the site |
+| `PUT` | `/api/v1/proxy-sites/{id}/notifications` | OPERATE on the site. Never deploys |
 | `GET` | `/api/v1/proxy-sites/{id}/preview` | READ on the site |
 | `POST` | `/api/v1/proxy-sites/{id}/deploy` | OPERATE on the site |
 | `POST` | `/api/v1/nginx-instances/{id}/deploy` | global ADMIN |

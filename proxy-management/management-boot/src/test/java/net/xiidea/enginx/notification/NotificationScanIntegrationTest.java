@@ -1,6 +1,8 @@
 package net.xiidea.enginx.notification;
 
 import net.xiidea.enginx.application.notification.NotificationScanService;
+import net.xiidea.enginx.application.notification.SiteNotificationService;
+import net.xiidea.enginx.domain.shared.ValidationException;
 import net.xiidea.enginx.application.proxy.ProxySiteCommands;
 import net.xiidea.enginx.application.proxy.ProxySiteService;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
@@ -33,9 +35,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The scan, end to end against PostgreSQL.
@@ -61,6 +65,8 @@ class NotificationScanIntegrationTest extends AbstractIntegrationTest {
     private TestSubjectProvider subjects;
     @Autowired
     private CapturingChannel channel;
+    @Autowired
+    private SiteNotificationService siteNotifications;
 
     private UUID instanceId;
 
@@ -165,6 +171,93 @@ class NotificationScanIntegrationTest extends AbstractIntegrationTest {
         scan.scan();
 
         assertThat(channel.recipients).contains("ops@example.com");
+    }
+
+    /**
+     * The opt-out, and the reason it is checked before the ledger rather than after.
+     *
+     * <p>Claiming and then discarding would record the notification as handled, so re-enabling
+     * later would send nothing — the site would be silently un-notifiable for good.
+     */
+    @Test
+    @DisplayName("a site opted out of expiry warnings produces none, and can be opted back in")
+    void optingOutSuppressesAndIsReversible() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(2));
+        siteNotifications.configure(site.id(), false, Set.of());
+
+        assertThat(scan.scan()).isZero();
+        assertThat(channel.forResource(site.id())).isEmpty();
+
+        siteNotifications.configure(site.id(), true, Set.of());
+
+        assertThat(scan.scan()).isPositive();
+        assertThat(channel.forResource(site.id())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("subscribers are told in addition to the operator list, never instead of it")
+    void subscribersAreAddedToTheOperators() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(1));
+        siteNotifications.configure(site.id(), true, Set.of("team@example.com", "oncall@example.com"));
+
+        scan.scan();
+
+        assertThat(channel.forResource(site.id())).hasSize(1);
+        assertThat(channel.recipients)
+                .contains("ops@example.com", "team@example.com", "oncall@example.com");
+    }
+
+    /**
+     * Who is told is not what happened. If the subscriber list were part of the ledger key, adding
+     * an address would re-arm a warning already sent and tell everybody again.
+     */
+    @Test
+    @DisplayName("adding a subscriber does not re-send a warning that has already gone out")
+    void changingSubscribersDoesNotResend() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(2));
+        scan.scan();
+        assertThat(channel.forResource(site.id())).hasSize(1);
+
+        channel.captured.clear();
+        siteNotifications.configure(site.id(), true, Set.of("late@example.com"));
+        scan.scan();
+
+        assertThat(channel.forResource(site.id())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a site nobody has configured is notified exactly as before")
+    void defaultsMatchThePreviousBehaviour() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(2));
+
+        assertThat(siteNotifications.get(site.id()).expiryEnabled()).isTrue();
+        assertThat(siteNotifications.get(site.id()).subscribers()).isEmpty();
+
+        scan.scan();
+        assertThat(channel.forResource(site.id())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("an address that is not one is refused before it can be stored")
+    void invalidAddressesAreRefused() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(30));
+
+        assertThatThrownBy(() -> siteNotifications.configure(site.id(), true, Set.of("not-an-address")))
+                .isInstanceOf(ValidationException.class);
+        // A trailing comma from pasting a list is the mistake people actually make.
+        assertThatThrownBy(() -> siteNotifications.configure(site.id(), true, Set.of("a@example.com,")))
+                .isInstanceOf(ValidationException.class);
+    }
+
+    /** The same person under two capitalisations is one person, and is told once. */
+    @Test
+    @DisplayName("addresses are normalised, so nobody is subscribed twice")
+    void addressesAreNormalised() {
+        ProxySite site = siteExpiringIn(Duration.ofDays(30));
+
+        siteNotifications.configure(site.id(), true, Set.of("Team@Example.com", "team@example.com"));
+
+        assertThat(siteNotifications.get(site.id()).subscribers()).containsExactly("team@example.com");
     }
 
     // ---- test channel ------------------------------------------------------

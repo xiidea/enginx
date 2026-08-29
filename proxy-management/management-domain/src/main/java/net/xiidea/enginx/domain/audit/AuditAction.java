@@ -7,6 +7,8 @@ public enum AuditAction {
     PROXY_SITE_ENABLED,
     PROXY_SITE_DISABLED,
     PROXY_SITE_RENEWED,
+    /** Who is told about this site, and whether. Not a change to what it serves. */
+    PROXY_SITE_NOTIFICATIONS_UPDATED,
     PROXY_SITE_EXPIRY_REMOVED,
     PROXY_SITE_CLONED,
     NGINX_INSTANCE_REGISTERED,

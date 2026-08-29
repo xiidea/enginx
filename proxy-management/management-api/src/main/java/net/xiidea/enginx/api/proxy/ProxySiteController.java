@@ -8,6 +8,7 @@ import net.xiidea.enginx.api.proxy.dto.ProxySiteResponse;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteSummaryResponse;
 import net.xiidea.enginx.api.proxy.dto.RenewRequest;
 import net.xiidea.enginx.application.proxy.ProxySiteCommands;
+import net.xiidea.enginx.application.notification.SiteNotificationService;
 import net.xiidea.enginx.application.proxy.ProxySiteService;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteQuery;
@@ -17,6 +18,7 @@ import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.SortDirection;
 import net.xiidea.enginx.domain.shared.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -51,10 +53,65 @@ public class ProxySiteController {
 
     private final ProxySiteService service;
     private final ProxySiteDtoMapper mapper;
+    private final SiteNotificationService notifications;
 
-    public ProxySiteController(ProxySiteService service, ProxySiteDtoMapper mapper) {
+    public ProxySiteController(ProxySiteService service, ProxySiteDtoMapper mapper,
+                               SiteNotificationService notifications) {
         this.service = service;
         this.mapper = mapper;
+        this.notifications = notifications;
+    }
+
+    @GetMapping("/{id}/notifications")
+    @Operation(summary = "Who is told about this site",
+            description = "A site nobody has configured returns the defaults: expiry warnings on, "
+                    + "and only the platform's operator addresses receive them.")
+    public NotificationSettingsResponse notifications(@PathVariable UUID id) {
+        return NotificationSettingsResponse.of(notifications.get(id));
+    }
+
+    @PutMapping("/{id}/notifications")
+    @Operation(summary = "Choose who is told about this site",
+            description = "Replaces the settings wholesale, because the console sends back the "
+                    + "list it displayed — two people editing at once cannot then produce a union "
+                    + "neither of them chose. Requires OPERATE: this is operational, and does not "
+                    + "change what anybody is served. Never triggers a deployment.")
+    public NotificationSettingsResponse configureNotifications(
+            @PathVariable UUID id, @Valid @RequestBody NotificationSettingsRequest request) {
+
+        return NotificationSettingsResponse.of(notifications.configure(id,
+                request.expiryEnabledOrDefault(),
+                request.subscribers() == null ? Set.of() : Set.copyOf(request.subscribers())));
+    }
+
+    /**
+     * @param subscribers addresses told in addition to the platform's operator list, never instead
+     * @param updatedBy   null while the site still has the defaults, which is the common case
+     */
+    @Schema(name = "SiteNotificationSettingsResponse",
+            requiredProperties = {"expiryEnabled", "subscribers"})
+    public record NotificationSettingsResponse(boolean expiryEnabled, List<String> subscribers,
+                                                String updatedBy, Instant updatedAt) {
+
+        static NotificationSettingsResponse of(
+                net.xiidea.enginx.domain.notification.SiteNotificationSettings settings) {
+            return new NotificationSettingsResponse(settings.expiryEnabled(),
+                    settings.subscribers().stream().sorted().toList(),
+                    settings.updatedBy(), settings.updatedAt());
+        }
+    }
+
+    @Schema(name = "SiteNotificationSettingsRequest")
+    public record NotificationSettingsRequest(Boolean expiryEnabled, List<String> subscribers) {
+
+        /**
+         * Boxed and defaulted, because a primitive component makes Jackson reject a body that
+         * omits it — turning an optional field into a required one the schema does not declare.
+         * Absent means on, which is what a site does before anybody configures it.
+         */
+        boolean expiryEnabledOrDefault() {
+            return expiryEnabled == null || expiryEnabled;
+        }
     }
 
     @GetMapping

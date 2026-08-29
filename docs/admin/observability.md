@@ -125,3 +125,28 @@ NGINX on live hosts — damage that outlives the request being shed.
 The limiter is per instance, so N replicas allow up to N times the configured rate. That trade, and
 where to put an exact global limit instead, is explained in
 [production.md](production.md#4-rate-limiting).
+
+## Per-site notification settings
+
+Expiry warnings are on for every site, and the platform's operator addresses receive them. A site
+can narrow or widen that from the console's **Notifications** section, or over
+`PUT /api/v1/proxy-sites/{id}/notifications`:
+
+- **Opt out** of expiry warnings for one site — for a site whose expiry is deliberate and
+  uninteresting, which is otherwise a recurring message nobody acts on. Warnings that get ignored
+  train people to ignore the next one.
+- **Subscribe addresses** told *in addition* to the operator list, never instead of it. A list
+  here that replaced the operator addresses would quietly cut off whoever configured the estate.
+
+Three things are deliberate:
+
+- **It is not part of the site's configuration.** Changing it takes no optimistic lock on the site,
+  does not appear in the audit trail as a configuration change, and never queues a deployment.
+  It is audited on its own, as `PROXY_SITE_NOTIFICATIONS_UPDATED`.
+- **OPERATE, not MANAGE.** Choosing who is told is operational, like enabling or renewing. It is
+  not READ either: an address added here receives mail naming a domain and its expiry.
+- **Opting out is checked before the ledger.** Claiming a notification and then discarding it
+  would record it as handled, so opting back in later would send nothing.
+
+A site nobody has configured stores no row at all — absence and the defaults are the same state,
+and returning to the defaults removes the row rather than keeping one that says nothing.

@@ -126,3 +126,5 @@ export type AgentRegistrationToken = Wire<Schemas['AgentRegistrationTokenRespons
 export type AgentRegistrationTokenCreated = Wire<Schemas['AgentRegistrationTokenCreatedResponse']>;
 
 export type AgentJob = Wire<Schemas['AgentJobResponse']>;
+
+export type SiteNotificationSettings = Wire<Schemas['SiteNotificationSettingsResponse']>;

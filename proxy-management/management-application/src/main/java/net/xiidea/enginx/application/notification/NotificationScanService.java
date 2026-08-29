@@ -9,6 +9,8 @@ import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.notification.NotificationEvent;
 import net.xiidea.enginx.domain.notification.NotificationKind;
+import net.xiidea.enginx.domain.notification.SiteNotificationSettings;
+import net.xiidea.enginx.domain.notification.SiteNotificationSettingsRepository;
 import net.xiidea.enginx.domain.outbox.OutboxMessage;
 import net.xiidea.enginx.domain.outbox.OutboxRepository;
 import net.xiidea.enginx.domain.proxy.ProxySite;
@@ -24,6 +26,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Looks for conditions worth telling someone about, and hands each to {@link NotificationService}.
@@ -51,12 +55,14 @@ public class NotificationScanService {
     private final ConfigBundleRepository bundles;
     private final NotificationService notifications;
     private final NotificationProperties properties;
+    private final SiteNotificationSettingsRepository siteSettings;
     private final Clock clock;
 
     public NotificationScanService(ProxySiteRepository sites, CertificateRepository certificates,
                                    NginxInstanceRepository instances, OutboxRepository outbox,
                                    ConfigBundleRepository bundles, NotificationService notifications,
-                                   NotificationProperties properties, Clock clock) {
+                                   NotificationProperties properties,
+                                   SiteNotificationSettingsRepository siteSettings, Clock clock) {
         this.sites = sites;
         this.certificates = certificates;
         this.instances = instances;
@@ -64,6 +70,7 @@ public class NotificationScanService {
         this.bundles = bundles;
         this.notifications = notifications;
         this.properties = properties;
+        this.siteSettings = siteSettings;
         this.clock = clock;
     }
 
@@ -95,9 +102,23 @@ public class NotificationScanService {
         Instant cutoff = now.plus(Duration.ofDays(properties.widestThresholdDays()));
         int sent = 0;
 
-        for (ProxySite site : sites.findWithExpiryBefore(cutoff, SCAN_LIMIT)) {
+        List<ProxySite> approaching = sites.findWithExpiryBefore(cutoff, SCAN_LIMIT);
+        // One query for the batch. Asking per site would turn one indexed read into a hundred, on
+        // a sweep that already touched every one of them.
+        Map<UUID, SiteNotificationSettings> settings = siteSettings.findForSites(
+                approaching.stream().map(ProxySite::id).collect(java.util.stream.Collectors.toSet()));
+
+        for (ProxySite site : approaching) {
             Instant expiry = site.spec().window().expiresAt();
             if (expiry == null) {
+                continue;
+            }
+
+            SiteNotificationSettings notify = settings.getOrDefault(site.id(),
+                    SiteNotificationSettings.defaultsFor(site.id()));
+            if (!notify.expiryEnabled()) {
+                // Opted out. Skipped before the ledger is touched, so re-enabling later still
+                // sends: a claim recorded now would suppress the notification for good.
                 continue;
             }
             // The fingerprint is the expiry instant. Extending a site's window changes it, which
@@ -114,7 +135,7 @@ public class NotificationScanService {
 
                         To restore it, set a new expiry date or remove the expiry entirely.\
                         """.formatted(site.spec().domain().value(), expiry),
-                        site.createdBy()));
+                        site.createdBy(), notify.subscribers()));
                 continue;
             }
 
@@ -141,7 +162,7 @@ public class NotificationScanService {
 
                     If it is still needed, extend or remove its expiry before then.\
                     """.formatted(site.spec().domain().value(), expiry, describeRemaining(stated)),
-                    site.createdBy()));
+                    site.createdBy(), notify.subscribers()));
         }
         return sent;
     }

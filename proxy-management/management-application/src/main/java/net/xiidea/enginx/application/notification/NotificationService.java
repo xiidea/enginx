@@ -63,13 +63,18 @@ public class NotificationService {
         }
         UUID ledgerId = claim.get();
 
-        Set<String> addresses = recipients.resolve(event.ownerUsername());
+        // The operator list, the owner, and anyone subscribed to this particular resource. A set,
+        // so somebody who is both an operator and a subscriber is told once.
+        Set<String> addresses = new java.util.LinkedHashSet<>(recipients.resolve(event.ownerUsername()));
+        addresses.addAll(event.subscribers());
+
         if (addresses.isEmpty()) {
             // Recorded rather than dropped silently. "Nobody is configured to be told" is a
             // configuration problem an operator needs to see, and the ledger is where they will
             // look when they wonder why they never heard about something.
             ledger.recordOutcome(ledgerId, false, "", "No recipients are configured");
-            log.warn("Notification {} for {} had no recipients; set enginx.notifications.operator-addresses",
+            log.warn("Notification {} for {} had no recipients; set "
+                    + "enginx.notifications.operator-addresses, or subscribe an address to the resource",
                     event.kind(), event.resourceId());
             return false;
         }

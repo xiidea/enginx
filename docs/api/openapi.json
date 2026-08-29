@@ -1838,6 +1838,45 @@
         ],
         "type": "object"
       },
+      "SiteNotificationSettingsRequest": {
+        "properties": {
+          "expiryEnabled": {
+            "type": "boolean"
+          },
+          "subscribers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SiteNotificationSettingsResponse": {
+        "properties": {
+          "expiryEnabled": {
+            "type": "boolean"
+          },
+          "subscribers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expiryEnabled",
+          "subscribers"
+        ],
+        "type": "object"
+      },
       "SubjectResponse": {
         "description": "A grantable subject.",
         "properties": {
@@ -4923,6 +4962,100 @@
           }
         },
         "summary": "Remove the expiry so the site never expires",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/notifications": {
+      "get": {
+        "description": "A site nobody has configured returns the defaults: expiry warnings on, and only the platform's operator addresses receive them.",
+        "operationId": "notifications",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteNotificationSettingsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Who is told about this site",
+        "tags": [
+          "Proxy sites"
+        ]
+      },
+      "put": {
+        "description": "Replaces the settings wholesale, because the console sends back the list it displayed \u2014 two people editing at once cannot then produce a union neither of them chose. Requires OPERATE: this is operational, and does not change what anybody is served. Never triggers a deployment.",
+        "operationId": "configureNotifications",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteNotificationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteNotificationSettingsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Choose who is told about this site",
         "tags": [
           "Proxy sites"
         ]

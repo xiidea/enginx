@@ -972,6 +972,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proxy-sites/{id}/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who is told about this site
+         * @description A site nobody has configured returns the defaults: expiry warnings on, and only the platform's operator addresses receive them.
+         */
+        get: operations["notifications"];
+        /**
+         * Choose who is told about this site
+         * @description Replaces the settings wholesale, because the console sends back the list it displayed — two people editing at once cannot then produce a union neither of them chose. Requires OPERATE: this is operational, and does not change what anybody is served. Never triggers a deployment.
+         */
+        put: operations["configureNotifications"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proxy-sites/{id}/preview": {
         parameters: {
             query?: never;
@@ -1698,6 +1722,17 @@ export interface components {
         };
         RotateAgentCertificateRequest: {
             agentCertFingerprint: string;
+        };
+        SiteNotificationSettingsRequest: {
+            expiryEnabled?: boolean;
+            subscribers?: string[];
+        };
+        SiteNotificationSettingsResponse: {
+            expiryEnabled: boolean;
+            subscribers: string[];
+            /** Format: date-time */
+            updatedAt?: string;
+            updatedBy?: string;
         };
         /** @description A grantable subject. */
         SubjectResponse: {
@@ -3784,6 +3819,72 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    configureNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteNotificationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
                 };
             };
             /** @description Unauthorized */

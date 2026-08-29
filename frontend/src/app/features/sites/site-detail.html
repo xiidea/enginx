@@ -145,6 +145,77 @@
 
     <div class="stack">
       <section class="card">
+        <div class="card-head"><h2>Notifications</h2></div>
+        <div class="card-body">
+          @if (!notificationSettings()) {
+            <p class="muted small">Could not load the notification settings.</p>
+          } @else {
+            <label for="notify-expiry" class="toggle">
+              <input id="notify-expiry" type="checkbox" [checked]="expiryNotifications()"
+                (change)="expiryNotifications.set(!expiryNotifications())" />
+              <span>
+                <strong>Warn before this site expires</strong>
+                <span class="muted small">
+                  @if (site.expiresAt) {
+                    Sent at each configured threshold before {{ site.expiresAt | datetime }}, and
+                    again when it comes off the air.
+                  } @else {
+                    This site has no expiry, so nothing is sent until one is set.
+                  }
+                </span>
+              </span>
+            </label>
+
+            <div class="subscribers">
+              <label for="notify-add">Also tell these addresses</label>
+              <!-- "Also", not "instead": the platform's operator addresses are told regardless,
+                   and a list here that silently replaced them would quietly cut off whoever
+                   configured the estate. -->
+              <p class="hint">
+                In addition to the platform's operator addresses, which are always told.
+              </p>
+
+              @if (subscribers().length) {
+                <ul class="chips">
+                  @for (address of subscribers(); track address) {
+                    <li>
+                      <span class="mono">{{ address }}</span>
+                      <button type="button" (click)="removeSubscriber(address)"
+                        [attr.aria-label]="'Remove ' + address">×</button>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <div class="row">
+                <input id="notify-add" type="email" placeholder="team@example.com"
+                  [ngModel]="newSubscriber()" (ngModelChange)="newSubscriber.set($event)"
+                  (keydown.enter)="addSubscriber()" />
+                <button class="btn btn-sm" type="button" [disabled]="!newSubscriber().trim()"
+                  (click)="addSubscriber()">Add</button>
+              </div>
+            </div>
+
+            @if (notificationsChanged()) {
+              <div class="row save-row">
+                <button class="btn btn-primary btn-sm" type="button"
+                  [disabled]="savingNotifications()" (click)="saveNotifications()">
+                  {{ savingNotifications() ? 'Saving…' : 'Save' }}
+                </button>
+                <span class="muted small">Changing this never redeploys the site.</span>
+              </div>
+            }
+
+            @if (notificationSettings(); as saved) {
+              @if (saved.updatedBy) {
+                <p class="hint">Last changed by {{ saved.updatedBy }}, {{ saved.updatedAt | datetime }}.</p>
+              }
+            }
+          }
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>Domain groups</h2></div>
         <div class="card-body">
           <!-- Here because a grant made over a group reaches this site: "which groups is it in"
