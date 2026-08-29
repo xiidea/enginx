@@ -66,3 +66,39 @@ tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
 .token { word-break: break-all; white-space: pre-wrap; }
 
 tbody tr.spent td { opacity: 0.6; }
+
+/* Which way the connection runs. A property of the network, not a state to act on, so it reads
+   quietly — but it is the first thing that decides how a host is troubleshot. */
+.mode {
+  display: inline-block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid currentColor;
+}
+.mode.push { color: var(--ink-3); }
+.mode.pull { color: var(--accent); }
+
+/* A host's queued work, revealed under its row. */
+.work-row td { background: var(--surface-2); }
+.work { padding: 0.25rem 0 0.5rem; }
+.work > p { margin: 0 0 0.6rem; }
+
+table.jobs { width: 100%; border-collapse: collapse; }
+table.jobs th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding: 0.2rem 0.5rem;
+}
+table.jobs td { padding: 0.25rem 0.5rem; border-top: 1px solid var(--rule); }
+
+.job-state { font-weight: 500; }
+/* Outstanding work is the point of the view, so it is the only state that carries the accent. */
+.job-queued, .job-leased { color: var(--accent); }
+.job-failed { color: var(--danger); }
+.job-succeeded { color: var(--ink-3); }

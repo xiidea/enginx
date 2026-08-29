@@ -124,3 +124,5 @@ export type DirectoryCleanup = Wire<Schemas['DirectoryCleanupResponse']>;
 export type AgentRegistrationToken = Wire<Schemas['AgentRegistrationTokenResponse']>;
 
 export type AgentRegistrationTokenCreated = Wire<Schemas['AgentRegistrationTokenCreatedResponse']>;
+
+export type AgentJob = Wire<Schemas['AgentJobResponse']>;

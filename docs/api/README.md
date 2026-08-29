@@ -21,6 +21,7 @@ URI, never on the human-readable `detail`.
 | `DELETE` | `/api/v1/proxy-sites/{id}/expiration` | `OPERATOR` |
 | `GET` | `/api/v1/nginx-instances` | any |
 | `POST` | `/api/v1/nginx-instances` | `SUPER_ADMIN` |
+| `GET` | `/api/v1/nginx-instances/{id}/agent-jobs` | any. Empty for a host the platform dials |
 | `GET` | `/api/v1/domain-groups?siteId=` | READ. With `siteId`, only the groups that site is in |
 | `POST` | `/api/v1/domain-groups` | MANAGE on the parent |
 | `GET` | `/api/v1/domain-groups/{id}/members` | READ on the group. Returns each site's domain |

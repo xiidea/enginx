@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
+  AgentJob,
   AgentRegistrationToken,
   AgentRegistrationTokenCreated,
   AuditEntry,
@@ -168,6 +169,16 @@ export class InstancesApi {
     environment?: string;
   }): Observable<NginxInstance> {
     return this.api.post('/nginx-instances', body);
+  }
+
+  /**
+   * What this host has been asked to do lately.
+   *
+   * Empty for a host the platform dials: that one is told what to do rather than collecting it,
+   * and its deployment record already says what happened.
+   */
+  agentJobs(id: string, limit = 20): Observable<AgentJob[]> {
+    return this.api.get(`/nginx-instances/${id}/agent-jobs`, { limit });
   }
 
   deploy(id: string): Observable<Deployment> {

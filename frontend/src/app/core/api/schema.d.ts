@@ -706,6 +706,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nginx-instances/{id}/agent-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent work queued for this host
+         * @description Empty for a host the platform dials, which is told what to do rather than collecting it.
+         */
+        get: operations["agentJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nginx-instances/{id}/bundles": {
         parameters: {
             query?: never;
@@ -1096,14 +1116,25 @@ export interface components {
             nginxRunning: boolean;
             nginxVersion?: string;
         };
+        /** @description One unit of work for a host that collects it. */
         AgentJobResponse: {
+            /** Format: int32 */
+            attempts: number;
             /** Format: uuid */
-            bundleId: string;
-            idempotencyKey: string;
+            bundleId?: string;
+            /** Format: date-time */
+            createdAt: string;
             /** Format: uuid */
-            jobId: string;
-            reload?: boolean;
+            deploymentId?: string;
+            error?: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            leaseExpiresAt?: string;
+            status: string;
             type: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         AgentJobResultRequest: {
             error?: string;
@@ -3170,6 +3201,39 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    agentJobs: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentJobResponse"][];
                 };
             };
             /** @description Unauthorized */

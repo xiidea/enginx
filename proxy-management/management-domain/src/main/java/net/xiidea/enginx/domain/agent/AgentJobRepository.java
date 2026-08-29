@@ -25,4 +25,12 @@ public interface AgentJobRepository {
 
     /** Queued or leased work for a deployment, so a failure can cancel what has not run yet. */
     List<AgentJob> findPendingForDeployment(UUID deploymentId);
+
+    /**
+     * Recent work for one host, newest first.
+     *
+     * <p>Read by the console. A deployment waiting on a host that is not collecting looks exactly
+     * like one that is merely slow, and this is the difference.
+     */
+    List<AgentJob> findRecentForInstance(UUID nginxInstanceId, int limit);
 }

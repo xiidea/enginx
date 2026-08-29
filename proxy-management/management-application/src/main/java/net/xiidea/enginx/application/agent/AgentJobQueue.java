@@ -7,6 +7,7 @@ import net.xiidea.enginx.domain.agent.AgentJobType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,6 +92,18 @@ public class AgentJobQueue {
                     job.type(), job.id(), job.nginxInstanceId(), job.attempts());
         }
         return expired.size();
+    }
+
+    /**
+     * Recent work for a host, for the console.
+     *
+     * <p>Authorised the same as viewing the host itself: this is the transport detail of a
+     * deployment, and whoever may see the deployment may see why it has not happened.
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','OPERATOR','READ_ONLY')")
+    @Transactional(readOnly = true)
+    public List<AgentJob> recentFor(UUID instanceId, int limit) {
+        return jobs.findRecentForInstance(instanceId, Math.clamp(limit, 1, 50));
     }
 
     @Transactional(readOnly = true)

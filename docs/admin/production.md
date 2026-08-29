@@ -636,6 +636,11 @@ so a deployment reaches the host in about as long as a request takes rather than
 interval. A deployment becomes two jobs, staged then activated, with the second queued only after
 the first succeeds: a host is never told to activate a bundle it has not stored.
 
+The console shows this per host, under **Work** on the NGINX instances page — which is how a
+deployment stalled on a host that is not collecting is told apart from one that is merely slow.
+Both look identical from the deployment record, and a pull host stays ONLINE until it has been
+silent for `AGENT_SILENCE_THRESHOLD`, so outstanding work is often the first visible sign.
+
 Three properties are worth knowing when reading `agent_jobs`:
 
 - **One job outstanding per host.** Two in flight against one NGINX would be two processes racing

@@ -47,4 +47,6 @@ public interface AgentJobJpaRepository extends JpaRepository<AgentJobEntity, UUI
     List<AgentJobEntity> findByDeploymentIdAndStatusIn(UUID deploymentId, List<AgentJobStatus> statuses);
 
     Optional<AgentJobEntity> findByIdAndNginxInstanceId(UUID id, UUID nginxInstanceId);
+
+    List<AgentJobEntity> findByNginxInstanceIdOrderByCreatedAtDesc(UUID nginxInstanceId, Pageable limit);
 }

@@ -193,7 +193,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Name</th><th>Status</th><th>Agent</th><th>NGINX</th><th>Last seen</th><th class="right">Actions</th></tr>
+          <tr><th>Name</th><th>Status</th><th>Reached</th><th>Agent</th><th>NGINX</th><th>Last seen</th><th class="right">Actions</th></tr>
         </thead>
         <tbody>
           @for (instance of instances(); track instance.id) {
@@ -203,11 +203,19 @@
                 <div class="muted small mono">{{ instance.hostname }} · {{ instance.environment }}</div>
               </td>
               <td><app-status-pill [status]="instance.status" /></td>
+              <td class="small">
+                <!-- Which direction the connection runs. Worth its own column rather than being
+                     inferred from an empty address: it decides what an operator can troubleshoot,
+                     and what a firewall has to allow. -->
+                @if (instance.connectivityMode === 'PULL') {
+                  <span class="mode pull" title="This host connects to the platform">calls in</span>
+                } @else {
+                  <span class="mode push" title="The platform connects to this host">dialled</span>
+                }
+              </td>
               <td class="mono small">
                 @if (instance.connectivityMode === 'PULL') {
-                  <!-- Nothing to show, and that is the point: this host is never dialled, so it
-                       has no address the platform needs and no certificate to pin. -->
-                  <span class="tag">calls in</span>
+                  <span class="muted">no address needed</span>
                 } @else {
                   {{ instance.agentBaseUrl }}
                   <div class="muted">{{ instance.agentCertFingerprint?.slice(0, 16) }}…</div>
@@ -215,12 +223,76 @@
               </td>
               <td class="mono small">{{ instance.nginxVersion ?? '—' }}</td>
               <td class="small nowrap">{{ instance.lastSeenAt | datetime }}</td>
-              <td class="right">
+              <td class="right nowrap">
+                @if (instance.connectivityMode === 'PULL') {
+                  <button class="btn btn-sm" type="button" (click)="toggleJobs(instance)"
+                    [attr.aria-expanded]="expandedHost() === instance.id">
+                    {{ expandedHost() === instance.id ? 'Hide work' : 'Work' }}
+                  </button>
+                }
                 @if (auth.isSuperAdmin()) {
                   <button class="btn btn-sm" type="button" (click)="deploy(instance)">Deploy all</button>
                 }
               </td>
             </tr>
+
+            @if (expandedHost() === instance.id) {
+              <tr class="work-row">
+                <td colspan="7">
+                  <div class="work">
+                    @if (jobsLoading()) {
+                      <p class="muted small">Loading…</p>
+                    } @else if (!jobs().length) {
+                      <p class="muted small">
+                        Nothing queued. This host has not been asked to do anything yet.
+                      </p>
+                    } @else {
+                      @if (outstanding()) {
+                        <!-- The distinction the whole view exists for: a deployment waiting on a
+                             host that is not collecting looks exactly like one that is slow. -->
+                        <p class="small">
+                          <strong>{{ outstanding() }} outstanding.</strong>
+                          Work waits here until the host collects it, so a host that is offline
+                          holds up its deployments rather than failing them.
+                        </p>
+                      }
+                      <table class="jobs">
+                        <thead>
+                          <tr><th>Work</th><th>State</th><th>Queued</th><th>Detail</th></tr>
+                        </thead>
+                        <tbody>
+                          @for (job of jobs(); track job.id) {
+                            <tr>
+                              <td class="small">{{ job.type }}</td>
+                              <td class="small">
+                                <span class="job-state" [class]="'job-' + job.status.toLowerCase()">
+                                  {{ job.status }}
+                                </span>
+                                @if (job.attempts > 1) {
+                                  <span class="muted" title="A previous holder never reported back">
+                                    · attempt {{ job.attempts }}
+                                  </span>
+                                }
+                              </td>
+                              <td class="small nowrap">{{ job.createdAt | datetime }}</td>
+                              <td class="small">
+                                @if (job.error) {
+                                  <span class="danger">{{ job.error }}</span>
+                                } @else if (job.status === 'LEASED') {
+                                  <span class="muted">held until {{ job.leaseExpiresAt | datetime }}</span>
+                                } @else {
+                                  <span class="muted mono">{{ job.bundleId?.slice(0, 8) }}</span>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
           }
         </tbody>
       </table>

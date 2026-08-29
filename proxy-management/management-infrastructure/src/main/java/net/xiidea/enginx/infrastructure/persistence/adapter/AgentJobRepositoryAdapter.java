@@ -78,6 +78,14 @@ public class AgentJobRepositoryAdapter implements AgentJobRepository {
                 .toList();
     }
 
+    @Override
+    public List<AgentJob> findRecentForInstance(UUID nginxInstanceId, int limit) {
+        return repository.findByNginxInstanceIdOrderByCreatedAtDesc(nginxInstanceId,
+                        PageRequest.of(0, limit)).stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     private AgentJob toDomain(AgentJobEntity entity) {
         return AgentJob.rehydrate(entity.getId(), entity.getNginxInstanceId(), entity.getDeploymentId(),
                 entity.getType(), json.readValue(entity.getPayload(), AgentJobPayload.class),

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgentRegistrationApi, InstancesApi } from '../../core/api/resources';
-import { AgentRegistrationToken, NginxInstance } from '../../core/api/models';
+import { AgentJob, AgentRegistrationToken, NginxInstance } from '../../core/api/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
@@ -32,6 +32,11 @@ export class InstanceList implements OnInit {
    */
   readonly mode = signal<'PUSH' | 'PULL'>('PUSH');
 
+  /** The host whose queued work is on screen, and what it holds. */
+  readonly expandedHost = signal<string | null>(null);
+  readonly jobs = signal<AgentJob[]>([]);
+  readonly jobsLoading = signal(false);
+
   readonly tokens = signal<AgentRegistrationToken[]>([]);
   readonly tokensLoading = signal(false);
   readonly minting = signal(false);
@@ -59,6 +64,38 @@ export class InstanceList implements OnInit {
     if (this.auth.isSuperAdmin()) {
       this.reloadTokens();
     }
+  }
+
+  /**
+   * Shows or hides a host's queued work.
+   *
+   * Loaded on expansion rather than with the list: most of the time nobody opens any of them, and
+   * a request per host would make the page cost proportional to the size of the estate.
+   */
+  toggleJobs(instance: NginxInstance): void {
+    if (this.expandedHost() === instance.id) {
+      this.expandedHost.set(null);
+      return;
+    }
+    this.expandedHost.set(instance.id);
+    this.jobsLoading.set(true);
+    this.jobs.set([]);
+
+    this.api.agentJobs(instance.id).subscribe({
+      next: (jobs) => {
+        this.jobs.set(jobs);
+        this.jobsLoading.set(false);
+      },
+      error: (problem) => {
+        this.jobsLoading.set(false);
+        this.notifications.problem(problem);
+      },
+    });
+  }
+
+  /** Work that has not finished, which is what makes a stalled deployment legible. */
+  outstanding(): number {
+    return this.jobs().filter((job) => job.status === 'QUEUED' || job.status === 'LEASED').length;
   }
 
   reloadTokens(): void {

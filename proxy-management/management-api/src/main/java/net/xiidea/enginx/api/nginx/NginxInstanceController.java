@@ -3,9 +3,11 @@ package net.xiidea.enginx.api.nginx;
 import net.xiidea.enginx.api.nginx.dto.NginxInstanceResponse;
 import net.xiidea.enginx.api.nginx.dto.RotateAgentCertificateRequest;
 import net.xiidea.enginx.api.nginx.dto.RegisterNginxInstanceRequest;
+import net.xiidea.enginx.application.agent.AgentJobQueue;
 import net.xiidea.enginx.application.nginx.NginxInstanceService;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +17,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,9 +32,11 @@ import java.util.UUID;
 public class NginxInstanceController {
 
     private final NginxInstanceService service;
+    private final AgentJobQueue jobs;
 
-    public NginxInstanceController(NginxInstanceService service) {
+    public NginxInstanceController(NginxInstanceService service, AgentJobQueue jobs) {
         this.service = service;
+        this.jobs = jobs;
     }
 
     @GetMapping
@@ -67,6 +73,41 @@ public class NginxInstanceController {
 
         URI location = uriBuilder.path("/api/v1/nginx-instances/{id}").buildAndExpand(instance.id()).toUri();
         return ResponseEntity.created(location).body(toResponse(instance));
+    }
+
+    /**
+     * What this host has been asked to do lately.
+     *
+     * <p>Only meaningful for a host that collects its own work. For a push host the platform makes
+     * the call itself and the deployment record already says what happened; here the deployment
+     * says only that it is waiting, and this says what for.
+     */
+    @GetMapping("/{id}/agent-jobs")
+    @Operation(summary = "Recent work queued for this host",
+            description = "Empty for a host the platform dials, which is told what to do rather "
+                    + "than collecting it.")
+    public List<AgentJobResponse> agentJobs(@PathVariable UUID id,
+                                            @RequestParam(defaultValue = "20") int limit) {
+        // Authorises the read, and 404s a host that does not exist rather than returning an
+        // empty list that looks like a host with nothing to do.
+        service.get(id);
+
+        return jobs.recentFor(id, limit).stream()
+                .map(job -> new AgentJobResponse(job.id(), job.type().name(), job.status().name(),
+                        job.attempts(), job.deploymentId(), job.payload().bundleId(),
+                        job.leaseExpiresAt(), job.error(), job.createdAt(), job.updatedAt()))
+                .toList();
+    }
+
+    /**
+     * @param leaseExpiresAt when the host holding this must report back, or it returns to the queue
+     * @param attempts       above one means a previous holder never reported
+     */
+    @Schema(name = "AgentJobResponse", description = "One unit of work for a host that collects it.",
+            requiredProperties = {"id", "type", "status", "attempts", "createdAt"})
+    public record AgentJobResponse(UUID id, String type, String status, int attempts,
+                                   UUID deploymentId, UUID bundleId, Instant leaseExpiresAt,
+                                   String error, Instant createdAt, Instant updatedAt) {
     }
 
     private static NginxInstanceResponse toResponse(NginxInstance instance) {
