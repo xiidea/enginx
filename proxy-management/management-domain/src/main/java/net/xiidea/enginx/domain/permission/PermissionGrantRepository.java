@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface PermissionGrantRepository {
@@ -19,6 +20,15 @@ public interface PermissionGrantRepository {
     List<PermissionGrant> findActiveForSubjects(Collection<String> subjectRefs, Instant now);
 
     List<PermissionGrant> findBySubject(SubjectType subjectType, String subjectRef);
+
+    /**
+     * Which of these subject references a grant still names.
+     *
+     * <p>One query for a whole page. Asked before removing anything from the identity mirror:
+     * a subject a grant names is one whose row is still doing work, because without it the grant
+     * shows as a bare reference nobody can identify.
+     */
+    Set<String> subjectRefsWithGrants(Collection<String> subjectRefs);
 
     /**
      * An existing grant for the same subject over the same scope, if there is one.

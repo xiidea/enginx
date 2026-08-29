@@ -116,3 +116,7 @@ export type UpdateLocalUserRequest = Schemas['UpdateLocalUserRequest'];
 export const GLOBAL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'READ_ONLY'] as const;
 
 export type GroupMember = Wire<Schemas['GroupMemberResponse']>;
+
+export type DirectoryEntry = Wire<Schemas['DirectoryEntryResponse']>;
+
+export type DirectoryCleanup = Wire<Schemas['DirectoryCleanupResponse']>;

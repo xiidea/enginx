@@ -6,6 +6,8 @@ import {
   GrantPreview,
   Certificate,
   Deployment,
+  DirectoryCleanup,
+  DirectoryEntry,
   DomainGroup,
   CreateLocalUserRequest,
   GroupMember,
@@ -29,6 +31,10 @@ import {
 
 export interface SubjectQuery {
   search?: string;
+  /** Only entries that no longer resolve, or that have gone quiet. */
+  stale?: boolean;
+  /** Counts an entry unseen for this long as stale too. At least 30. */
+  dormantForDays?: number | null;
   page?: number;
   size?: number;
 }
@@ -271,8 +277,26 @@ export class PermissionsApi {
    * Paged and searched on the server: this index gains a row for every person who ever signs in,
    * so on a real directory it is far past what a dropdown can hold by the time anyone notices.
    */
-  users(query: SubjectQuery = {}): Observable<Page<Subject>> {
-    return this.api.get('/users', { search: query.search, page: query.page, size: query.size });
+  users(query: SubjectQuery = {}): Observable<Page<DirectoryEntry>> {
+    return this.api.get('/users', {
+      search: query.search,
+      stale: query.stale,
+      dormantForDays: query.dormantForDays,
+      page: query.page,
+      size: query.size,
+    });
+  }
+
+  /**
+   * Removes one name from the directory. Not a revocation: the subject keeps whatever grants it
+   * holds, and reappears here the next time its owner signs in.
+   */
+  forget(subjectRef: string): Observable<void> {
+    return this.api.delete(`/users/${encodeURIComponent(subjectRef)}`);
+  }
+
+  cleanupDirectory(body: { dormantForDays?: number | null; includeGranted: boolean }): Observable<DirectoryCleanup> {
+    return this.api.post('/users/cleanup', body);
   }
 
   groups(): Observable<Subject[]> {

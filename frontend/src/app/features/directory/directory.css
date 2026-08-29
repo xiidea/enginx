@@ -1,0 +1,31 @@
+.note-card, .filters { margin-bottom: 1rem; }
+.note-card p { margin: 0; color: var(--ink-2); }
+
+.filter-row { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.filter-row .grow { flex: 1 1 16rem; }
+.filter-row .checkbox { padding-top: 1.4rem; }
+.filter-row .checkbox label { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; margin: 0; }
+
+.dormancy { display: flex; align-items: baseline; gap: 0.4rem; }
+.dormancy input { width: 6rem; }
+
+.actions { margin-top: 1rem; }
+
+.right { text-align: right; }
+/* A left stripe, so a stale row is distinguishable without relying on colour alone. */
+tbody tr.stale td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+
+.tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  margin-right: 0.3rem;
+}
+.tag.gone { color: var(--danger); }
+.tag.granted { color: var(--ink-3); }
+
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }

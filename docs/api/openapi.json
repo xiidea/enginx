@@ -492,6 +492,77 @@
         ],
         "type": "object"
       },
+      "DirectoryCleanupRequest": {
+        "properties": {
+          "dormantForDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "includeGranted": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "DirectoryCleanupResponse": {
+        "properties": {
+          "removed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "removedSubjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skippedBecauseGranted": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed",
+          "removedSubjects",
+          "skippedBecauseGranted"
+        ],
+        "type": "object"
+      },
+      "DirectoryEntryResponse": {
+        "description": "Someone who has signed in.",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "hasGrants": {
+            "type": "boolean"
+          },
+          "lastLoginAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "subjectRef": {
+            "type": "string"
+          },
+          "subjectType": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "hasGrants",
+          "present",
+          "subjectRef",
+          "subjectType"
+        ],
+        "type": "object"
+      },
       "DomainGroupResponse": {
         "description": "One domain group.",
         "properties": {
@@ -935,11 +1006,11 @@
         },
         "type": "object"
       },
-      "PageResponseProxySiteSummaryResponse": {
+      "PageResponseDirectoryEntryResponse": {
         "properties": {
           "content": {
             "items": {
-              "$ref": "#/components/schemas/ProxySiteSummaryResponse"
+              "$ref": "#/components/schemas/DirectoryEntryResponse"
             },
             "type": "array"
           },
@@ -962,11 +1033,11 @@
         },
         "type": "object"
       },
-      "PageResponseSubjectResponse": {
+      "PageResponseProxySiteSummaryResponse": {
         "properties": {
           "content": {
             "items": {
-              "$ref": "#/components/schemas/SubjectResponse"
+              "$ref": "#/components/schemas/ProxySiteSummaryResponse"
             },
             "type": "array"
           },
@@ -4311,6 +4382,24 @@
           },
           {
             "in": "query",
+            "name": "stale",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dormantForDays",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {
@@ -4335,7 +4424,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageResponseSubjectResponse"
+                  "$ref": "#/components/schemas/PageResponseDirectoryEntryResponse"
                 }
               }
             },
@@ -4353,6 +4442,82 @@
           }
         },
         "summary": "Search users who have signed in",
+        "tags": [
+          "Identity"
+        ]
+      }
+    },
+    "/api/v1/users/cleanup": {
+      "post": {
+        "description": "Stale means a local subject whose account no longer exists or, with dormantForDays, one not seen for that long. Entries a permission grant still names are skipped unless includeGranted is set: removing one leaves the grant showing a reference nobody can identify, which is worse than an untidy picker. Grants are never revoked here.",
+        "operationId": "cleanup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryCleanupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryCleanupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Remove every stale subject",
+        "tags": [
+          "Identity"
+        ]
+      }
+    },
+    "/api/v1/users/{subjectRef}": {
+      "delete": {
+        "description": "Removes a name the console can offer when authoring a grant. It does not revoke access and does not delete an account: a subject removed by mistake reappears the next time its owner signs in. Requires global admin, because the directory is shared.",
+        "operationId": "forget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subjectRef",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Remove one subject from the directory",
         "tags": [
           "Identity"
         ]
@@ -4396,12 +4561,12 @@
       "name": "Authentication"
     },
     {
-      "description": "Append-only record of security-sensitive and configuration-changing operations",
-      "name": "Audit"
-    },
-    {
       "description": "Users and groups available as permission subjects",
       "name": "Identity"
+    },
+    {
+      "description": "Append-only record of security-sensitive and configuration-changing operations",
+      "name": "Audit"
     },
     {
       "description": "Grouping proxy sites so permissions can be granted over a set",

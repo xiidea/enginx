@@ -41,6 +41,9 @@ export class App implements OnInit {
     // Only exists when the platform authenticates people itself; with an external provider the
     // accounts live there and this page would have nothing to show.
     { path: '/local-users', label: 'Local users', adminOnly: true, localOnly: true },
+    // Everyone who has signed in, and the removal of entries that no longer resolve. Global
+    // admin, because the list is shared by everyone who authors a grant.
+    { path: '/directory', label: 'Directory', adminOnly: true },
   ];
 
   readonly navigation = computed(() =>

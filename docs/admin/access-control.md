@@ -148,3 +148,25 @@ Two things keep it honest about who still exists:
 Subjects from an external identity provider are always reported present. This platform cannot ask
 that provider whether an account still exists, and guessing would mean reporting every federated
 user as departed.
+
+### Cleaning it up
+
+The **Directory** page, and `POST /api/v1/users/cleanup`, remove entries that no longer earn their
+place. Both require global admin, because the list is shared by everyone who authors a grant, and
+both are audited as `IDENTITY_SUBJECT_FORGOTTEN`.
+
+Worth being exact about what removal does, because the words matter: an entry is a **name**.
+Removing it takes away the name the console offers when authoring a grant. It revokes no access,
+deletes no account, and is undone the moment its owner signs in again.
+
+Two things count as stale:
+
+- **Departed** — a `local:` subject whose account no longer exists. Certain, and the default.
+- **Dormant** — not seen for `dormantForDays`. Opt-in, and at least 30 days: anything shorter
+  describes a holiday, and a cleanup that quietly emptied the directory would look like a bug.
+
+An entry a permission grant still names is **skipped**, and the listing says which those are
+(`hasGrants`). Removing one leaves the grant showing a bare subject reference nobody can
+attribute — an access rule made unreadable, which is worse than an untidy picker. `includeGranted`
+overrides that, and still does not revoke anything: deciding that access should end is a separate
+and deliberate act.

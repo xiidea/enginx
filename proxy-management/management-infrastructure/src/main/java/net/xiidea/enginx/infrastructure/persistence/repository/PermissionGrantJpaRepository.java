@@ -48,4 +48,8 @@ public interface PermissionGrantJpaRepository extends JpaRepository<PermissionGr
     List<PermissionGrantEntity> findByScopeGroupId(UUID scopeGroupId);
 
     List<PermissionGrantEntity> findByScopeSiteId(UUID scopeSiteId);
+
+    /** Distinct subject references named by any grant, restricted to the ones asked about. */
+    @Query("select distinct g.subjectRef from PermissionGrantEntity g where g.subjectRef in :refs")
+    List<String> findDistinctSubjectRefsIn(@Param("refs") Collection<String> refs);
 }

@@ -69,7 +69,7 @@ public class LocalUserController {
                 request.username(), request.password(), request.email(), request.displayName(),
                 parseRoles(request.roles()), request.groupPaths() == null ? Set.of()
                         : Set.copyOf(request.groupPaths()),
-                request.mustChangePassword()));
+                Boolean.TRUE.equals(request.mustChangePassword())));
 
         URI location = uriBuilder.path("/api/v1/local-users/{id}").buildAndExpand(created.id()).toUri();
         return ResponseEntity.created(location).body(toResponse(created));
@@ -152,7 +152,10 @@ public class LocalUserController {
             @Size(max = 256) String displayName,
             List<String> roles,
             List<String> groupPaths,
-            boolean mustChangePassword) {
+            // Boxed, and not because null means anything here. A primitive would make Jackson
+            // reject a body that omits it, so a request sending only the two required fields --
+            // exactly what the schema says is enough -- would come back 400.
+            Boolean mustChangePassword) {
     }
 
     @Schema(name = "UpdateLocalUserRequest")

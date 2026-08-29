@@ -1,0 +1,123 @@
+<app-page-header
+  title="Directory"
+  subtitle="Everyone who has signed in, offered by name when a permission grant is authored.">
+</app-page-header>
+
+<section class="card note-card">
+  <div class="card-body">
+    <p class="small">
+      An entry here is a <strong>name</strong>, not an account and not an access rule. Removing one
+      takes away the name the console can offer; it revokes nothing, deletes no account, and is
+      undone the next time its owner signs in.
+    </p>
+  </div>
+</section>
+
+<section class="card filters">
+  <div class="card-body">
+    <div class="filter-row">
+      <div class="grow">
+        <label for="dir-search">Search</label>
+        <input
+          id="dir-search"
+          type="search"
+          placeholder="Name or username"
+          [value]="search()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </div>
+      <div>
+        <label for="dir-dormant">Also treat as stale if unseen for</label>
+        <div class="dormancy">
+          <input
+            id="dir-dormant"
+            type="number"
+            [min]="minimumDormancy"
+            placeholder="never"
+            [ngModel]="dormantForDays()"
+            (ngModelChange)="onDormancyChange($event)"
+          />
+          <span class="muted small">days</span>
+        </div>
+        <!-- The server refuses anything shorter. A few days describes a holiday, and a cleanup
+             that emptied the directory would be indistinguishable from a bug. -->
+        <p class="hint">Optional, and at least {{ minimumDormancy }}. Left empty, only accounts
+          that provably no longer exist count as stale.</p>
+      </div>
+      <div class="checkbox">
+        <label for="dir-stale">
+          <input id="dir-stale" type="checkbox" [checked]="staleOnly()" (change)="toggleStale()" />
+          Show only stale
+        </label>
+      </div>
+    </div>
+
+    <div class="row actions">
+      <button class="btn" type="button" [disabled]="cleaning()" (click)="cleanup(false)">
+        {{ cleaning() ? 'Removing…' : 'Remove stale entries' }}
+      </button>
+      <button class="btn btn-danger" type="button" [disabled]="cleaning()" (click)="cleanup(true)">
+        Remove stale, including granted
+      </button>
+    </div>
+    <p class="hint">
+      Entries a permission grant still names are kept by default: removing one leaves that grant
+      showing an identifier nobody can attribute. Neither button revokes a grant.
+    </p>
+  </div>
+</section>
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!entries().length) {
+    <app-empty
+      title="Nothing to show"
+      [detail]="staleOnly() ? 'No stale entries. The directory is clean.' : 'Nobody has signed in yet.'" />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Username</th><th>Subject</th><th>Last seen</th><th>State</th><th class="right">Actions</th></tr>
+        </thead>
+        <tbody>
+          @for (entry of entries(); track entry.subjectRef) {
+            <tr [class.stale]="!entry.present">
+              <td class="primary">{{ entry.displayName }}</td>
+              <td class="small">{{ entry.username || '—' }}</td>
+              <td class="mono small">{{ entry.subjectRef }}</td>
+              <td class="small nowrap">{{ entry.lastLoginAt | datetime }}</td>
+              <td class="small">
+                @if (!entry.present) {
+                  <span class="tag gone">no longer present</span>
+                } @else {
+                  <span class="muted">active</span>
+                }
+                @if (entry.hasGrants) {
+                  <span class="tag granted" title="A permission grant names this subject">granted</span>
+                }
+              </td>
+              <td class="right">
+                <button class="btn btn-sm" type="button" (click)="forget(entry)">Remove</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <div class="card-body pager">
+        <button class="btn btn-sm" type="button" [disabled]="page() === 0" (click)="reload(page() - 1)">
+          Previous
+        </button>
+        <span class="muted small">Page {{ page() + 1 }} of {{ totalPages() }} · {{ total() }} entries</span>
+        <button class="btn btn-sm" type="button" [disabled]="page() + 1 >= totalPages()" (click)="reload(page() + 1)">
+          Next
+        </button>
+      </div>
+    } @else {
+      <div class="card-body"><span class="muted small">{{ total() }} entries</span></div>
+    }
+  }
+</div>

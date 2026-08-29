@@ -35,6 +35,9 @@ public enum AuditAction {
     /** A rejected login. Recorded as a denial, with the reason the caller was not told. */
     LOCAL_USER_LOGIN_FAILED,
 
+    /** A subject removed from the identity directory. The account, if any, is untouched. */
+    IDENTITY_SUBJECT_FORGOTTEN,
+
     PERMISSION_GRANTED,
     PERMISSION_REVOKED,
 

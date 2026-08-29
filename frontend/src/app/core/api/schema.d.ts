@@ -885,6 +885,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove every stale subject
+         * @description Stale means a local subject whose account no longer exists or, with dormantForDays, one not seen for that long. Entries a permission grant still names are skipped unless includeGranted is set: removing one leaves the grant showing a reference nobody can identify, which is worse than an untidy picker. Grants are never revoked here.
+         */
+        post: operations["cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{subjectRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one subject from the directory
+         * @description Removes a name the console can offer when authoring a grant. It does not revoke access and does not delete an account: a subject removed by mistake reappears the next time its owner signs in. Requires global admin, because the directory is shared.
+         */
+        delete: operations["forget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1053,6 +1093,29 @@ export interface components {
             status: string;
             trigger: string;
         };
+        DirectoryCleanupRequest: {
+            /** Format: int32 */
+            dormantForDays?: number;
+            includeGranted?: boolean;
+        };
+        DirectoryCleanupResponse: {
+            /** Format: int32 */
+            removed: number;
+            removedSubjects: string[];
+            /** Format: int32 */
+            skippedBecauseGranted: number;
+        };
+        /** @description Someone who has signed in. */
+        DirectoryEntryResponse: {
+            displayName: string;
+            hasGrants: boolean;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            present: boolean;
+            subjectRef: string;
+            subjectType: string;
+            username?: string;
+        };
         /** @description One domain group. */
         DomainGroupResponse: {
             /** Format: date-time */
@@ -1197,8 +1260,8 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        PageResponseProxySiteSummaryResponse: {
-            content?: components["schemas"]["ProxySiteSummaryResponse"][];
+        PageResponseDirectoryEntryResponse: {
+            content?: components["schemas"]["DirectoryEntryResponse"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -1208,8 +1271,8 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        PageResponseSubjectResponse: {
-            content?: components["schemas"]["SubjectResponse"][];
+        PageResponseProxySiteSummaryResponse: {
+            content?: components["schemas"]["ProxySiteSummaryResponse"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -3288,6 +3351,8 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string;
+                stale?: boolean;
+                dormantForDays?: number;
                 page?: number;
                 size?: number;
             };
@@ -3303,8 +3368,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseSubjectResponse"];
+                    "*/*": components["schemas"]["PageResponseDirectoryEntryResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DirectoryCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DirectoryCleanupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    forget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

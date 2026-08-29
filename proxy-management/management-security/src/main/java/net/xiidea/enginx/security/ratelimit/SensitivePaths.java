@@ -36,6 +36,9 @@ final class SensitivePaths {
             "/api/v1/local-users/**",
             // Authorization changes. Brute-forcing these is how a foothold becomes an estate.
             "/api/v1/permissions/**",
+            // Bulk removal from the shared identity directory. Not destructive to access, but
+            // repeated at speed it would empty the list every grant author picks names from.
+            "/api/v1/users/cleanup",
             // Registering an instance introduces a new host, and its trusted agent fingerprint.
             "/api/v1/nginx-instances/**");
 

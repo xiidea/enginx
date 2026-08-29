@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -42,4 +43,50 @@ public interface AppUserJpaRepository extends JpaRepository<AppUserEntity, UUID>
                or lower(coalesce(u.displayName, '')) like :pattern escape '!'
             """)
     Page<AppUserEntity> search(@Param("pattern") String pattern, Pageable pageable);
+
+    /**
+     * The same search, restricted to entries that are stale.
+     *
+     * <p>Stale means one of two things, and only the first is certain: a {@code local:} subject
+     * with no matching account, or -- when {@code dormantBefore} is given -- one last seen before
+     * then. A federated subject is never stale on the first ground, because this platform cannot
+     * ask the provider whether the account still exists.
+     *
+     * <p>Native because the first condition is a join against a table this entity has no relation
+     * to, and expressing it in JPQL would mean modelling a relationship that exists only for this
+     * one query.
+     */
+    @Query(value = """
+            select * from app_users u
+            where (lower(u.username) like :pattern escape '!'
+                   or lower(coalesce(u.display_name, '')) like :pattern escape '!')
+              and (
+                    (u.keycloak_subject like 'local:%'
+                     and not exists (
+                         select 1 from local_users l
+                         where 'local:' || l.id::text = u.keycloak_subject))
+                 or (cast(:dormantBefore as timestamptz) is not null
+                     and u.last_login_at < cast(:dormantBefore as timestamptz))
+              )
+            order by u.username
+            """,
+            countQuery = """
+            select count(*) from app_users u
+            where (lower(u.username) like :pattern escape '!'
+                   or lower(coalesce(u.display_name, '')) like :pattern escape '!')
+              and (
+                    (u.keycloak_subject like 'local:%'
+                     and not exists (
+                         select 1 from local_users l
+                         where 'local:' || l.id::text = u.keycloak_subject))
+                 or (cast(:dormantBefore as timestamptz) is not null
+                     and u.last_login_at < cast(:dormantBefore as timestamptz))
+              )
+            """,
+            nativeQuery = true)
+    Page<AppUserEntity> searchStale(@Param("pattern") String pattern,
+                                    @Param("dormantBefore") Instant dormantBefore,
+                                    Pageable pageable);
+
+    void deleteByKeycloakSubjectIn(Collection<String> subjects);
 }

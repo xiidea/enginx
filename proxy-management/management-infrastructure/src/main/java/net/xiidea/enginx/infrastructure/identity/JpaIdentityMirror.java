@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -99,19 +101,45 @@ public class JpaIdentityMirror implements IdentityMirror {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResult<MirroredUser> findUsers(String search, int page, int size) {
-        Page<AppUserEntity> found = users.search(likePattern(search),
-                PageRequest.of(page, size, Sort.by("username").ascending()));
+    public PageResult<MirroredUser> findUsers(DirectoryQuery query) {
+        String pattern = likePattern(query.search());
+        // The native stale query carries its own ordering; the derived one takes a Sort.
+        Page<AppUserEntity> found = query.staleOnly()
+                ? users.searchStale(pattern, query.dormantBefore(),
+                        PageRequest.of(query.page(), query.size()))
+                : users.search(pattern,
+                        PageRequest.of(query.page(), query.size(), Sort.by("username").ascending()));
 
-        Set<String> stillPresent = localSubjectsPresentIn(found.getContent());
+        return new PageResult<>(toMirrored(found.getContent()),
+                query.page(), query.size(), found.getTotalElements());
+    }
 
-        return new PageResult<>(
-                found.getContent().stream()
-                        .map(u -> new MirroredUser(u.getKeycloakSubject(), u.getUsername(), u.getEmail(),
-                                u.getDisplayName(), u.getLastLoginAt(),
-                                isPresent(u.getKeycloakSubject(), stillPresent)))
-                        .toList(),
-                page, size, found.getTotalElements());
+    @Override
+    @Transactional(readOnly = true)
+    public List<MirroredUser> findStale(Instant dormantBefore) {
+        // Unpaged deliberately: a cleanup decides on the whole set at once, and paging through a
+        // list while deleting from it silently skips half of it.
+        return toMirrored(users.searchStale("%", dormantBefore, Pageable.unpaged()).getContent());
+    }
+
+    @Override
+    @Transactional
+    public int forgetAll(Collection<String> subjects) {
+        if (subjects.isEmpty()) {
+            return 0;
+        }
+        users.deleteByKeycloakSubjectIn(subjects);
+        subjects.forEach(lastWritten::remove);
+        return subjects.size();
+    }
+
+    private List<MirroredUser> toMirrored(List<AppUserEntity> entities) {
+        Set<String> stillPresent = localSubjectsPresentIn(entities);
+        return entities.stream()
+                .map(u -> new MirroredUser(u.getKeycloakSubject(), u.getUsername(), u.getEmail(),
+                        u.getDisplayName(), u.getLastLoginAt(),
+                        isPresent(u.getKeycloakSubject(), stillPresent)))
+                .toList();
     }
 
     @Override

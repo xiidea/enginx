@@ -116,7 +116,7 @@ public class CertificateController {
     public CertificateDtos.Response configureRenewal(@PathVariable UUID id,
                                                       @Valid @RequestBody CertificateDtos.ConfigureRenewalRequest request) {
         return toResponse(certificates.configureRenewal(new CertificateCommands.ConfigureRenewal(
-                id, request.autoRenew(), request.renewBeforeDays())));
+                id, request.autoRenewOrDefault(), request.renewBeforeDaysOrDefault())));
     }
 
     @PostMapping("/{id}/revoke")

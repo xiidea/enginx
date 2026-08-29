@@ -29,7 +29,9 @@ URI, never on the human-readable `detail`.
 | `GET`/`POST` | `/api/v1/permissions` | ADMIN on the scope |
 | `DELETE` | `/api/v1/permissions/{id}` | ADMIN on the scope |
 | `GET` | `/api/v1/permissions/effective?siteId=` | READ on the site |
-| `GET` | `/api/v1/users?search=&page=&size=` | ADMIN on any scope. Paged; searches username and display name |
+| `GET` | `/api/v1/users?search=&stale=&dormantForDays=&page=&size=` | ADMIN on any scope. Paged; searches username and display name |
+| `DELETE` | `/api/v1/users/{subjectRef}` | global admin. Removes a name, never access |
+| `POST` | `/api/v1/users/cleanup` | global admin. Removes every stale name |
 | `GET` | `/api/v1/groups` | ADMIN on any scope |
 | `GET` | `/api/v1/proxy-sites/{id}/preview` | READ on the site |
 | `POST` | `/api/v1/proxy-sites/{id}/deploy` | OPERATE on the site |

@@ -66,6 +66,14 @@ public class PermissionGrantRepositoryAdapter implements PermissionGrantReposito
     }
 
     @Override
+    public java.util.Set<String> subjectRefsWithGrants(java.util.Collection<String> subjectRefs) {
+        if (subjectRefs.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(repository.findDistinctSubjectRefsIn(subjectRefs));
+    }
+
+    @Override
     public Optional<PermissionGrant> findBySubjectAndScope(SubjectType subjectType, String subjectRef,
                                                            ScopeType scopeType, UUID scopeGroupId,
                                                            UUID scopeSiteId, String patternReversed) {

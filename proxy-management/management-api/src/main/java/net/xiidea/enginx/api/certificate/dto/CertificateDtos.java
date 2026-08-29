@@ -33,9 +33,24 @@ public final class CertificateDtos {
             @NotBlank(message = "The private key is required") String privateKeyPem) {
     }
 
+    /**
+     * Boxed for the same reason as elsewhere: a primitive component makes Jackson reject any body
+     * that omits it, turning an optional field into a required one that the schema does not
+     * declare. {@code renewBeforeDays} keeps the platform default when absent.
+     */
     public record ConfigureRenewalRequest(
-            boolean autoRenew,
-            @Min(1) @Max(89) int renewBeforeDays) {
+            Boolean autoRenew,
+            @Min(1) @Max(89) Integer renewBeforeDays) {
+
+        public static final int DEFAULT_RENEW_BEFORE_DAYS = 30;
+
+        public boolean autoRenewOrDefault() {
+            return Boolean.TRUE.equals(autoRenew);
+        }
+
+        public int renewBeforeDaysOrDefault() {
+            return renewBeforeDays == null ? DEFAULT_RENEW_BEFORE_DAYS : renewBeforeDays;
+        }
     }
 
     /**

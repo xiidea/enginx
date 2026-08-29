@@ -3,6 +3,7 @@ package net.xiidea.enginx.application.shared;
 import net.xiidea.enginx.domain.shared.PageResult;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -28,7 +29,27 @@ public interface IdentityMirror {
      * @param search matched against username and display name, case-insensitively; null or blank
      *               matches everyone
      */
-    PageResult<MirroredUser> findUsers(String search, int page, int size);
+    PageResult<MirroredUser> findUsers(DirectoryQuery query);
+
+    /**
+     * Every stale entry, unpaged, for a bulk cleanup that has to act on all of them at once.
+     *
+     * <p>Separate from {@link #findUsers} because paging through a list while deleting from it is
+     * a well-known way to skip half of it.
+     */
+    List<MirroredUser> findStale(Instant dormantBefore);
+
+    /** @return how many were removed */
+    int forgetAll(Collection<String> subjects);
+
+    /**
+     * @param staleOnly     restrict to entries that no longer resolve, or that have gone quiet
+     * @param dormantBefore counts an entry as stale when it was last seen before this. Null means
+     *                      only entries that provably no longer resolve are stale -- a person who
+     *                      has not signed in for a year is not necessarily gone.
+     */
+    record DirectoryQuery(String search, boolean staleOnly, Instant dormantBefore, int page, int size) {
+    }
 
     /**
      * Everyone the mirror has seen under this username, most recently seen first.

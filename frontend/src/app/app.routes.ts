@@ -73,5 +73,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/local-user-list').then((m) => m.LocalUserList),
     title: 'Local users · Easy NGINX Admin',
   },
+  {
+    path: 'directory',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/directory/directory').then((m) => m.Directory),
+    title: 'Directory · Easy NGINX Admin',
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];
