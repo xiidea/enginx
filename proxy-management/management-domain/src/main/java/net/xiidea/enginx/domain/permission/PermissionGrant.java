@@ -38,6 +38,23 @@ public record PermissionGrant(
             throw new ValidationException("level", "A grant needs a permission level");
         }
 
+        requireScopeReference(scopeType, scopeGroupId, scopeSiteId, domainPattern);
+    }
+
+    /**
+     * Whether a scope type has been given the reference it needs, and nothing it must not have.
+     *
+     * <p>Exposed because the check has to happen before a caller acts on the reference, not only
+     * when the grant is finally constructed. Authorising a grant means measuring what the grantor
+     * holds over the scope, which means loading the site or group it names -- so a {@code SITE}
+     * grant with no site id reaches a repository lookup on {@code null} and fails as a server
+     * error, several steps before this constructor would have called it what it is.
+     *
+     * <p>Kept here rather than copied into the caller so there is one statement of the rule. A
+     * second copy is a copy that can drift, and the one that drifts is the one nothing runs.
+     */
+    public static void requireScopeReference(ScopeType scopeType, UUID scopeGroupId, UUID scopeSiteId,
+                                             DomainPattern domainPattern) {
         switch (scopeType) {
             case GLOBAL -> {
                 if (scopeGroupId != null || scopeSiteId != null || domainPattern != null) {

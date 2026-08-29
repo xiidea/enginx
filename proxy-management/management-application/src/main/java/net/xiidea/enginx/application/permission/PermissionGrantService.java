@@ -72,15 +72,20 @@ public class PermissionGrantService {
 
     @Transactional
     public PermissionGrant grant(PermissionCommands.Grant command) {
-        PermissionLevel holderLevel = holderLevelOnScope(command);
+        DomainPattern pattern = patternOf(command);
+        // Before the authorization check, because the check loads whatever the scope names and a
+        // missing reference would reach the repository as a null id.
+        PermissionGrant.requireScopeReference(command.scopeType(), command.scopeGroupId(),
+                command.scopeSiteId(), pattern);
+
+        PermissionLevel holderLevel = holderLevelOnScope(command.scopeType(), command.scopeGroupId(),
+                command.scopeSiteId(), pattern);
         permissions.requireGrantPermission(command.level(), holderLevel);
 
         Instant now = clock.instant();
         if (command.expiresAt() != null && !command.expiresAt().isAfter(now)) {
             throw new ValidationException("expiresAt", "A grant's expiry must be in the future");
         }
-
-        DomainPattern pattern = command.domainPattern() == null ? null : DomainPattern.of(command.domainPattern());
 
         // A subject holds at most one grant per scope, so re-granting changes the level rather
         // than adding a competing rule. Two grants over one scope would be indistinguishable in
@@ -121,11 +126,12 @@ public class PermissionGrantService {
      */
     @Transactional(readOnly = true)
     public GrantPreview preview(PermissionCommands.Grant command) {
-        permissions.requireGrantPermission(command.level(), holderLevelOnScope(command));
+        DomainPattern pattern = patternOf(command);
+        PermissionGrant.requireScopeReference(command.scopeType(), command.scopeGroupId(),
+                command.scopeSiteId(), pattern);
 
-        DomainPattern pattern = command.domainPattern() == null
-                ? null
-                : DomainPattern.of(command.domainPattern());
+        permissions.requireGrantPermission(command.level(), holderLevelOnScope(
+                command.scopeType(), command.scopeGroupId(), command.scopeSiteId(), pattern));
 
         AccessScope proposed = scopeOf(command, pattern);
         // What the subject can already reach, so the preview can say what is genuinely new rather
@@ -226,9 +232,8 @@ public class PermissionGrantService {
      * The level the caller holds over the scope a grant would cover. This is what both
      * "may you administer here" and "may you confer this much" are measured against.
      */
-    private PermissionLevel holderLevelOnScope(PermissionCommands.Grant command) {
-        return holderLevelOnScope(command.scopeType(), command.scopeGroupId(), command.scopeSiteId(),
-                command.domainPattern() == null ? null : DomainPattern.of(command.domainPattern()));
+    private static DomainPattern patternOf(PermissionCommands.Grant command) {
+        return command.domainPattern() == null ? null : DomainPattern.of(command.domainPattern());
     }
 
     private PermissionLevel holderLevelOnScope(ScopeType scopeType, UUID groupId, UUID siteId,

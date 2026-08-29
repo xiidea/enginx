@@ -22,6 +22,7 @@ import net.xiidea.enginx.domain.proxy.ProxyTimeouts;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.NotFoundException;
+import net.xiidea.enginx.domain.shared.ValidationException;
 import net.xiidea.enginx.domain.shared.PageResult;
 import net.xiidea.enginx.domain.shared.TimeWindow;
 import net.xiidea.enginx.support.AbstractIntegrationTest;
@@ -429,6 +430,83 @@ class DomainPermissionIntegrationTest extends AbstractIntegrationTest {
     }
 
     // ---- fixtures ----------------------------------------------------------
+
+    /**
+     * A malformed grant is the caller's mistake and has to be reported as one.
+     *
+     * <p>Authorising a grant means measuring what the grantor holds over the scope, which loads
+     * whatever the scope names. A scope type with no reference therefore reached a repository
+     * lookup on a null id and surfaced as a 500 -- several steps before the aggregate that owns
+     * the rule would have called it what it is.
+     */
+    @Nested
+    @DisplayName("a grant whose scope names nothing")
+    class MalformedScope {
+
+        @Test
+        @DisplayName("a site grant with no site is refused, not a server error")
+        void siteGrantNeedsASite() {
+            assertThatThrownBy(() -> permissions.grant(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.SITE, null, null, null, PermissionLevel.READ, null)))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("site");
+        }
+
+        @Test
+        @DisplayName("a domain group grant with no group is refused")
+        void groupGrantNeedsAGroup() {
+            assertThatThrownBy(() -> permissions.grant(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.DOMAIN_GROUP, null, null, null,
+                    PermissionLevel.READ, null)))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("group");
+        }
+
+        @Test
+        @DisplayName("a pattern grant with no pattern is refused")
+        void patternGrantNeedsAPattern() {
+            assertThatThrownBy(() -> permissions.grant(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.DOMAIN_PATTERN, null, null, null,
+                    PermissionLevel.READ, null)))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("pattern");
+        }
+
+        /**
+         * The preview runs the same authorization, so it had the same failure. Worth its own case
+         * because the preview exists to be used before committing -- exactly when a half-filled
+         * form is most likely.
+         */
+        @Test
+        @DisplayName("the preview refuses it the same way")
+        void previewRefusesItToo() {
+            assertThatThrownBy(() -> permissions.preview(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.SITE, null, null, null, PermissionLevel.READ, null)))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("site");
+        }
+
+        @Test
+        @DisplayName("a global grant carrying a scope reference is refused rather than silently ignoring it")
+        void globalGrantCarriesNoReference() {
+            // Accepting it would store a grant whose recorded scope is not the scope it confers.
+            assertThatThrownBy(() -> permissions.grant(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.GLOBAL, null, apiSite.id(), null,
+                    PermissionLevel.READ, null)))
+                    .isInstanceOf(ValidationException.class);
+        }
+
+        @Test
+        @DisplayName("a site grant that names a site nobody has is still a 404, not a 422")
+        void unknownSiteIsNotFound() {
+            // The reference is present and well formed; it simply does not resolve. Collapsing the
+            // two would make a typo indistinguishable from an omission.
+            assertThatThrownBy(() -> permissions.grant(new PermissionCommands.Grant(
+                    SubjectType.USER, ALICE, ScopeType.SITE, null, UUID.randomUUID(), null,
+                    PermissionLevel.READ, null)))
+                    .isInstanceOf(NotFoundException.class);
+        }
+    }
 
     private ProxySite createSite(String domain) {
         return sites.create(new ProxySiteCommands.Create(specFor(domain), AdminState.ENABLED));
