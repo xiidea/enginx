@@ -37,7 +37,7 @@ spec:
       # is also what lets it restore the previous release when a reload fails.
       containers:
         - name: agent
-          image: xiidea/enginx-agent:latest
+          image: ghcr.io/xiidea/enginx-agent:latest
           ports:
             - name: http
               containerPort: 80

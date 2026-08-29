@@ -18,10 +18,28 @@ COPY management-boot/build.gradle.kts          management-boot/
 RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon :management-boot:dependencies --quiet || true
 
 COPY . .
-RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon :management-boot:bootJar -x test
+# Stamped so the running application can say which version it is, not only the image tag. Without
+# it the jar inside a 0.0.2 image would report a SNAPSHOT, and "which version is that host
+# running?" could only be answered by trusting what somebody believes they deployed.
+ARG VERSION=0.1.0-SNAPSHOT
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew --no-daemon :management-boot:bootJar -x test -Pversion=${VERSION}
 
 # ---- run ------------------------------------------------------------------
 FROM eclipse-temurin:25-jre-alpine AS runtime
+
+# OCI labels, so `docker inspect` answers the version question without starting the container.
+# The same default as the build stage above: a label claiming one version over a jar built at
+# another is worse than no label.
+ARG VERSION=0.1.0-SNAPSHOT
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="Easy NGINX Admin management server" \
+      org.opencontainers.image.description="Control plane for NGINX reverse proxies" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/xiidea/enginx" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 
 RUN apk add --no-cache wget \
     && addgroup -S enginx && adduser -S -G enginx -H enginx

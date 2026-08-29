@@ -15,7 +15,7 @@ name: enginx-agent
 
 services:
   nginx:
-    image: ${AGENT_IMAGE:-xiidea/enginx-agent:latest}
+    image: ${AGENT_IMAGE:-ghcr.io/xiidea/enginx-agent:latest}
     restart: unless-stopped
     # NGINX and the agent share a container by necessity: the agent signals the NGINX process to
     # reload, and a process in another container cannot be signalled. The agent is PID 1 and

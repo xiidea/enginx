@@ -23,6 +23,17 @@ RUN CGO_ENABLED=0 go build -trimpath \
 # in another container cannot be signalled, so co-location is a requirement of the design.
 FROM nginx:1.27-alpine AS runtime
 
+# OCI labels, so `docker inspect` answers the version question without starting the container.
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="Easy NGINX Admin agent" \
+      org.opencontainers.image.description="NGINX node agent, co-located with the NGINX it manages" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/xiidea/enginx" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+
 COPY --from=build /out/enginx-agent /usr/local/bin/enginx-agent
 
 RUN mkdir -p /etc/nginx/enginx/releases /etc/enginx/pki

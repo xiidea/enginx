@@ -41,6 +41,21 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+/**
+ * Writes META-INF/build-info.properties into the jar, which is what makes the running application
+ * able to say which version it is. Without it the version exists only in the artefact's filename
+ * and the image tag — so a deployed server could not be asked, and "which version is that host
+ * running?" would be answered by looking at what somebody believes they deployed.
+ */
+springBoot {
+    buildInfo {
+        properties {
+            // The Gradle version, which the release sets from the tag via -Pversion.
+            version = project.version.toString()
+        }
+    }
+}
+
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName = "proxy-management.jar"
 }

@@ -17,6 +17,9 @@ on:
 
 permissions:
   contents: write
+  # Pushing images to the registry attached to this repository. The built-in token is enough, so
+  # there are no registry credentials to create, rotate, or leak.
+  packages: write
 
 jobs:
   agent:
@@ -169,12 +172,132 @@ jobs:
           path: proxy-management/dist/
           retention-days: 7
 
+  images:
+    name: Container images
+    runs-on: ubuntu-latest
+    # After the tests above, not beside them: an image published from code that failed its own
+    # tests is the artefact that must not exist, and it is the one people actually deploy.
+    needs: [agent, management]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # A pre-release must not become what `:latest` resolves to. Somebody pulling latest is
+          # asking for the version they should be running, and that is never an rc.
+          moving_latest=true
+          case "$VERSION" in *-*) moving_latest=false ;; esac
+
+          # The tag lists are built here rather than inline in each build step: an expression
+          # spanning several YAML lines is folded before it is evaluated, and a tag list that
+          # quietly folds wrong publishes an image under a name nobody expects.
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER}"
+          for image in management agent console; do
+            tags="${repo}/enginx-${image}:${VERSION}"
+            if [ "$moving_latest" = true ]; then
+              tags="${tags},${repo}/enginx-${image}:latest"
+            fi
+            echo "${image}_tags=${tags}" >> "$GITHUB_OUTPUT"
+          done
+          echo "registry=${repo}" >> "$GITHUB_OUTPUT"
+
+      # arm64 as well as amd64: the agent's whole job is to run on whatever hosts serve traffic,
+      # and Graviton and Ampere are ordinary choices for those.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to the registry
+        # Only for a real tag. A dispatch run builds every image and pushes none, which is what
+        # makes the publish path rehearsable without publishing.
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Management server
+        uses: docker/build-push-action@v6
+        with:
+          context: proxy-management
+          file: docker/proxy-management/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          tags: ${{ steps.version.outputs.management_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Agent
+        uses: docker/build-push-action@v6
+        with:
+          context: enginx-agent
+          file: enginx-agent/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          tags: ${{ steps.version.outputs.agent_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Console
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/frontend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          tags: ${{ steps.version.outputs.console_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The same reasoning as the binaries: an image tagged 1.2.3 whose application reports
+      # something else is worse than no version at all, because it is believed. Checked on the
+      # amd64 image, which is the one this runner can execute.
+      - name: Verify the version reached the application
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          reported=$(docker run --rm --platform linux/amd64 \
+            --entrypoint /usr/local/bin/enginx-agent \
+            "ghcr.io/${OWNER}/enginx-agent:${VERSION}" -version)
+          echo "agent image reports: $reported"
+          case "$reported" in
+            "enginx-agent ${VERSION} "*) ;;
+            *) echo "::error::agent image reports '$reported', expected ${VERSION}"; exit 1;;
+          esac
+
+          labelled=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
+            "ghcr.io/${OWNER}/enginx-management:${VERSION}")
+          echo "management image labelled: $labelled"
+          [ "$labelled" = "$VERSION" ] || { echo "::error::label says '$labelled'"; exit 1; }
+
   publish:
     name: Publish the release
     # Only for a real tag. A dispatch run builds and verifies everything above and stops there,
     # which is what makes the release path safe to rehearse.
     if: github.event_name == 'push'
-    needs: [agent, management]
+    # The release notes name the images, so they must exist by the time anyone reads them.
+    needs: [agent, management, images]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -199,6 +322,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           # --generate-notes builds the changelog from merged pull requests, so release notes are
@@ -207,8 +331,23 @@ jobs:
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease";; esac
 
+          # Generated notes plus the images, because a release that lists only binaries reads as
+          # though there are none — and the images are what most people actually deploy.
+          cat > notes.md <<EOF
+          ### Container images
+
+          \`\`\`
+          ghcr.io/${OWNER}/enginx-management:${VERSION#v}
+          ghcr.io/${OWNER}/enginx-agent:${VERSION#v}
+          ghcr.io/${OWNER}/enginx-console:${VERSION#v}
+          \`\`\`
+
+          Built for \`linux/amd64\` and \`linux/arm64\`.
+          EOF
+
           gh release create "$VERSION" \
             --title "$VERSION" \
+            --notes-file notes.md \
             --generate-notes \
             $prerelease \
             release/*

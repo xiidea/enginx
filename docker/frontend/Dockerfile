@@ -17,6 +17,17 @@ RUN npx ng build
 # ---- run ------------------------------------------------------------------
 FROM nginx:1.27-alpine AS runtime
 
+# OCI labels, so `docker inspect` answers the version question without starting the container.
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="Easy NGINX Admin console" \
+      org.opencontainers.image.description="Web interface for the management server" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/xiidea/enginx" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 

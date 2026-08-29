@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: proxy-management
-          image: xiidea/enginx-management:latest
+          image: ghcr.io/xiidea/enginx-management:latest
           ports:
             - name: http
               containerPort: 8080

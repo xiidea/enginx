@@ -57,5 +57,10 @@ The properties the platform holds, and why each one is arranged the way it is.
 - `/actuator` exposes only health and info without authentication; metrics and Prometheus require
   `SUPER_ADMIN`, and the production edge does not proxy `/actuator` at all — publishing it would
   disclose the estate's shape to anyone asking.
+- `/actuator/info` now reports the running version, which is a deliberate and small disclosure: it
+  is what lets an operator ask a host what it is rather than trust what somebody believes they
+  deployed. It is worth naming because a version is also what an attacker matches against a list of
+  known vulnerabilities. The edge not proxying `/actuator` is what keeps that off the internet; if
+  you expose it, put the version behind authentication with the rest of `/actuator`.
 - Production secrets are files, not environment variables, and the key that wraps every stored
   private key is generated separately and never regenerated in place.
