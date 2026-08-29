@@ -230,8 +230,12 @@ jobs:
         with:
           context: proxy-management
           file: docker/proxy-management/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'push' }}
+          # A dispatch keeps the image instead of discarding it, so the checks below can run
+          # against it. Single-architecture because `load` cannot take a multi-platform image,
+          # and the verification runs on amd64 regardless.
+          load: ${{ github.event_name != 'push' }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
@@ -244,8 +248,12 @@ jobs:
         with:
           context: enginx-agent
           file: enginx-agent/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'push' }}
+          # A dispatch keeps the image instead of discarding it, so the checks below can run
+          # against it. Single-architecture because `load` cannot take a multi-platform image,
+          # and the verification runs on amd64 regardless.
+          load: ${{ github.event_name != 'push' }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
@@ -258,8 +266,12 @@ jobs:
         with:
           context: .
           file: docker/frontend/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'push' }}
+          # A dispatch keeps the image instead of discarding it, so the checks below can run
+          # against it. Single-architecture because `load` cannot take a multi-platform image,
+          # and the verification runs on amd64 regardless.
+          load: ${{ github.event_name != 'push' }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
@@ -270,11 +282,14 @@ jobs:
       # The same reasoning as the binaries: an image tagged 1.2.3 whose application reports
       # something else is worse than no version at all, because it is believed. Checked on the
       # amd64 image, which is the one this runner can execute.
+      # Runs on a dispatch as well as on a tag, deliberately. This step failed the first time it
+      # ran for real, and it failed because a dispatch had never exercised it — a rehearsal that
+      # skips the part most likely to break is not a rehearsal.
       - name: Verify the version reached the application
-        if: github.event_name == 'push'
         env:
           VERSION: ${{ steps.version.outputs.version }}
           OWNER: ${{ github.repository_owner }}
+          PUSHED: ${{ github.event_name == 'push' }}
         run: |
           set -euo pipefail
 
@@ -285,8 +300,10 @@ jobs:
           # check that passes by accident is one nobody can rely on.
           agent="ghcr.io/${OWNER}/enginx-agent:${VERSION}"
           management="ghcr.io/${OWNER}/enginx-management:${VERSION}"
-          docker pull --quiet --platform linux/amd64 "$agent"
-          docker pull --quiet --platform linux/amd64 "$management"
+          if [ "$PUSHED" = "true" ]; then
+            docker pull --quiet --platform linux/amd64 "$agent"
+            docker pull --quiet --platform linux/amd64 "$management"
+          fi
 
           reported=$(docker run --rm --platform linux/amd64 \
             --entrypoint /usr/local/bin/enginx-agent "$agent" -version)
