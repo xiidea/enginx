@@ -1,19 +1,84 @@
-.form-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; align-items: start; }
+/*
+ * Two columns, never three.
+ *
+ * auto-fit against a 320px minimum gave four columns on a wide monitor, and since the cards are
+ * placed in order with two of them spanning the full width, the short rows left ragged empty
+ * cells beside them. Two columns keeps every pair aligned and keeps a text input at a width
+ * somebody can actually read.
+ */
+.form-cols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+  /* A form is read down a column. Letting it fill a 27-inch monitor puts the label and its input
+     an eye movement apart, and stretches a port field to 600px for no reason. */
+  max-width: 74rem;
+}
+
+@media (min-width: 62rem) {
+  .form-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .span { grid-column: 1 / -1; }
+
+/* ---------- one labelled control ---------- */
+
+.field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.field > label { margin: 0; }
+/* The button in a repeating row sits on the control line, not against its label. */
+.field > .btn { align-self: start; }
+
+/* A checkbox reads as label-then-box, so it lays out across rather than down. */
+.check-field { flex-direction: row; align-items: center; gap: 0.5rem; }
+.check-field label { margin: 0; font-size: 0.87rem; color: var(--ink); }
+.check-field input { flex: none; }
+/* Beside a labelled control, so it lines up with the input rather than with the label above it. */
+.check-field.aligned { align-self: end; padding-bottom: 0.45rem; }
 
 .check { display: flex; align-items: center; gap: 0.5rem; }
 .check label { margin: 0; font-size: 0.87rem; color: var(--ink); }
-.check.tall { align-items: flex-end; padding-bottom: 0.45rem; }
 
-.upstream {
+/* ---------- repeating rows ---------- */
+
+/*
+ * Each row is a labelled group per control, so the two number fields are visibly Port and Weight
+ * rather than two identical boxes. The labels cost one line per row and remove every guess.
+ *
+ * Wrapping rather than a fixed column count: below the breakpoint the controls stack into a
+ * bordered block instead of collapsing into one column of unlabelled inputs.
+ */
+.upstream,
+.header-row {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 2fr) 6rem 5rem auto auto;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 0.5rem 0.75rem;
+  align-items: end;
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 
-.header-row { display: grid; grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 0.5rem; align-items: center; }
+.upstream { grid-template-columns: 7rem minmax(8rem, 2fr) 6rem 6rem auto auto; }
+.header-row { grid-template-columns: 10rem minmax(8rem, 1fr) minmax(8rem, 1.4fr) auto; }
 
-@media (max-width: 780px) {
-  .upstream, .header-row { grid-template-columns: 1fr; }
+/*
+ * Narrower: two controls per line, flowing in order, so nothing spans and no cell is left empty
+ * beside a short field. Each keeps its label, so a wrapped row is still readable.
+ */
+@media (max-width: 60rem) {
+  .upstream,
+  .header-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* A header value is arbitrary text and the longest thing in the row, so it takes the width
+     rather than sharing it with a button. It starts a row, so spanning leaves no empty cell. */
+  .header-row .field:nth-child(3) { grid-column: 1 / -1; }
+  .header-row .field:nth-child(4) { justify-self: end; }
+}
+
+@media (max-width: 34rem) {
+  .upstream,
+  .header-row { grid-template-columns: 1fr; }
+  /* Stacked, the button is the last thing in a tall block; full width makes it a clear target. */
+  .field > .btn { align-self: stretch; }
 }

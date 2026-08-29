@@ -70,37 +70,50 @@
       <button class="btn btn-sm" type="button" (click)="addUpstream()">Add upstream</button>
     </div>
     <div class="card-body stack">
+      <!-- Each control carries its own label. Two bare number boxes side by side are port and
+           weight to whoever wrote this form and a guess to everybody else. -->
       @for (upstream of upstreams(); track $index) {
         <div class="upstream">
-          <select
-            [ngModel]="upstream.scheme"
-            (ngModelChange)="updateUpstream($index, { scheme: $event })"
-            aria-label="Scheme">
-            <option value="http">http</option>
-            <option value="https">https</option>
-          </select>
-          <input
-            class="mono"
-            placeholder="10.10.10.20"
-            [ngModel]="upstream.host"
-            (ngModelChange)="updateUpstream($index, { host: $event })"
-            aria-label="Host" />
-          <input
-            type="number"
-            class="mono"
-            placeholder="8080"
-            [ngModel]="upstream.port"
-            (ngModelChange)="updateUpstream($index, { port: +$event })"
-            aria-label="Port" />
-          <input
-            type="number"
-            min="1"
-            max="100"
-            [ngModel]="upstream.weight ?? 1"
-            (ngModelChange)="updateUpstream($index, { weight: +$event })"
-            aria-label="Weight"
-            title="Weight" />
-          <div class="check">
+          <div class="field">
+            <label [for]="'up-scheme-' + $index">Scheme</label>
+            <select
+              [id]="'up-scheme-' + $index"
+              [ngModel]="upstream.scheme"
+              (ngModelChange)="updateUpstream($index, { scheme: $event })">
+              <option value="http">http</option>
+              <option value="https">https</option>
+            </select>
+          </div>
+          <div class="field">
+            <label [for]="'up-host-' + $index">Host</label>
+            <input
+              [id]="'up-host-' + $index"
+              class="mono"
+              placeholder="10.10.10.20"
+              [ngModel]="upstream.host"
+              (ngModelChange)="updateUpstream($index, { host: $event })" />
+          </div>
+          <div class="field">
+            <label [for]="'up-port-' + $index">Port</label>
+            <input
+              [id]="'up-port-' + $index"
+              type="number"
+              class="mono"
+              placeholder="8080"
+              [ngModel]="upstream.port"
+              (ngModelChange)="updateUpstream($index, { port: +$event })" />
+          </div>
+          <div class="field">
+            <label [for]="'up-weight-' + $index">Weight</label>
+            <input
+              [id]="'up-weight-' + $index"
+              type="number"
+              min="1"
+              max="100"
+              [ngModel]="upstream.weight ?? 1"
+              (ngModelChange)="updateUpstream($index, { weight: +$event })" />
+          </div>
+          <div class="field check-field">
             <input
               type="checkbox"
               [id]="'backup' + $index"
@@ -108,9 +121,12 @@
               (ngModelChange)="updateUpstream($index, { backup: $event })" />
             <label [for]="'backup' + $index">Backup</label>
           </div>
-          <button class="btn btn-sm" type="button" [disabled]="upstreams().length === 1" (click)="removeUpstream($index)">
-            Remove
-          </button>
+          <div class="field">
+            <button class="btn btn-sm" type="button" [disabled]="upstreams().length === 1"
+              (click)="removeUpstream($index)">
+              Remove
+            </button>
+          </div>
         </div>
       }
       <p class="hint">
@@ -126,7 +142,7 @@
             <option value="IP_HASH">IP hash</option>
           </select>
         </div>
-        <div class="check tall">
+        <div class="field check-field aligned">
           <input id="ws" type="checkbox" [ngModel]="websocketEnabled()" (ngModelChange)="websocketEnabled.set($event)" />
           <label for="ws">WebSocket proxying</label>
         </div>
@@ -209,13 +225,27 @@
       }
       @for (header of headers(); track $index) {
         <div class="header-row">
-          <select [ngModel]="header.direction" (ngModelChange)="updateHeader($index, { direction: $event })" aria-label="Direction">
-            <option value="REQUEST">To upstream</option>
-            <option value="RESPONSE">To client</option>
-          </select>
-          <input class="mono" placeholder="X-Tenant-Id" [ngModel]="header.name" (ngModelChange)="updateHeader($index, { name: $event })" aria-label="Header name" />
-          <input class="mono" placeholder="acme" [ngModel]="header.value" (ngModelChange)="updateHeader($index, { value: $event })" aria-label="Header value" />
-          <button class="btn btn-sm" type="button" (click)="removeHeader($index)">Remove</button>
+          <div class="field">
+            <label [for]="'hd-dir-' + $index">Direction</label>
+            <select [id]="'hd-dir-' + $index" [ngModel]="header.direction"
+              (ngModelChange)="updateHeader($index, { direction: $event })">
+              <option value="REQUEST">To upstream</option>
+              <option value="RESPONSE">To client</option>
+            </select>
+          </div>
+          <div class="field">
+            <label [for]="'hd-name-' + $index">Name</label>
+            <input [id]="'hd-name-' + $index" class="mono" placeholder="X-Tenant-Id"
+              [ngModel]="header.name" (ngModelChange)="updateHeader($index, { name: $event })" />
+          </div>
+          <div class="field">
+            <label [for]="'hd-value-' + $index">Value</label>
+            <input [id]="'hd-value-' + $index" class="mono" placeholder="acme"
+              [ngModel]="header.value" (ngModelChange)="updateHeader($index, { value: $event })" />
+          </div>
+          <div class="field">
+            <button class="btn btn-sm" type="button" (click)="removeHeader($index)">Remove</button>
+          </div>
         </div>
       }
       @if (headers().length) {
