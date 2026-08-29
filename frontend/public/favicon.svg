@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Easy NGINX Admin">
+  <title>Easy NGINX Admin</title>
+  <!--
+    The same mark the console draws in its sidebar, and the source of truth for favicon.ico:
+    one flat band on one flat ground, in the platform's pine accent. Flat because it is read at
+    16px in a tab strip, where a gradient turns to mud and a second colour turns to noise.
+
+    Both colours are literal rather than themed. A favicon is composited by the browser onto
+    whatever its tab strip happens to be, which is not a surface this stylesheet knows about, so
+    the icon carries its own ground instead of borrowing one.
+
+    The band is a little wider than the CSS mark's, which at 16px would land under two pixels and
+    disappear. That is the usual optical correction for small sizes, not a different mark.
+  -->
+  <rect width="32" height="32" rx="5" fill="#1f6f4a"/>
+  <path d="M0 28.2 L28.2 0 L32 3.8 L3.8 32 Z" fill="#ffffff"/>
+</svg>
