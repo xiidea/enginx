@@ -21,7 +21,8 @@ Two deployable applications plus three infrastructure services. No microservices
 | `proxy-management` | Java 25 / Spring Boot 4 | Source of truth. Owns domain model, permissions, config rendering, deployment orchestration, scheduling, ACME. |
 | `enginx-agent` | Go 1.22+ | One per NGINX host. Dumb, privileged executor: store bundle, `nginx -t`, atomic activate, reload, report status. |
 
-Infrastructure: PostgreSQL 16, Keycloak 26, NGINX OSS (co-located with each agent).
+Infrastructure: PostgreSQL 16, NGINX OSS (co-located with each agent), and an OIDC provider —
+Keycloak 26 in development, and optional: the platform can authenticate its own accounts instead.
 
 ### 1.2 Six architectural decisions that shape everything else
 
@@ -77,8 +78,9 @@ graph TB
         NG["Angular Admin UI<br/><i>angular-auth-oidc-client</i>"]
     end
 
-    subgraph IdP["Identity"]
-        KC["Keycloak 26<br/>realm: enginx<br/>roles + groups"]
+    subgraph IdP["Identity &mdash; either, or both"]
+        KC["OIDC provider<br/>Keycloak 26 in dev<br/>roles + groups"]
+        LOC["local accounts<br/>bcrypt &middot; platform-signed JWT<br/>same claims"]
     end
 
     subgraph MGMT["proxy-management &mdash; Spring Boot 4 (stateless, N replicas)"]
@@ -419,7 +421,7 @@ Quartz supplies its own `QRTZ_*` tables via its clustered JDBC schema; they are 
 
 ### 4.1 Two layers, deliberately
 
-**Layer 1 — Keycloak realm roles** establish a *global floor* and gate system-wide capabilities:
+**Layer 1 — realm roles** establish a *global floor* and gate system-wide capabilities:
 
 | Role | Meaning |
 |---|---|
@@ -428,7 +430,17 @@ Quartz supplies its own `QRTZ_*` tables via its clustered JDBC schema; they are 
 | `OPERATOR` | No implicit scope access. Can only act where explicitly granted. |
 | `READ_ONLY` | Ceiling of `READ` — explicit grants above `READ` are clamped down. |
 
-**Layer 2 — scoped grants in the database** provide the domain-level access the brief requires. Keycloak is the identity provider; it is a poor fit for storing thousands of per-domain ACL rows, and putting them in tokens would blow up JWT size. Grants therefore live in `permission_grants` and are keyed by Keycloak subject or group path.
+**Layer 2 — scoped grants in the database** provide the domain-level access the brief requires. An identity provider is a poor fit for storing thousands of per-domain ACL rows, and putting them in tokens would blow up JWT size. Grants therefore live in `permission_grants` and are keyed by subject or group path.
+
+### 4.1.1 Two issuers, one claim shape
+
+Authentication has two possible sources, and either may be switched off: an OIDC provider, and a local account store the platform owns. At least one must be on — starting with neither would bring up an application nobody can sign in to, reporting healthy.
+
+Local sign-in mints a platform-signed HS256 token whose claims **mirror the provider's**: `sub`, `preferred_username`, `email`, `realm_access.roles`, `groups`. Everything downstream — the converter, the permission evaluator, the scope filter, `@PreAuthorize` — is therefore unaware which one authenticated the caller. The alternative, a second principal type with its own authorization path, would mean every permission decision existing twice and only one of them being exercised by the tests that matter.
+
+The issuer claim selects which verifier runs; the audience check is the same for both. Reading an unverified claim to *choose* a verifier is safe, because the chosen verifier still has to accept the signature.
+
+One invariant makes the two safe to run together: a local subject is `local:<uuid>`, never a bare UUID. `permission_grants.subject_ref` holds an OIDC `sub`, which *is* a bare UUID, so an unnamespaced local id could match a grant written for somebody else — and the collision would be silent and permanent.
 
 ### 4.2 Permission levels (totally ordered)
 

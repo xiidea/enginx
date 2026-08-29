@@ -1,0 +1,136 @@
+<app-page-header
+  title="Local users"
+  subtitle="Accounts the platform authenticates itself, for deployments that do not run an identity provider.">
+  <button class="btn btn-primary" type="button" (click)="showForm.set(!showForm())">Create account</button>
+</app-page-header>
+
+@if (showForm()) {
+  <section class="card form-card">
+    <div class="card-head"><h2>Create a local account</h2></div>
+    <div class="card-body stack">
+      <div class="grid-2">
+        <div>
+          <label for="lu-username">Username</label>
+          <input id="lu-username" class="mono" autocomplete="off"
+            [ngModel]="username()" (ngModelChange)="username.set($event)" placeholder="ada" />
+          <p class="hint">Lowercase letters, digits, hyphens and underscores. Stored lowercase, so two accounts cannot differ only by case.</p>
+        </div>
+        <div>
+          <label for="lu-password">Initial password</label>
+          <input id="lu-password" type="password" autocomplete="new-password"
+            [ngModel]="password()" (ngModelChange)="password.set($event)" />
+          <p class="hint">At least 12 characters. The account must replace it at first sign-in, and can do nothing else until it does.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label for="lu-name">Display name</label>
+          <input id="lu-name" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" />
+        </div>
+        <div>
+          <label for="lu-email">Email</label>
+          <input id="lu-email" type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" />
+        </div>
+      </div>
+      <div>
+        <label>Roles</label>
+        <div class="roles">
+          @for (role of roles; track role) {
+            <label [for]="'lu-role-' + role">
+              <input [id]="'lu-role-' + role" type="checkbox"
+                [checked]="selectedRoles().has(role)" (change)="toggleRole(role)" />
+              {{ role }}
+            </label>
+          }
+        </div>
+        <p class="hint">Global roles only. Access to individual domains is granted on the permissions page.</p>
+      </div>
+      <div>
+        <label for="lu-groups">Group paths</label>
+        <input id="lu-groups" class="mono" [ngModel]="groupPaths()" (ngModelChange)="groupPaths.set($event)"
+          placeholder="/platform/operators, /teams/payments" />
+        <p class="hint">Comma separated. Matched against group grants exactly as an identity provider's groups are.</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" type="button"
+          [disabled]="saving() || !username().trim() || password().length < 12" (click)="create()">
+          {{ saving() ? 'Creating…' : 'Create' }}
+        </button>
+        <button class="btn" type="button" (click)="showForm.set(false)">Cancel</button>
+      </div>
+    </div>
+  </section>
+}
+
+@if (resetting(); as user) {
+  <section class="card form-card">
+    <div class="card-head"><h2>Reset the password for {{ user.username }}</h2></div>
+    <div class="card-body stack">
+      <div>
+        <label for="lu-reset">New password</label>
+        <input id="lu-reset" type="password" autocomplete="new-password"
+          [ngModel]="resetPassword()" (ngModelChange)="resetPassword.set($event)" />
+        <p class="hint">
+          A reset does not ask for the current password — that is the situation a reset exists for.
+          The account keeps its own must-change flag only if it already had one.
+        </p>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" type="button"
+          [disabled]="saving() || resetPassword().length < 12" (click)="applyReset()">
+          {{ saving() ? 'Saving…' : 'Reset password' }}
+        </button>
+        <button class="btn" type="button" (click)="resetting.set(null)">Cancel</button>
+      </div>
+    </div>
+  </section>
+}
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!users().length) {
+    <app-empty
+      title="No local accounts"
+      detail="Create one, or sign in through an identity provider instead." />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th><th>Roles</th><th>Groups</th><th>Last sign-in</th><th class="right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+            <tr [class.disabled]="!user.enabled">
+              <td class="primary">
+                {{ user.username }}
+                @if (isSelf(user)) { <span class="muted small"> · you</span> }
+                <div class="muted small">
+                  {{ user.displayName || user.email || '—' }}
+                  @if (user.mustChangePassword) { · must change password }
+                  @if (!user.enabled) { · disabled }
+                </div>
+              </td>
+              <td class="small">{{ user.roles.join(' · ') || '—' }}</td>
+              <td class="small mono">{{ user.groupPaths.join(' ') || '—' }}</td>
+              <td class="small nowrap">{{ user.lastLoginAt | datetime }}</td>
+              <td class="right nowrap">
+                <button class="btn btn-sm" type="button" (click)="resetting.set(user); resetPassword.set('')">
+                  Reset password
+                </button>
+                @if (!isSelf(user)) {
+                  <button class="btn btn-sm" type="button" (click)="setEnabled(user, !user.enabled)">
+                    {{ user.enabled ? 'Disable' : 'Enable' }}
+                  </button>
+                  <button class="btn btn-sm" type="button" (click)="remove(user)">Delete</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

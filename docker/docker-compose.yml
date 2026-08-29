@@ -23,7 +23,11 @@ services:
       retries: 20
     networks: [enginx]
 
+  # Opt-in. `docker compose --profile oidc up -d` starts it; without the profile the stack runs
+  # on local accounts alone, which is the configuration a small deployment wants and the one this
+  # file defaults to so that path is the one exercised daily.
   keycloak:
+    profiles: [oidc]
     image: quay.io/keycloak/keycloak:26.7.2
     container_name: enginx-keycloak
     command: ["start-dev", "--import-realm"]
@@ -67,6 +71,14 @@ services:
       # The issuer is the URL a browser used to obtain the token, so it must match what
       # Keycloak stamps into it. The JWKS URI is how this container reaches Keycloak on the
       # Docker network. They differ, and that is exactly what jwk-set-uri exists for.
+      # Local accounts by default; set AUTH_OIDC_ENABLED=true (with --profile oidc) to federate.
+      # Both may be on at once, which is what a migration onto Keycloak actually needs.
+      AUTH_OIDC_ENABLED: ${AUTH_OIDC_ENABLED:-false}
+      AUTH_LOCAL_ENABLED: ${AUTH_LOCAL_ENABLED:-true}
+      # Development value. Generate a real one with: openssl rand -base64 48
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-signing-secret-not-for-any-real-deployment}
+      AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-change-me-on-first-login}
       OIDC_ISSUER_URI: http://localhost:8081/realms/enginx
       OIDC_JWK_SET_URI: http://keycloak:8081/realms/enginx/protocol/openid-connect/certs
       OIDC_CLIENT_ID: enginx-api
@@ -106,8 +118,6 @@ services:
       - "8080:8080"
     depends_on:
       postgres:
-        condition: service_healthy
-      keycloak:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]

@@ -1,4 +1,4 @@
-@if (auth.authenticated()) {
+@if (auth.authenticated() && !auth.mustChangePassword()) {
   <div class="shell">
     <nav class="rail">
       <div class="brand">
@@ -35,19 +35,13 @@
       <router-outlet />
     </main>
   </div>
+} @else if (auth.authenticated()) {
+  <div class="signin">
+    <app-password-change />
+  </div>
 } @else {
   <div class="signin">
-    <div class="card signin-card">
-      <div class="card-body">
-        <span class="mark large" aria-hidden="true"></span>
-        <h1>Easy NGINX Admin</h1>
-        <p class="muted">
-          Reverse-proxy management across your NGINX estate. Sign in with your organisation account
-          to continue.
-        </p>
-        <button class="btn btn-primary" type="button" (click)="auth.login()">Sign in</button>
-      </div>
-    </div>
+    <app-sign-in />
   </div>
 }
 

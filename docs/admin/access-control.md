@@ -4,8 +4,11 @@ Who may do what, and how to grant it without granting more than you meant to.
 
 ## The permission model
 
-Two layers. Keycloak realm roles set a floor and a ceiling that apply everywhere; scoped grants
-in `permission_grants` decide who reaches which domains.
+Two layers. Realm roles set a floor and a ceiling that apply everywhere; scoped grants in
+`permission_grants` decide who reaches which domains.
+
+Both layers read the caller's token and nothing else, so it makes no difference whether an identity
+provider or the platform's own local account store authenticated them.
 
 | Level | Grants |
 |---|---|
@@ -96,3 +99,27 @@ to themselves by making the grant.
 **A pattern grant needs authority over a namespace containing it.** Holding ADMIN over
 `*.test.example.com` confers nothing over `*.example.com`, so nobody can escalate from a subdomain
 to its parent — and therefore to every sibling.
+
+## Local accounts
+
+When `AUTH_LOCAL_ENABLED` is on, the platform holds its own accounts and the console gains a
+**Local users** page. Administering them requires a global admin role, because a local account
+carries global roles — anyone able to create one could otherwise grant themselves `SUPER_ADMIN`.
+
+An account has a username, a bcrypt-hashed password, a set of realm roles, and a set of group
+paths. Those group paths are matched against group grants exactly as an identity provider's groups
+are, so one grant can cover both kinds of member.
+
+A few behaviours are worth knowing before you rely on them:
+
+- **The last enabled `SUPER_ADMIN` cannot be deleted or disabled.** Removing it would lock everyone
+  out of a running platform, and the only remedy is a database edit. Create a second administrator
+  first.
+- **Changing your own password requires the current one; an administrator's reset does not** — and
+  must not, since a reset exists precisely for the case where the old password is unavailable.
+- **A new account must change its password before it can do anything else.** Its token is refused
+  on every endpoint but its own password change, so the password an administrator typed is never
+  one the account keeps.
+- **Deleting an account does not remove its grants.** They are keyed by subject, and a subject that
+  no longer resolves grants nothing; but recreating a username issues a new id, so the old grants
+  do not come back with it.

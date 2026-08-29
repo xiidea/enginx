@@ -1,6 +1,6 @@
 # Roadmap
 
-**Phases 9 through 13 are complete.** The roadmap is finished; what remains is the two open
+**Phases 9 through 14 are complete.** The roadmap is finished; what remains is the two open
 decisions below.
 
 Phases 1–8 are complete. What follows is everything named as outstanding in
@@ -209,6 +209,28 @@ presents itself. [`../docs/admin/production.md`](admin/production.md) §7 descri
 
 ---
 
+## Phase 14 — Local accounts, and optional OIDC — **complete**
+
+Keycloak was a hard dependency: the application would not start without a reachable issuer, so the
+smallest useful deployment was a two-service one and evaluating the platform meant standing up an
+identity provider first.
+
+**14.1 — A local account store.** Username, bcrypt-hashed password, realm roles, group paths.
+Sign-in issues a platform-signed JWT whose claims mirror the provider's, so no authorization code
+changes and there is one path rather than two.
+
+**14.2 — OIDC as a switch.** Either provider may be off; at least one must be on, and the
+application refuses to start otherwise. With both on, the issuer selects the verifier.
+
+**14.3 — A bootstrap administrator, confined until it rotates.** Created into an empty user table
+from configuration, and flagged. A token carrying that flag is refused everywhere but its own
+password change — enforced by a filter, since a console check is a suggestion.
+
+**14.4 — Console.** Sign-in renders whichever methods the server reports, a forced password-change
+screen, and a Local users page for global admins.
+
+---
+
 ## Sequencing at a glance
 
 | Phase | Theme | Closes | Blocked by |
@@ -219,9 +241,11 @@ presents itself. [`../docs/admin/production.md`](admin/production.md) §7 descri
 | 11 | Governance | R5, retention | **Complete** |
 | 12 | Certificate and key capability | R1, open questions 2 and 4 | **Complete** |
 | 13 | Delivery | Improvement 7 | **Complete** |
+| 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
 
-Phase 11 depends on nothing and can be pulled forward if the wildcard grants are already in use.
-Phase 13 is the only one left, and depends on nothing but time.
+Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
+in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than
+to a plan.
 
 ## Deliberately not planned
 

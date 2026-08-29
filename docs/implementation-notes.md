@@ -541,6 +541,68 @@ heartbeat reported OFFLINE within one interval, `PUT /nginx-instances/{id}/agent
 trusted the new digest, and the instance returned to ONLINE at the next heartbeat. An existing
 deployment could not have done this without deleting and re-registering the instance.
 
+## Implementation note — local users, and optional OIDC
+
+Keycloak was a hard dependency: the application would not start without a reachable issuer, which
+made the smallest useful deployment a two-service one. Local accounts remove that, and the OIDC
+path became a switch rather than an assumption.
+
+**Local login issues a JWT rather than creating a session.** Every authorization path already
+begins with a validated JWT, so a session would have meant a second path — and a second path is one
+that only some of the tests exercise. The token's claims mirror the provider's exactly
+(`sub`, `preferred_username`, `email`, `realm_access.roles`, `groups`), so the converter, the
+permission evaluator and every `@PreAuthorize` are unchanged and unaware of which issuer signed.
+
+**HS256, not a keypair.** This service is both the only issuer and the only verifier of these
+tokens. A keypair would buy third-party verification nothing needs, and cost key distribution
+across replicas. The consequence is that `AUTH_JWT_SECRET` must match across replicas, and rotating
+it revokes every local session — which is the only way to revoke them all, since the tokens are
+self-contained.
+
+**A local subject is `local:<uuid>`.** This is the one invariant that keeps the two providers safe
+to run together. `permission_grants.subject_ref` holds an OIDC `sub`, which is a bare UUID; an
+unnamespaced local id could match a grant written for somebody else, and nothing would report it.
+
+**Choosing the verifier by the unverified `iss` claim.** With both providers on there are two
+decoders, and the token has to be routed to one of them before anything about it is trusted.
+Reading `iss` to make that choice is safe because the chosen decoder still validates the
+signature: a token claiming to be local is verified against the local secret, and fails.
+
+**The must-change-password flag is enforced by a filter, not by the console.** It began as a claim
+the console read to show a password form first. That is a suggestion — the token is a bearer token
+and curl works just as well. It matters most for the bootstrap administrator, whose password comes
+from configuration and has therefore been readable by everything that can read configuration. The
+filter confines such a token to exactly one request: a `PUT` to *its own* password, matched against
+the subject in the token. Allowing "any password change" instead would have handed whoever read the
+bootstrap password out of a manifest the ability to take over an administrator who had already
+rotated.
+
+**Changing your own password requires the current one, even though you are already holding a valid
+token.** A stolen token should not be enough to take permanent ownership of the account it was
+stolen from. An administrator's reset does not require it, and must not: a reset exists precisely
+for the case where the old password is unavailable.
+
+**One rejection message, and a dummy hash.** Wrong password, no such account and disabled account
+return the same message, and the missing-account path still runs bcrypt against a fixed hash so the
+three take the same time. Either difference on its own turns the login form into an account
+enumerator — which is how a credential-stuffing list gets filtered down to the accounts worth
+attacking.
+
+**The last enabled `SUPER_ADMIN` cannot be deleted or disabled.** Cheap to check, and only ever
+wrong in the direction of making someone create a second administrator first. Without it the
+remedy for the obvious mistake is an `INSERT` with a bcrypt hash produced by hand.
+
+**Bootstrap runs on an empty user table, not on a missing bootstrap user.** The narrower condition
+would recreate an account an administrator deliberately deleted, and resurrect one they disabled.
+
+**The console asks the server which methods exist** (`GET /api/v1/auth/methods`) before rendering
+anything. Offering a form for a method that is switched off produces a login that always fails with
+nothing on screen to explain why. Two smaller consequences followed: the route guard had been
+reading the OIDC library's session, which is invisible to a local one and turned local users away
+from every route; and the local token needs its own interceptor, which attaches it only to the API
+base — a bearer token sent to any other host is a credential handed to a third party on every
+request.
+
 ## Deviations from the original schema
 
 

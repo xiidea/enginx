@@ -13,8 +13,8 @@ docker compose -f docker-compose.prod.yml up -d       # management plane
 docker compose -f docker-compose.agent.yml up -d      # on each NGINX host
 ```
 
-`docker-compose.prod.yml` publishes exactly one service, the edge proxy. PostgreSQL, Keycloak's
-management port and the management API are reachable only on the internal network. Secrets are
+`docker-compose.prod.yml` publishes exactly one service, the edge proxy. PostgreSQL, the management
+API and any identity provider's management port are reachable only on the internal network. Secrets are
 mounted as files and read as a Spring config tree, never passed as environment variables — those
 are visible in `docker inspect` and in `/proc`.
 
@@ -47,7 +47,8 @@ virtual machine outside any cluster, and a host does not have to be a pod.
 
 Two things are deployed, and they are deployed differently.
 
-**The management plane** — API, console, Keycloak, PostgreSQL — runs once, wherever you like. It
+**The management plane** — API, console, PostgreSQL, and an identity provider if you use one —
+runs once, wherever you like. It
 holds the desired state and is the only thing operators talk to. It is not in the request path of
 any proxied site: if it is down, every site keeps serving, and only changes stop.
 
@@ -139,8 +140,8 @@ docker compose -f docker-compose.agent.yml up -d
 ```
 
 `docker-compose.prod.yml` publishes exactly one service — the edge proxy on 80 and 443. PostgreSQL,
-Keycloak's management port and the management API are reachable only on the internal network. A
-database port bound to `0.0.0.0` is the most common way a stack like this is lost.
+the management API and any identity provider's management port are reachable only on the internal
+network. A database port bound to `0.0.0.0` is the most common way a stack like this is lost.
 
 ### 2.5 Before going live
 
@@ -149,7 +150,9 @@ database port bound to `0.0.0.0` is the most common way a stack like this is los
       per week, and exceeding it is a lockout measured in days, not a slowdown.
 - [ ] `springdoc.api-docs.enabled=false` and `springdoc.swagger-ui.enabled=false` if you do not
       want the schema public.
-- [ ] The Keycloak realm's users, roles and client secrets are yours, not the development ones.
+- [ ] The realm's users, roles and client secrets are yours, not the development ones — or, with
+      local accounts, `AUTH_BOOTSTRAP_PASSWORD` has been used once and removed from the
+      environment, and `AUTH_JWT_SECRET` is a value nothing else has ever held.
 - [ ] `secrets/crypto_key_k1` is backed up separately from the database.
 - [ ] A restore has been tested. An untested backup is a hypothesis.
 
@@ -465,8 +468,13 @@ Everything below is an environment variable on the management container. Default
 |---|---|---|
 | `DB_URL`, `DB_USERNAME` | localhost | Password comes from the secret, not from here |
 | `DB_POOL_SIZE` | 10 | 20 is reasonable in production |
-| `OIDC_ISSUER_URI` | — | The **public** Keycloak URL. Must match what browsers used |
-| `OIDC_JWK_SET_URI` | — | How this container reaches Keycloak internally. Differs on purpose |
+| `AUTH_OIDC_ENABLED` | `true` | Trust an identity provider |
+| `AUTH_LOCAL_ENABLED` | `false` | Authenticate accounts held by the platform. At least one of the two must be on |
+| `AUTH_JWT_SECRET` | — | Signs local tokens. At least 32 bytes, identical across replicas, from a file rather than here |
+| `AUTH_TOKEN_TTL` | `8h` | Local token lifetime. Self-contained, so this is also the revocation delay |
+| `AUTH_BOOTSTRAP_USERNAME`, `AUTH_BOOTSTRAP_PASSWORD` | — | The first administrator. Remove both once it exists |
+| `OIDC_ISSUER_URI` | — | The **public** provider URL. Must match what browsers used |
+| `OIDC_JWK_SET_URI` | — | How this container reaches the provider internally. Differs on purpose |
 | `CORS_ALLOWED_ORIGINS` | localhost:4200 | The console's public origin |
 | `CRYPTO_ACTIVE_KEY_ID` | `dev` | Which key wraps *new* secrets. Old ones record their own |
 | `ACME_DIRECTORY_URL` | LE staging | Switch to production deliberately |

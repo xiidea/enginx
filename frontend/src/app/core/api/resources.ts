@@ -7,7 +7,9 @@ import {
   Certificate,
   Deployment,
   DomainGroup,
+  CreateLocalUserRequest,
   EffectivePermission,
+  LocalUser,
   NginxInstance,
   Page,
   PermissionGrant,
@@ -20,6 +22,7 @@ import {
   SiteSummary,
   Subject,
   SubjectType,
+  UpdateLocalUserRequest,
   UpstreamCheck,
 } from './models';
 
@@ -283,5 +286,38 @@ export class AuditApi {
   /** The action vocabulary, so the filter offers what the server can actually match. */
   actions(): Observable<string[]> {
     return this.api.get('/audit-logs/actions');
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class LocalUsersApi {
+  private readonly api = inject(ApiService);
+
+  list(): Observable<LocalUser[]> {
+    return this.api.get('/local-users');
+  }
+
+  create(request: CreateLocalUserRequest): Observable<LocalUser> {
+    return this.api.post('/local-users', request);
+  }
+
+  update(id: string, request: UpdateLocalUserRequest): Observable<LocalUser> {
+    return this.api.put(`/local-users/${id}`, request);
+  }
+
+  setEnabled(id: string, enabled: boolean): Observable<LocalUser> {
+    return this.api.post(`/local-users/${id}/${enabled ? 'enable' : 'disable'}`);
+  }
+
+  /**
+   * Changing your own password requires the current one; an administrator resetting somebody
+   * else's neither has it nor needs it.
+   */
+  changePassword(id: string, newPassword: string, currentPassword?: string): Observable<void> {
+    return this.api.put(`/local-users/${id}/password`, { currentPassword, newPassword });
+  }
+
+  remove(id: string): Observable<void> {
+    return this.api.delete(`/local-users/${id}`);
   }
 }

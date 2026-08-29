@@ -5,8 +5,9 @@ The web interface.
 ## The admin console
 
 Angular 21, standalone components and signals, every feature lazily loaded — 98 kB initial
-transfer. Authentication is authorization code with PKCE against the same Keycloak realm the API
-trusts.
+transfer. Authentication is whatever the server reports at `GET /api/v1/auth/methods`: a username
+and password form for local accounts, a redirect for an identity provider, or both. The redirect is
+authorization code with PKCE against the same realm the API trusts.
 
 ```bash
 cd frontend && npm install && npm start   # http://localhost:4200 against a local API
@@ -19,7 +20,8 @@ expired, failed deployments, certificates approaching renewal — and says so ex
 nothing does. **Proxy sites** filters and sorts in the query, so the page count is honest.
 **Site detail** carries the configuration preview, which renders the exact NGINX directives a
 deployment would produce without touching live traffic. **Certificates**, **Deployments** with
-per-phase history, **Permissions** with domain groups, and **NGINX instances**.
+per-phase history, **Permissions** with domain groups, and **NGINX instances**. **Local users**
+appears only when the platform authenticates people itself, and only for a global admin.
 
 ### Hidden actions are a courtesy, not a control
 

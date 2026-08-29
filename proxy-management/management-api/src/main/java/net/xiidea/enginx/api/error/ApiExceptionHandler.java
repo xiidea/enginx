@@ -11,12 +11,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import net.xiidea.enginx.application.identity.LocalAuthenticationService;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -99,6 +101,19 @@ public class ApiExceptionHandler {
                         + "or a unique value is already taken.", request);
         problem.setProperty("reference", reference);
         return problem;
+    }
+
+    /**
+     * A rejected login is 401, not 403: the caller has not proven who they are, rather than proven
+     * it and been refused. The detail is whatever the service chose, which is deliberately the same
+     * sentence for every cause.
+     */
+    @ExceptionHandler(LocalAuthenticationService.AuthenticationFailedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ProblemDetail handleAuthenticationFailed(
+            LocalAuthenticationService.AuthenticationFailedException e, HttpServletRequest request) {
+        return problem(HttpStatus.UNAUTHORIZED, "authentication-failed", "Authentication failed",
+                e.getMessage(), request);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

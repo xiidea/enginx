@@ -41,6 +41,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a username and password for an access token
+         * @description Available only when local authentication is enabled. Rate limited as a sensitive operation, and every rejection returns the same message whether the account is missing, disabled or the password is wrong.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which authentication methods this deployment offers
+         * @description Unauthenticated: a login screen has to render before anyone has a token. Returns only what a login page needs — never whether an account exists.
+         */
+        get: operations["methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates": {
         parameters: {
             query?: never;
@@ -52,7 +92,7 @@ export interface paths {
          * List certificates
          * @description Metadata only. Private key material is never returned by any endpoint.
          */
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
         /**
          * Request a certificate over ACME
@@ -113,14 +153,14 @@ export interface paths {
             cookie?: never;
         };
         /** Fetch one certificate */
-        get: operations["get_4"];
+        get: operations["get_5"];
         put?: never;
         post?: never;
         /**
          * Delete a certificate
          * @description Refused while any proxy site still references it.
          */
-        delete: operations["delete_2"];
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch?: never;
@@ -211,7 +251,7 @@ export interface paths {
             cookie?: never;
         };
         /** List deployments */
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
         post?: never;
         delete?: never;
@@ -228,7 +268,7 @@ export interface paths {
             cookie?: never;
         };
         /** Fetch one deployment with its phase history */
-        get: operations["get_3"];
+        get: operations["get_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -265,13 +305,13 @@ export interface paths {
             cookie?: never;
         };
         /** List domain groups visible to you */
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         /**
          * Create a domain group
          * @description A top-level group requires global MANAGE; a subgroup requires MANAGE on its parent.
          */
-        post: operations["create_1"];
+        post: operations["create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -286,18 +326,18 @@ export interface paths {
             cookie?: never;
         };
         /** Fetch one domain group */
-        get: operations["get_1"];
+        get: operations["get_2"];
         /**
          * Rename a domain group
          * @description The path is identity and cannot be changed: moving a group would silently change which sites every grant beneath it reaches.
          */
-        put: operations["update_1"];
+        put: operations["update_2"];
         post?: never;
         /**
          * Delete an empty domain group
          * @description Refused while the group has subgroups or members, because deleting it would silently revoke every grant made over it.
          */
-        delete: operations["delete_1"];
+        delete: operations["delete_2"];
         options?: never;
         head?: never;
         patch?: never;
@@ -358,6 +398,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/local-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List local accounts */
+        get: operations["list_3"];
+        put?: never;
+        /**
+         * Create a local account
+         * @description Requires global admin: a local account carries global roles, so anyone able to create one could otherwise grant themselves SUPER_ADMIN.
+         */
+        post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One local account */
+        get: operations["get_1"];
+        /** Update a local account's profile, roles and groups */
+        put: operations["update_1"];
+        post?: never;
+        /**
+         * Delete a local account
+         * @description Refused for the last enabled administrator.
+         */
+        delete: operations["delete_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a local account
+         * @description Refused for the last enabled administrator, which would lock everyone out.
+         */
+        post: operations["disable_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a local account */
+        post: operations["enable_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a password
+         * @description Changing your own requires the current password. An administrator resetting someone else's does not, and must not — a reset exists precisely for the case where the old password is unavailable.
+         */
+        put: operations["changePassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nginx-instances": {
         parameters: {
             query?: never;
@@ -387,7 +527,7 @@ export interface paths {
             cookie?: never;
         };
         /** Fetch one NGINX instance */
-        get: operations["get_2"];
+        get: operations["get_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -764,6 +904,12 @@ export interface components {
             resourceType?: string;
             result: string;
         };
+        AuthMethodsResponse: {
+            localEnabled: boolean;
+            oidcClientId?: string;
+            oidcEnabled: boolean;
+            oidcIssuer?: string;
+        };
         BundleFileResponse: {
             content?: string;
             path?: string;
@@ -830,6 +976,10 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        ChangePasswordRequest: {
+            currentPassword?: string;
+            newPassword: string;
+        };
         CloneRequest: {
             domain: string;
             name: string;
@@ -854,6 +1004,15 @@ export interface components {
             /** Format: uuid */
             parentId?: string;
             slug: string;
+        };
+        CreateLocalUserRequest: {
+            displayName?: string;
+            email?: string;
+            groupPaths?: string[];
+            mustChangePassword?: boolean;
+            password: string;
+            roles?: string[];
+            username: string;
         };
         /** @description One deployment phase. */
         DeploymentEventResponse: {
@@ -948,10 +1107,32 @@ export interface components {
             name: string;
             value: string;
         };
+        LocalUserResponse: {
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: string;
+            displayName?: string;
+            email?: string;
+            enabled: boolean;
+            groupPaths: string[];
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            mustChangePassword: boolean;
+            roles: string[];
+            username: string;
+            /** Format: int64 */
+            version: number;
+        };
         /** @description A location rule. */
         LocationDto: {
             matchType: string;
             pathPattern: string;
+        };
+        LoginRequest: {
+            password: string;
+            username: string;
         };
         /** @description A site a grant would reach. */
         MatchedSiteResponse: {
@@ -1032,6 +1213,19 @@ export interface components {
             scopeType: string;
             subjectRef: string;
             subjectType: string;
+        };
+        ProblemDetail: {
+            detail?: string;
+            /** Format: uri */
+            instance?: string;
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** Format: int32 */
+            status?: number;
+            title?: string;
+            /** Format: uri */
+            type?: string;
         };
         ProxySiteRequest: {
             /** Format: date-time */
@@ -1165,10 +1359,24 @@ export interface components {
             subjectRef: string;
             subjectType: string;
         };
+        TokenResponse: {
+            accessToken: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: int64 */
+            expiresInSeconds: number;
+            tokenType: string;
+        };
         /** @description Changes to a domain group. */
         UpdateDomainGroupRequest: {
             description?: string;
             name: string;
+        };
+        UpdateLocalUserRequest: {
+            displayName?: string;
+            email?: string;
+            groupPaths?: string[];
+            roles?: string[];
         };
         UploadRequest: {
             fullChainPem: string;
@@ -1231,6 +1439,15 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseAuditResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     actions: {
@@ -1251,9 +1468,80 @@ export interface operations {
                     "*/*": string[];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    list_4: {
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    methods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthMethodsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    list_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -1269,6 +1557,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CertificateResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1295,6 +1592,15 @@ export interface operations {
                     "*/*": components["schemas"]["CertificateResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     rewrapSecrets: {
@@ -1313,6 +1619,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RewrapResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1339,9 +1654,18 @@ export interface operations {
                     "*/*": components["schemas"]["CertificateResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    get_4: {
+    get_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -1361,9 +1685,18 @@ export interface operations {
                     "*/*": components["schemas"]["CertificateResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    delete_2: {
+    delete_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1380,6 +1713,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
             };
         };
     };
@@ -1401,6 +1743,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1429,6 +1780,15 @@ export interface operations {
                     "*/*": components["schemas"]["CertificateResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     revoke: {
@@ -1449,6 +1809,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1473,9 +1842,18 @@ export interface operations {
                     "*/*": components["schemas"]["BundleResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    list_5: {
+    list_6: {
         parameters: {
             query?: {
                 nginxInstanceId?: string;
@@ -1498,9 +1876,18 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseDeploymentResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    get_3: {
+    get_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1518,6 +1905,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1542,9 +1938,18 @@ export interface operations {
                     "*/*": components["schemas"]["DeploymentResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1562,9 +1967,18 @@ export interface operations {
                     "*/*": components["schemas"]["DomainGroupResponse"][];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    create_1: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1586,9 +2000,18 @@ export interface operations {
                     "*/*": components["schemas"]["DomainGroupResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    get_1: {
+    get_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1608,9 +2031,18 @@ export interface operations {
                     "*/*": components["schemas"]["DomainGroupResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    update_1: {
+    update_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1634,9 +2066,18 @@ export interface operations {
                     "*/*": components["schemas"]["DomainGroupResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    delete_1: {
+    delete_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1653,6 +2094,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
             };
         };
     };
@@ -1676,6 +2126,15 @@ export interface operations {
                     "*/*": string[];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     addMember: {
@@ -1696,6 +2155,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
             };
         };
     };
@@ -1718,6 +2186,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     groups: {
@@ -1738,6 +2215,267 @@ export interface operations {
                     "*/*": components["schemas"]["SubjectResponse"][];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    create_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocalUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    update_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocalUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    delete_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    disable_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    enable_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     list_2: {
@@ -1756,6 +2494,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["NginxInstanceResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1782,9 +2529,18 @@ export interface operations {
                     "*/*": components["schemas"]["NginxInstanceResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
-    get_2: {
+    get_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1802,6 +2558,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1830,6 +2595,15 @@ export interface operations {
                     "*/*": components["schemas"]["NginxInstanceResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     bundles: {
@@ -1854,6 +2628,15 @@ export interface operations {
                     "*/*": components["schemas"]["BundleSummaryResponse"][];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     deployInstance: {
@@ -1874,6 +2657,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1897,6 +2689,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PermissionGrantResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1923,6 +2724,15 @@ export interface operations {
                     "*/*": components["schemas"]["PermissionGrantResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     effective: {
@@ -1943,6 +2753,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EffectivePermissionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -1969,6 +2788,15 @@ export interface operations {
                     "*/*": components["schemas"]["GrantPreviewResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     revoke_1: {
@@ -1988,6 +2816,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
             };
         };
     };
@@ -2017,6 +2854,15 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseProxySiteSummaryResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     create: {
@@ -2041,6 +2887,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     get: {
@@ -2061,6 +2916,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -2091,6 +2955,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     delete: {
@@ -2112,6 +2985,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
             };
         };
     };
@@ -2139,6 +3021,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     deploySite: {
@@ -2159,6 +3050,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -2183,6 +3083,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     enable: {
@@ -2203,6 +3112,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -2227,6 +3145,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     preview_1: {
@@ -2247,6 +3174,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ConfigurationPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -2277,6 +3213,15 @@ export interface operations {
                     "*/*": components["schemas"]["ProxySiteResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     checkUpstreams: {
@@ -2299,6 +3244,15 @@ export interface operations {
                     "*/*": components["schemas"]["UpstreamCheckResponse"][];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     users: {
@@ -2317,6 +3271,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SubjectResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
         };

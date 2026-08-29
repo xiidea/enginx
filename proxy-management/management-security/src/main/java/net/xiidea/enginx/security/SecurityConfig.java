@@ -1,8 +1,8 @@
 package net.xiidea.enginx.security;
 
+import net.xiidea.enginx.security.local.PasswordChangeRequiredFilter;
 import net.xiidea.enginx.security.ratelimit.RateLimitFilter;
 import jakarta.servlet.Filter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -13,13 +13,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
@@ -32,24 +25,29 @@ import java.util.List;
 /**
  * Resource-server configuration.
  *
- * <p>The application never sees a password: Keycloak is the only identity provider, and this
- * service does nothing but validate the tokens Keycloak issues.
+ * <p>The application is a resource server for two possible issuers: an OIDC provider, and — when
+ * local accounts are enabled — itself. Both mint the same claims, so everything from
+ * {@link KeycloakJwtAuthenticationConverter} onward is unaware which one authenticated the caller.
+ * Which issuers are trusted is decided in {@link JwtDecoderConfiguration}.
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({SecurityProperties.class, AuthProperties.class})
 public class SecurityConfig {
 
     private final SecurityProperties properties;
     private final IdentityMirrorFilter identityMirrorFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
 
     public SecurityConfig(SecurityProperties properties, IdentityMirrorFilter identityMirrorFilter,
-                          RateLimitFilter rateLimitFilter) {
+                          RateLimitFilter rateLimitFilter,
+                          PasswordChangeRequiredFilter passwordChangeRequiredFilter) {
         this.properties = properties;
         this.identityMirrorFilter = identityMirrorFilter;
         this.rateLimitFilter = rateLimitFilter;
+        this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
     }
 
     @Bean
@@ -58,6 +56,10 @@ public class SecurityConfig {
                 .securityMatcher("/api/**")
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                        // Necessarily open: these are what a caller uses before it has a token.
+                        // Neither reveals whether an account exists, and login is rate limited as
+                        // a sensitive operation so the openness is not a brute-force surface.
+                        .requestMatchers("/api/v1/auth/methods", "/api/v1/auth/login").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(
@@ -68,6 +70,10 @@ public class SecurityConfig {
                 // should not also pay for the work behind it.
                 .addFilterAfter(rateLimitFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(identityMirrorFilter, RateLimitFilter.class)
+                // Last of the three, so a confined caller is still counted against its rate limit
+                // and still appears in the identity mirror. Placing it earlier would let an
+                // account that cannot use the API spend nothing to keep asking.
+                .addFilterAfter(passwordChangeRequiredFilter, IdentityMirrorFilter.class)
                 // Bearer tokens, no cookies and no session mean this chain has no CSRF surface.
                 // A cookie-backed endpoint added later must re-enable it rather than inherit this.
                 .csrf(csrf -> csrf.disable())
@@ -101,6 +107,9 @@ public class SecurityConfig {
                         jwt.jwtAuthenticationConverter(
                                 new KeycloakJwtAuthenticationConverter(properties.clientId()))))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // The same confinement as the API chain. Metrics and thread dumps are exactly the
+                // sort of thing a not-yet-rotated bootstrap credential should not reach.
+                .addFilterAfter(passwordChangeRequiredFilter, BearerTokenAuthenticationFilter.class)
                 .csrf(csrf -> csrf.disable());
         return http.build();
     }
@@ -127,33 +136,17 @@ public class SecurityConfig {
         return unregistered(identityMirrorFilter);
     }
 
+    @Bean
+    FilterRegistrationBean<Filter> passwordChangeRequiredFilterRegistration() {
+        return unregistered(passwordChangeRequiredFilter);
+    }
+
     private static FilterRegistrationBean<Filter> unregistered(Filter filter) {
         FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }
 
-    /**
-     * Adds audience validation on top of the standard issuer and expiry checks. Without it, any
-     * token from the same realm would be accepted here, including one minted for another app.
-     *
-     * <p>When {@code enginx.security.jwk-set-uri} is set, keys are fetched from there instead of
-     * through discovery. The issuer inside the token is still validated against {@code issuerUri}
-     * either way, so splitting the two loosens nothing: it only lets this service reach the
-     * identity provider by a different name than the browser does.
-     */
-    @Bean
-    JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri) {
-        NimbusJwtDecoder decoder = properties.jwkSetUri() == null
-                ? (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri)
-                : NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();
-
-        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuerUri),
-                new AudienceValidator(properties.clientId()));
-        decoder.setJwtValidator(validator);
-        return decoder;
-    }
 
     @Bean
     CorsConfigurationSource corsConfigurationSource() {

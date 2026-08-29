@@ -4,9 +4,26 @@ The properties the platform holds, and why each one is arranged the way it is.
 
 ## Security posture
 
-- Keycloak is the only identity provider. There is no password handling in this codebase.
+- Authentication is a bearer token, whichever provider issued it. An OIDC provider and the
+  platform's own local accounts produce the same claims, so there is one authorization path rather
+  than two — and only one of two would ever have been exercised by the tests that matter.
+- Local passwords are hashed with bcrypt at cost 12 and never leave the application: no response
+  carries a hash, and the aggregate does not print one in `toString`.
+- A failed local sign-in returns one message for a wrong password, a missing account and a
+  disabled account alike, and hashes against a dummy value when the account is missing so the
+  three take the same time. Distinguishing them turns the login form into an account enumerator.
+- An account that must still change its password can do exactly that and nothing else. The check
+  is a servlet filter reading the validated token, not a console screen — a console can be told to
+  show a password form first, but a bearer token cannot be told to only be used by a console.
 - Tokens are checked for issuer, expiry **and audience**. Without the audience check any token
-  from the same realm would be accepted, including one minted for an unrelated application.
+  from the same realm would be accepted, including one minted for an unrelated application. With
+  both providers enabled, the issuer selects which verifier runs; the audience check is the same
+  either way.
+- A local subject is `local:<uuid>`, never a bare UUID. `permission_grants.subject_ref` holds an
+  OIDC `sub`, which *is* a bare UUID, so an unnamespaced local id could match a grant written for
+  somebody else — silently, and permanently.
+- The platform refuses to start with both providers disabled, rather than coming up healthy with
+  nobody able to sign in.
 - Authorization is enforced on application service methods, not controllers: a scheduler or
   message consumer can bypass a controller, but not the service it calls.
 - Group membership is read from the token on every request, never from a mirrored table, so a

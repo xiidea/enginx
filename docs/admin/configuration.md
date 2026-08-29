@@ -7,10 +7,37 @@ Every setting the platform reads, and the schema behind it.
 | Variable | Default | Notes |
 |---|---|---|
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | local Postgres | |
+| `AUTH_OIDC_ENABLED` | `true` | Trust an identity provider |
+| `AUTH_LOCAL_ENABLED` | `false` | Let the platform authenticate accounts itself |
+| `AUTH_JWT_SECRET` | unset | Signs local tokens. Required when local is on; at least 32 bytes |
+| `AUTH_TOKEN_TTL` | `8h` | How long a local token lasts |
+| `AUTH_BOOTSTRAP_USERNAME` / `AUTH_BOOTSTRAP_PASSWORD` | unset | The first administrator, created only into an empty user table |
 | `OIDC_ISSUER_URI` | `http://localhost:8081/realms/enginx` | Must match the issuer **inside** the token |
 | `OIDC_JWK_SET_URI` | unset | Where this service fetches signing keys, when that differs from the issuer |
-| `OIDC_CLIENT_ID` | `enginx-api` | Required audience |
+| `OIDC_CLIENT_ID` | `enginx-api` | Required audience, for local tokens as well |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | |
+
+### Choosing an authentication method
+
+The two are independent, and at least one must be on — the application refuses to start with
+neither, rather than coming up healthy with nobody able to sign in.
+
+| | `AUTH_OIDC_ENABLED` | `AUTH_LOCAL_ENABLED` |
+|---|---|---|
+| An organisation that already runs an identity provider | `true` | `false` |
+| A small deployment that would rather not run one | `false` | `true` |
+| Migrating between the two, or keeping a break-glass account | `true` | `true` |
+
+With both on, the token's issuer decides which verifier runs. Everything after that — roles,
+groups, per-domain grants — is identical, because a local token carries the same claims an OIDC
+token does.
+
+Local subjects are `local:<uuid>` and OIDC subjects are bare UUIDs, so the two sets cannot
+intersect and a permission grant always belongs to exactly one of them.
+
+`AUTH_JWT_SECRET` must be the same across replicas: it both signs and verifies, so a replica with
+a different value rejects tokens its neighbour issued. Rotating it invalidates every local session
+at once, which is also how you revoke them all.
 
 ### Why the issuer and the JWKS URI are separate
 

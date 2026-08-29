@@ -49,9 +49,12 @@ configuration is ever activated before `nginx -t` has accepted it.
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-The console is at `http://localhost:4200`, the API at `http://localhost:8080`, and Keycloak at
-`http://localhost:8081`. [Getting started](docs/admin/getting-started.md) covers the accounts, the
-first proxy site, and what to do when something does not come up.
+The console is at `http://localhost:4200` and the API at `http://localhost:8080`. Sign in as
+`admin` / `change-me-on-first-login`, which the first start creates and requires you to replace.
+
+No identity provider is needed: the platform can authenticate accounts itself. To federate against
+Keycloak instead, add `--profile oidc`. [Getting started](docs/admin/getting-started.md) covers
+both, the first proxy site, and what to do when something does not come up.
 
 ---
 
@@ -59,20 +62,20 @@ first proxy site, and what to do when something does not come up.
 
 ```
 docs/architecture.md     the design this implementation follows
-docker/                  development stack: Postgres, Keycloak, NGINX + agent, console, dev PKI
+docker/                  development stack: Postgres, NGINX + agent, console, dev PKI, optional Keycloak
 deploy/kubernetes/       manifests for the management plane and agents
 proxy-management/        Spring Boot management server (Gradle multi-module)
 enginx-agent/            Go node agent, co-located with NGINX
 frontend/                Angular admin console
 ```
 
-Java 25 · Spring Boot 4 · PostgreSQL 17 · Keycloak · Go 1.26 · Angular 21.
+Java 25 · Spring Boot 4 · PostgreSQL 17 · Go 1.26 · Angular 21 · optionally any OIDC provider.
 
 ---
 
 ## Status
 
-Phases 1–13 are complete; the roadmap is finished. Two decisions remain open and are worth making
+Phases 1–14 are complete; the roadmap is finished. Two decisions remain open and are worth making
 deliberately — whether a site may target more than one NGINX host, and what `forceHttps=false`
 should mean for port 80. Both are written up in
 [docs/roadmap.md](docs/roadmap.md#open-decisions).
@@ -92,3 +95,4 @@ should mean for port 80. Both are written up in
 | 11 | Grant reach preview, namespace-authority tests, audit retention | **Complete** |
 | 12 | DNS-01 and wildcard certificates, Vault-backed key wrapping, agent certificate rotation | **Complete** |
 | 13 | Generated API client, Kubernetes manifests, tagged releases with multi-arch agent binaries | **Complete** |
+| 14 | Local accounts with optional OIDC, bootstrap administrator, console sign-in | **Complete** |

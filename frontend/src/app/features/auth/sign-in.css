@@ -1,0 +1,19 @@
+.signin-card { max-width: 24rem; }
+.signin-card h1 { font-size: 1.25rem; margin-bottom: 0.4rem; }
+.signin-card p { margin: 0 0 1.1rem; font-size: 0.88rem; }
+
+.signin-form { display: flex; flex-direction: column; gap: 0.85rem; text-align: left; }
+
+.block { width: 100%; justify-content: center; }
+
+/* A labelled rule, so the two methods read as alternatives rather than as steps. */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  color: var(--ink-3);
+  font-size: 0.76rem;
+}
+.or::before,
+.or::after { content: ''; flex: 1; height: 1px; background: var(--rule); }

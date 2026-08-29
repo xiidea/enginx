@@ -1,14 +1,25 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
+import { PasswordChange } from './features/auth/password-change';
+import { SignIn } from './features/auth/sign-in';
 import { Toasts } from './shared/notifications';
 
 type Theme = 'system' | 'light' | 'dark';
 
+interface NavigationItem {
+  path: string;
+  label: string;
+  /** Hidden without a global admin role. The server refuses the underlying endpoint regardless. */
+  adminOnly: boolean;
+  /** Hidden unless the platform authenticates people itself. */
+  localOnly?: boolean;
+}
+
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toasts],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toasts, SignIn, PasswordChange],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -16,7 +27,7 @@ export class App implements OnInit {
   readonly auth = inject(AuthService);
   readonly theme = signal<Theme>(readStoredTheme());
 
-  private readonly allNavigation = [
+  private readonly allNavigation: NavigationItem[] = [
     { path: '/dashboard', label: 'Dashboard', adminOnly: false },
     { path: '/sites', label: 'Proxy sites', adminOnly: false },
     { path: '/certificates', label: 'Certificates', adminOnly: false },
@@ -27,10 +38,17 @@ export class App implements OnInit {
     // Hiding the link is a courtesy to everyone else, not the control: the endpoint refuses the
     // request regardless of what this list says.
     { path: '/audit', label: 'Audit log', adminOnly: true },
+    // Only exists when the platform authenticates people itself; with an external provider the
+    // accounts live there and this page would have nothing to show.
+    { path: '/local-users', label: 'Local users', adminOnly: true, localOnly: true },
   ];
 
   readonly navigation = computed(() =>
-    this.allNavigation.filter((item) => !item.adminOnly || this.auth.isSuperAdmin()),
+    this.allNavigation.filter(
+      (item) =>
+        (!item.adminOnly || this.auth.isSuperAdmin())
+        && (!item.localOnly || this.auth.methods().localEnabled),
+    ),
   );
 
   /** The realm roles, for the sidebar. Domain-scoped grants are shown on the pages they affect. */

@@ -1,0 +1,62 @@
+<div class="card signin-card">
+  <div class="card-body">
+    <span class="mark large" aria-hidden="true"></span>
+    <h1>Easy NGINX Admin</h1>
+    <p class="muted">Reverse-proxy management across your NGINX estate.</p>
+
+    @if (auth.methods().localEnabled) {
+      <form class="signin-form" (ngSubmit)="submit()">
+        <div class="field">
+          <label for="signin-username">Username</label>
+          <input
+            id="signin-username"
+            name="username"
+            autocomplete="username"
+            autofocus
+            [ngModel]="username()"
+            (ngModelChange)="username.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="signin-password">Password</label>
+          <input
+            id="signin-password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            [ngModel]="password()"
+            (ngModelChange)="password.set($event)"
+          />
+        </div>
+
+        @if (error()) {
+          <p class="field-error" role="alert">{{ error() }}</p>
+        }
+
+        <button
+          class="btn btn-primary block"
+          type="submit"
+          [disabled]="submitting() || !username().trim() || !password()"
+        >
+          {{ submitting() ? 'Signing in…' : 'Sign in' }}
+        </button>
+      </form>
+    }
+
+    @if (auth.methods().localEnabled && auth.methods().oidcEnabled) {
+      <div class="or"><span>or</span></div>
+    }
+
+    @if (auth.methods().oidcEnabled) {
+      <button class="btn block" type="button" (click)="auth.login()">
+        Sign in with your organisation account
+      </button>
+    }
+
+    @if (!auth.methods().localEnabled && !auth.methods().oidcEnabled) {
+      <p class="field-error" role="alert">
+        No sign-in method is available. The server may be starting, or unreachable.
+      </p>
+    }
+  </div>
+</div>

@@ -34,6 +34,15 @@ URI, never on the human-readable `detail`.
 | `GET` | `/api/v1/deployments`, `/deployments/{id}` | READ on the instance |
 | `POST` | `/api/v1/deployments/{id}/rollback` | global ADMIN |
 | `GET` | `/api/v1/nginx-instances/{id}/bundles`, `/config-bundles/{id}` | READ on the instance |
+| `GET` | `/api/v1/auth/methods` | none — this is what a caller reads before it has a token |
+| `POST` | `/api/v1/auth/login` | none — rate limited as a sensitive operation |
+| `GET`/`POST` | `/api/v1/local-users` | global admin |
+| `PUT`/`DELETE` | `/api/v1/local-users/{id}` | global admin |
+| `POST` | `/api/v1/local-users/{id}/enable`, `/disable` | global admin |
+| `PUT` | `/api/v1/local-users/{id}/password` | your own, or global admin for anyone else |
+
+`/api/v1/auth/methods` and `/api/v1/auth/login` are the only two endpoints that do not require a
+token. Neither reveals whether an account exists.
 
 ## Generated client
 

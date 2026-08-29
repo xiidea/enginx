@@ -78,6 +78,24 @@ server:
       enabled: false
 
 enginx:
+  auth:
+    # Which ways in this deployment offers. Both may be on at once, which is what a migration
+    # onto an identity provider needs: local accounts keep working while people move across.
+    # The platform refuses to start with both off — an application nobody can log into would
+    # otherwise come up reporting healthy and serve 401 to everything.
+    oidc-enabled: ${AUTH_OIDC_ENABLED:true}
+    local-enabled: ${AUTH_LOCAL_ENABLED:false}
+    # Signs locally issued tokens. Required when local is enabled, with no default: a generated
+    # one would differ per replica, so a token minted by one would be rejected by the next.
+    # Generate with: openssl rand -base64 48
+    jwt-secret: ${AUTH_JWT_SECRET:}
+    token-ttl: ${AUTH_TOKEN_TTL:8h}
+    # Created on first start, and only when no local account exists at all. The account is
+    # flagged to change its password immediately, because this value has been readable by
+    # everything that can read configuration.
+    bootstrap-username: ${AUTH_BOOTSTRAP_USERNAME:}
+    bootstrap-password: ${AUTH_BOOTSTRAP_PASSWORD:}
+
   security:
     client-id: ${OIDC_CLIENT_ID:enginx-api}
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}

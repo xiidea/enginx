@@ -25,6 +25,16 @@ public enum AuditAction {
     DOMAIN_GROUP_MEMBER_ADDED,
     DOMAIN_GROUP_MEMBER_REMOVED,
 
+    LOCAL_USER_CREATED,
+    LOCAL_USER_UPDATED,
+    LOCAL_USER_DELETED,
+    LOCAL_USER_ENABLED,
+    LOCAL_USER_DISABLED,
+    LOCAL_USER_PASSWORD_CHANGED,
+    LOCAL_USER_LOGGED_IN,
+    /** A rejected login. Recorded as a denial, with the reason the caller was not told. */
+    LOCAL_USER_LOGIN_FAILED,
+
     PERMISSION_GRANTED,
     PERMISSION_REVOKED,
 

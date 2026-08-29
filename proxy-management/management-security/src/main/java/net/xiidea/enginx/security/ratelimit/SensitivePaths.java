@@ -29,6 +29,11 @@ final class SensitivePaths {
             "/api/v1/deployments/**",
             "/api/v1/proxy-sites/*/deploy",
             "/api/v1/nginx-instances/*/deploy",
+            // Login. Unauthenticated, so the limiter keys it by address — which is exactly the
+            // right key for credential stuffing, and the only defence a public endpoint has.
+            "/api/v1/auth/login",
+            // Creating an account, changing a password, granting a role.
+            "/api/v1/local-users/**",
             // Authorization changes. Brute-forcing these is how a foothold becomes an estate.
             "/api/v1/permissions/**",
             // Registering an instance introduces a new host, and its trusted agent fingerprint.

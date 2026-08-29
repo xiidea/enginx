@@ -105,3 +105,12 @@ export type AuditEntry = Wire<Schemas['AuditResponse']>;
 export type UpstreamCheck = Wire<Schemas['UpstreamCheckResponse']>;
 
 export type GrantPreview = Wire<Schemas['GrantPreviewResponse']>;
+
+export type LocalUser = Wire<Schemas['LocalUserResponse']>;
+
+export type CreateLocalUserRequest = Schemas['CreateLocalUserRequest'];
+
+export type UpdateLocalUserRequest = Schemas['UpdateLocalUserRequest'];
+
+/** The roles a local account can carry. Domain-scoped permissions are granted separately. */
+export const GLOBAL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'READ_ONLY'] as const;
