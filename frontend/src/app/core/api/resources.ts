@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
+  AgentRegistrationToken,
+  AgentRegistrationTokenCreated,
   AuditEntry,
   GrantPreview,
   Certificate,
@@ -122,6 +124,31 @@ export class DeploymentsApi {
 
   rollback(id: string): Observable<Deployment> {
     return this.api.post(`/deployments/${id}/rollback`);
+  }
+}
+
+/**
+ * The credentials that let a host enrol itself.
+ *
+ * A registration token is the whole of a new host's claim, and a host in the estate receives
+ * bundles carrying every site's private key — so everything here is global admin.
+ */
+@Injectable({ providedIn: 'root' })
+export class AgentRegistrationApi {
+  private readonly api = inject(ApiService);
+
+  list(): Observable<AgentRegistrationToken[]> {
+    return this.api.get('/agent-registration-tokens');
+  }
+
+  /** The response carries the token in clear. It is not stored and cannot be shown again. */
+  create(body: { description?: string; expiresAt?: string | null; maxUses?: number | null }):
+      Observable<AgentRegistrationTokenCreated> {
+    return this.api.post('/agent-registration-tokens', body);
+  }
+
+  revoke(id: string): Observable<void> {
+    return this.api.delete(`/agent-registration-tokens/${id}`);
   }
 }
 

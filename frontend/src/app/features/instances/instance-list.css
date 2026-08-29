@@ -14,3 +14,55 @@ tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
   border-radius: 999px;
   padding: 0 0.35rem;
 }
+
+/* The connectivity choice. Presented as two cards rather than a select, because picking wrongly
+   produces a host that can never be reached and the trade deserves more than one line each. */
+.modes { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.modes label {
+  flex: 1 1 18rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 400;
+}
+.modes label.chosen { border-color: var(--accent); background: var(--accent-wash); }
+.modes label span { display: flex; flex-direction: column; gap: 0.2rem; }
+.modes input { margin-top: 0.2rem; flex: none; }
+
+.pull-note {
+  padding: 0.85rem;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.pull-note p { margin: 0 0 0.5rem; }
+
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; }
+
+/* The minted secret. Deliberately loud: it is readable exactly once. */
+.minted {
+  padding: 0.85rem;
+  border: 1px solid var(--accent);
+  background: var(--accent-wash);
+  border-radius: var(--radius);
+}
+.minted p { margin: 0 0 0.5rem; }
+.token, .command {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  /* Wide content scrolls inside its own box rather than pushing the page sideways. */
+  overflow-x: auto;
+  white-space: pre;
+}
+.token { word-break: break-all; white-space: pre-wrap; }
+
+tbody tr.spent td { opacity: 0.6; }

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { InstancesApi } from '../../core/api/resources';
-import { NginxInstance } from '../../core/api/models';
+import { AgentRegistrationApi, InstancesApi } from '../../core/api/resources';
+import { AgentRegistrationToken, NginxInstance } from '../../core/api/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
@@ -17,6 +17,7 @@ import { DateTimePipe } from '../../shared/formatting';
 })
 export class InstanceList implements OnInit {
   private readonly api = inject(InstancesApi);
+  private readonly enrolment = inject(AgentRegistrationApi);
   private readonly notifications = inject(Notifications);
   readonly auth = inject(AuthService);
 
@@ -24,6 +25,28 @@ export class InstanceList implements OnInit {
   readonly instances = signal<NginxInstance[]>([]);
   readonly registering = signal(false);
   readonly showForm = signal(false);
+
+  /**
+   * How a new host will be reached. Push needs a URL to dial and a certificate to pin; pull needs
+   * neither, because nothing ever dials it.
+   */
+  readonly mode = signal<'PUSH' | 'PULL'>('PUSH');
+
+  readonly tokens = signal<AgentRegistrationToken[]>([]);
+  readonly tokensLoading = signal(false);
+  readonly minting = signal(false);
+  readonly tokenDescription = signal('');
+  readonly tokenMaxUses = signal('1');
+  readonly tokenExpiresAt = signal('');
+
+  /**
+   * The token just minted, in clear.
+   *
+   * Held only until the operator navigates away. The platform stores a digest and cannot show it
+   * again, so the one moment it exists anywhere readable is right here.
+   */
+  readonly mintedToken = signal<string | null>(null);
+  readonly copied = signal(false);
 
   readonly name = signal('');
   readonly hostname = signal('');
@@ -33,6 +56,91 @@ export class InstanceList implements OnInit {
 
   ngOnInit(): void {
     this.reload();
+    if (this.auth.isSuperAdmin()) {
+      this.reloadTokens();
+    }
+  }
+
+  reloadTokens(): void {
+    this.tokensLoading.set(true);
+    this.enrolment.list().subscribe({
+      next: (tokens) => {
+        this.tokens.set(tokens);
+        this.tokensLoading.set(false);
+      },
+      error: (problem) => {
+        this.tokensLoading.set(false);
+        this.notifications.problem(problem);
+      },
+    });
+  }
+
+  mintToken(): void {
+    this.minting.set(true);
+    this.mintedToken.set(null);
+
+    const maxUses = Number.parseInt(this.tokenMaxUses(), 10);
+    this.enrolment
+      .create({
+        description: this.tokenDescription().trim() || undefined,
+        // An empty box means no limit, which is a choice an operator has to make deliberately
+        // rather than one that happens by leaving a field alone.
+        maxUses: Number.isFinite(maxUses) && maxUses > 0 ? maxUses : null,
+        expiresAt: this.tokenExpiresAt() ? new Date(this.tokenExpiresAt()).toISOString() : null,
+      })
+      .subscribe({
+        next: (created) => {
+          this.minting.set(false);
+          this.mintedToken.set(created.token);
+          this.copied.set(false);
+          this.tokenDescription.set('');
+          this.reloadTokens();
+        },
+        error: (problem) => {
+          this.minting.set(false);
+          this.notifications.problem(problem);
+        },
+      });
+  }
+
+  revokeToken(token: AgentRegistrationToken): void {
+    if (!confirm('Revoke this registration token?\n\nHosts it has already enrolled keep working: '
+        + 'they hold credentials of their own.')) {
+      return;
+    }
+    this.enrolment.revoke(token.id).subscribe({
+      next: () => {
+        this.notifications.success('Token revoked');
+        this.reloadTokens();
+      },
+      error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
+  /** The command an operator runs on the new host, with the token already in it. */
+  runCommand(): string {
+    return [
+      'docker run -d --name enginx-agent \\',
+      `  -e ENGINX_SERVER_URL=${window.location.origin.replace(':4200', ':8080')}/api/v1 \\`,
+      `  -e ENGINX_REGISTRATION_TOKEN=${this.mintedToken()} \\`,
+      '  -e ENGINX_INSTANCE_NAME=nginx-edge-01 \\',
+      '  -v /var/lib/enginx:/var/lib/enginx \\',
+      '  -p 80:80 -p 443:443 \\',
+      '  xiidea/enginx-agent:latest',
+    ].join('\n');
+  }
+
+  copyCommand(): void {
+    navigator.clipboard.writeText(this.runCommand()).then(
+      () => this.copied.set(true),
+      // Clipboard access can be refused, and silently doing nothing would look like a broken
+      // button. The command is on screen either way.
+      () => this.notifications.info('Could not copy', 'Select the command and copy it manually.'),
+    );
+  }
+
+  dismissToken(): void {
+    this.mintedToken.set(null);
   }
 
   reload(): void {

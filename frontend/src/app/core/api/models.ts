@@ -120,3 +120,7 @@ export type GroupMember = Wire<Schemas['GroupMemberResponse']>;
 export type DirectoryEntry = Wire<Schemas['DirectoryEntryResponse']>;
 
 export type DirectoryCleanup = Wire<Schemas['DirectoryCleanupResponse']>;
+
+export type AgentRegistrationToken = Wire<Schemas['AgentRegistrationTokenResponse']>;
+
+export type AgentRegistrationTokenCreated = Wire<Schemas['AgentRegistrationTokenCreatedResponse']>;

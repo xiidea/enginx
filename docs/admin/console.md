@@ -22,8 +22,9 @@ nothing does. **Proxy sites** filters and sorts in the query, so the page count 
 deployment would produce without touching live traffic, and the groups the site is filed under —
 the same question as who else can reach it, since a group grant reaches everything beneath it. **Certificates**, **Deployments** with
 per-phase history, **Permissions** with domain groups — expandable to manage which sites each one
-contains — **NGINX instances**, and **Directory**, which lists everyone who has signed in and
-removes the entries that no longer resolve. **Local users**
+contains — **NGINX instances** — which also mints the registration tokens a host uses to enrol itself — and
+**Directory**, which lists everyone who has signed in and removes the entries that no longer
+resolve. **Local users**
 appears only when the platform authenticates people itself, and only for a global admin.
 
 ### Hidden actions are a courtesy, not a control

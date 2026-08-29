@@ -1,15 +1,53 @@
 <app-page-header
   title="NGINX instances"
-  subtitle="The hosts this platform configures. Each is reached through its agent over mutual TLS.">
+  subtitle="The hosts this platform configures, each through its agent.">
   @if (auth.isSuperAdmin()) {
-    <button class="btn btn-primary" type="button" (click)="showForm.set(!showForm())">Register instance</button>
+    <button class="btn btn-primary" type="button" (click)="showForm.set(!showForm())">Add a host</button>
   }
 </app-page-header>
 
 @if (showForm()) {
   <section class="card form-card">
-    <div class="card-head"><h2>Register an NGINX instance</h2></div>
+    <div class="card-head"><h2>Add a host</h2></div>
     <div class="card-body stack">
+      <!-- The choice is a property of the network the host sits on, not a preference. Stated as
+           such, because picking wrongly produces a host that can never be reached. -->
+      <div>
+        <label>How will this host be reached?</label>
+        <div class="modes">
+          <label for="mode-push" [class.chosen]="mode() === 'PUSH'">
+            <input id="mode-push" type="radio" name="mode" [checked]="mode() === 'PUSH'"
+              (change)="mode.set('PUSH')" />
+            <span>
+              <strong>The platform connects to it</strong>
+              <span class="muted small">Needs port 8443 open to the management plane, and the
+                agent's certificate. Stronger proof of which host is answering.</span>
+            </span>
+          </label>
+          <label for="mode-pull" [class.chosen]="mode() === 'PULL'">
+            <input id="mode-pull" type="radio" name="mode" [checked]="mode() === 'PULL'"
+              (change)="mode.set('PULL')" />
+            <span>
+              <strong>It connects to the platform</strong>
+              <span class="muted small">Needs no inbound connectivity at all, so a host behind NAT
+                or in another network works. The host enrols itself with a token.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      @if (mode() === 'PULL') {
+        <div class="pull-note">
+          <p class="small">
+            Nothing to fill in here. A host that connects to the platform registers itself the
+            first time it runs — mint a token below and give it to that host.
+          </p>
+          <p class="hint">
+            Hosts added this way cannot issue HTTP-01 certificates yet.
+          </p>
+          <button class="btn" type="button" (click)="showForm.set(false)">Close</button>
+        </div>
+      } @else {
       <div class="grid-2">
         <div>
           <label for="iname">Name</label>
@@ -45,6 +83,101 @@
         </button>
         <button class="btn" type="button" (click)="showForm.set(false)">Cancel</button>
       </div>
+      }
+    </div>
+  </section>
+}
+
+@if (auth.isSuperAdmin()) {
+  <section class="card form-card">
+    <div class="card-head">
+      <h2>Registration tokens</h2>
+      <span class="muted small">For hosts that connect to the platform</span>
+    </div>
+    <div class="card-body stack">
+      @if (mintedToken(); as token) {
+        <!-- The one moment this exists anywhere readable. The platform keeps a digest and cannot
+             show it again, so an operator who navigates away needs a new token, not a lookup. -->
+        <div class="minted">
+          <p class="small"><strong>Copy this now.</strong> It is shown once and cannot be
+            retrieved — the platform stores only a digest of it.</p>
+          <pre class="token mono">{{ token }}</pre>
+          <p class="small">Run this on the new host:</p>
+          <pre class="command mono">{{ runCommand() }}</pre>
+          <div class="row">
+            <button class="btn btn-sm" type="button" (click)="copyCommand()">
+              {{ copied() ? 'Copied' : 'Copy command' }}
+            </button>
+            <button class="btn btn-sm" type="button" (click)="dismissToken()">Done</button>
+          </div>
+        </div>
+      }
+
+      <div class="grid-3">
+        <div>
+          <label for="tdesc">What is it for</label>
+          <input id="tdesc" [ngModel]="tokenDescription()" (ngModelChange)="tokenDescription.set($event)"
+            placeholder="edge hosts, eu-west" />
+        </div>
+        <div>
+          <label for="tuses">How many hosts</label>
+          <input id="tuses" type="number" min="1" [ngModel]="tokenMaxUses()"
+            (ngModelChange)="tokenMaxUses.set($event)" placeholder="unlimited" />
+          <p class="hint">Empty means unlimited.</p>
+        </div>
+        <div>
+          <label for="texp">Expires</label>
+          <input id="texp" type="datetime-local" [ngModel]="tokenExpiresAt()"
+            (ngModelChange)="tokenExpiresAt.set($event)" />
+          <p class="hint">Optional.</p>
+        </div>
+      </div>
+      <!-- It travels: into a manifest, a provisioning script, a message to whoever is building the
+           host. The useful question is not whether it leaks but for how long a leaked one works. -->
+      <p class="hint">
+        Bound it to as few hosts and as short a life as the job needs. Revoking a token stops it
+        enrolling anything further; hosts it already enrolled keep working.
+      </p>
+      <div class="row">
+        <button class="btn btn-primary" type="button" [disabled]="minting()" (click)="mintToken()">
+          {{ minting() ? 'Creating…' : 'Create token' }}
+        </button>
+      </div>
+
+      @if (tokensLoading()) {
+        <p class="muted small">Loading…</p>
+      } @else if (tokens().length) {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Description</th><th>Used</th><th>Expires</th><th>State</th><th class="right"></th></tr>
+            </thead>
+            <tbody>
+              @for (token of tokens(); track token.id) {
+                <tr [class.spent]="!token.usable">
+                  <td>{{ token.description || '—' }}<div class="muted small">by {{ token.createdBy }}</div></td>
+                  <td class="small">{{ token.uses }}@if (token.maxUses) { of {{ token.maxUses }} }</td>
+                  <td class="small nowrap">{{ token.expiresAt ? (token.expiresAt | datetime) : 'never' }}</td>
+                  <td class="small">
+                    @if (token.revokedAt) {
+                      <span class="tag">revoked</span>
+                    } @else if (token.usable) {
+                      <span class="muted">usable</span>
+                    } @else {
+                      <span class="tag">spent</span>
+                    }
+                  </td>
+                  <td class="right">
+                    @if (!token.revokedAt) {
+                      <button class="btn btn-sm" type="button" (click)="revokeToken(token)">Revoke</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     </div>
   </section>
 }

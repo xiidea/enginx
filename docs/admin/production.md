@@ -588,7 +588,8 @@ A push host needs an address the management plane can reach and a port open to i
 NAT, in another cloud, or on a network nobody routes to can offer neither. Pull mode inverts the
 connection so that no inbound path is required.
 
-Mint a registration token — console, **NGINX instances**, or the API:
+Mint a registration token on the **NGINX instances** page, which shows it once alongside the exact
+`docker run` line for the new host. Or over the API:
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
