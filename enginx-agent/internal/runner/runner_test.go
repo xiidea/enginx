@@ -115,3 +115,110 @@ func TestRejectedTokenIsDistinguishableFromAnOutage(t *testing.T) {
 		t.Fatalf("got %v, expected ErrUnauthorized", err)
 	}
 }
+
+// The situation this exists for: a host's credential is revoked, an operator gives it a fresh
+// registration token, and it must be able to come back on its own.
+func TestRecoversOnceFromARejectedToken(t *testing.T) {
+	registrations := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		registrations++
+		_ = json.NewEncoder(w).Encode(client.RegisterResponse{AgentToken: "enginx-agt-reissued"})
+	}))
+	defer server.Close()
+
+	r := runnerFor(t, server.URL, "enginx-reg-token")
+	if err := os.MkdirAll(filepath.Dir(r.cfg.TokenFile), 0o700); err != nil {
+		t.Fatalf("preparing the token file: %v", err)
+	}
+	if err := os.WriteFile(r.cfg.TokenFile, []byte("enginx-agt-revoked\n"), 0o600); err != nil {
+		t.Fatalf("seeding a stale token: %v", err)
+	}
+	r.authenticated = r.client.WithToken("enginx-agt-revoked")
+
+	if !r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected the credential to be replaced")
+	}
+	if registrations != 1 {
+		t.Fatalf("registered %d times, expected once", registrations)
+	}
+
+	// The new token has to reach disk, or the next restart enrols again and spends another.
+	stored, err := r.readToken()
+	if err != nil || stored != "enginx-agt-reissued" {
+		t.Fatalf("token file holds %q (%v)", stored, err)
+	}
+
+	// Once. A runner that recovered on every rejection would spend a fresh registration on every
+	// restart against a misconfigured server.
+	if r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected only one recovery attempt")
+	}
+	if registrations != 1 {
+		t.Fatalf("registered %d times after a second attempt", registrations)
+	}
+}
+
+// Without a registration token there is nothing to recover with, and pretending otherwise would
+// turn a clear "an operator must act" into a silent retry loop.
+func TestDoesNotRecoverWithoutARegistrationToken(t *testing.T) {
+	r := runnerFor(t, "https://enginx.example.com/api/v1", "")
+	r.authenticated = r.client.WithToken("enginx-agt-revoked")
+
+	if r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected no recovery attempt")
+	}
+}
+
+// A failed attempt still counts. Otherwise a server that refuses every enrolment is asked again on
+// every heartbeat, which is the hammering the once-only rule exists to prevent.
+func TestAFailedRecoveryIsNotRetried(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusConflict)
+	}))
+	defer server.Close()
+
+	r := runnerFor(t, server.URL, "enginx-reg-token")
+	r.authenticated = r.client.WithToken("enginx-agt-revoked")
+
+	if r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected the recovery to fail")
+	}
+	if r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected no second attempt")
+	}
+	if attempts != 1 {
+		t.Fatalf("asked the server %d times, expected once", attempts)
+	}
+}
+
+// Both loops can discover a rejected token in the same instant. The one that does not perform the
+// recovery must be told to retry, not to report a failure the other has already repaired.
+func TestTheLoserOfARecoveryRaceIsToldToRetry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.RegisterResponse{AgentToken: "enginx-agt-reissued"})
+	}))
+	defer server.Close()
+
+	r := runnerFor(t, server.URL, "enginx-reg-token")
+	stale := r.client.WithToken("enginx-agt-revoked")
+	r.authenticated = stale
+
+	// The winner replaces the credential.
+	if !r.recoverCredential(context.Background(), stale) {
+		t.Fatal("expected the first caller to recover")
+	}
+
+	// The loser arrives holding the credential that was already replaced. Recovery is spent, but
+	// it should still be told to try again, because a working credential is now in place.
+	if !r.recoverCredential(context.Background(), stale) {
+		t.Fatal("expected the loser to be told to retry")
+	}
+
+	// Whereas a caller holding the current credential really has been rejected, and recovery is
+	// spent, so it must be told so rather than looping.
+	if r.recoverCredential(context.Background(), r.authenticated) {
+		t.Fatal("expected no further recovery")
+	}
+}

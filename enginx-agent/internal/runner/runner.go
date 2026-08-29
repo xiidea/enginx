@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xiidea/enginx/enginx-agent/internal/api"
@@ -21,6 +22,13 @@ type Runner struct {
 	cfg    config.Config
 	api    *api.Server
 	client *client.Client
+
+	// Guards the credential, which two goroutines read and either may replace: the heartbeat and
+	// the job loop can discover a rejected token at the same moment, and only one of them should
+	// spend a registration token recovering from it.
+	mu            sync.Mutex
+	authenticated *client.Client
+	reEnrolled    bool
 }
 
 func New(cfg config.Config, server *api.Server) *Runner {
@@ -39,7 +47,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	authenticated := r.client.WithToken(token)
+	r.authenticated = r.client.WithToken(token)
 
 	slog.Info("agent registered; reporting to the management server",
 		"server", r.cfg.ServerURL, "interval", r.cfg.HeartbeatInterval)
@@ -47,11 +55,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	// Collecting work runs alongside reporting rather than between reports: a long-poll parks for
 	// up to half a minute, and a heartbeat that waited behind it would drift late enough to have
 	// the platform judge this host silent.
-	go r.collectWork(ctx, authenticated)
+	go r.collectWork(ctx)
 
 	// Immediately, then on the interval: waiting a full interval before the first report leaves
 	// a freshly started host looking silent for exactly as long as the threshold that judges it.
-	r.report(ctx, authenticated)
+	r.report(ctx)
 
 	ticker := time.NewTicker(r.cfg.HeartbeatInterval)
 	defer ticker.Stop()
@@ -61,9 +69,65 @@ func (r *Runner) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			r.report(ctx, authenticated)
+			r.report(ctx)
 		}
 	}
+}
+
+// current returns the credential to call with.
+func (r *Runner) current() *client.Client {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.authenticated
+}
+
+// recoverCredential enrols again after the platform rejected the token the caller used.
+//
+// Once, and only when a registration token is present. The restriction is the whole design: a
+// runner that re-enrolled on every rejection would spend a fresh registration on every restart
+// against a misconfigured server, and a single-use token would be gone before anyone noticed. But
+// refusing outright is worse than it sounds — a host whose credential was revoked could then never
+// recover, even with an operator standing over it having supplied a new token.
+//
+// @param used the credential that was rejected, so the loser of a race is told to retry rather
+//
+//	than reporting a failure that the winner has already repaired
+//
+// @return whether the caller should try again
+func (r *Runner) recoverCredential(ctx context.Context, used *client.Client) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Both loops can discover a rejected token in the same instant. If the other one has already
+	// replaced it, there is nothing to recover from and everything to retry.
+	if used != nil && r.authenticated != used {
+		return true
+	}
+	if r.reEnrolled {
+		return false
+	}
+	if strings.TrimSpace(r.cfg.RegistrationToken) == "" {
+		return false
+	}
+	// Set before trying, so a failed attempt is not retried on the next tick either. One attempt
+	// per process start, whatever the outcome.
+	r.reEnrolled = true
+
+	slog.Warn("the stored agent token was rejected; enrolling again with the configured " +
+		"registration token")
+
+	token, err := r.enrol(ctx)
+	if err != nil {
+		// A conflict here means the instance still exists under this name and only its credential
+		// was revoked. Worth saying plainly: the remedy is to reissue or remove that instance, and
+		// nothing this host does on its own will help.
+		slog.Error("could not enrol again; this host needs an operator", "error", err)
+		return false
+	}
+
+	r.authenticated = r.client.WithToken(token)
+	slog.Info("enrolled again; the previous credential is no longer used")
+	return true
 }
 
 // establishToken loads the stored agent token, or enrols to obtain one.
@@ -81,7 +145,11 @@ func (r *Runner) establishToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("no agent token at %s and ENGINX_REGISTRATION_TOKEN is unset, "+
 			"so this host cannot enrol", r.cfg.TokenFile)
 	}
+	return r.enrol(ctx)
+}
 
+// enrol spends the registration token and stores what it buys.
+func (r *Runner) enrol(ctx context.Context) (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = r.cfg.InstanceName
@@ -108,9 +176,10 @@ func (r *Runner) establishToken(ctx context.Context) (string, error) {
 }
 
 // report sends one heartbeat, reusing exactly the status the push API would have returned.
-func (r *Runner) report(ctx context.Context, authenticated *client.Client) {
+func (r *Runner) report(ctx context.Context) {
 	status := r.api.Status(ctx)
 
+	authenticated := r.current()
 	err := authenticated.Heartbeat(ctx, client.HeartbeatRequest{
 		AgentVersion:     status.AgentVersion,
 		NginxVersion:     status.NginxVersion,
@@ -124,8 +193,11 @@ func (r *Runner) report(ctx context.Context, authenticated *client.Client) {
 	case err == nil:
 		return
 	case errors.Is(err, client.ErrUnauthorized):
-		// Retrying will not help: the credential has been revoked, and only an operator can
-		// issue another. Loud, and left running so the host keeps serving traffic meanwhile.
+		if r.recoverCredential(ctx, authenticated) {
+			return
+		}
+		// Retrying the same credential will not help. Loud, and left running so the host keeps
+		// serving traffic while somebody attends to it.
 		slog.Error("the management server rejected this agent's token; re-enrolment is needed",
 			"file", r.cfg.TokenFile)
 	default:

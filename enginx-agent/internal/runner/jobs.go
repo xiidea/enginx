@@ -15,19 +15,23 @@ import (
 //
 // The request is long-polled, so this is not a busy loop: it spends nearly all its time parked in
 // a request the server answers the moment work appears.
-func (r *Runner) collectWork(ctx context.Context, authenticated *client.Client) {
+func (r *Runner) collectWork(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 
+		authenticated := r.current()
 		job, err := authenticated.RequestJob(ctx, r.cfg.PollWait)
 		switch {
 		case ctx.Err() != nil:
 			return
 		case errors.Is(err, client.ErrUnauthorized):
-			// Retrying cannot help; only an operator can issue another credential. Back off hard
-			// rather than hammering, and keep serving traffic meanwhile.
+			if r.recoverCredential(ctx, authenticated) {
+				continue
+			}
+			// Retrying the same credential cannot help. Back off hard rather than hammering, and
+			// keep serving traffic meanwhile.
 			slog.Error("the management server rejected this agent's token; re-enrolment is needed")
 			sleep(ctx, 60*time.Second)
 			continue

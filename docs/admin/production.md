@@ -626,8 +626,17 @@ Anything on the host that can read the file can collect every site's private key
 configuration bundle contains them — the same exposure a push host's private key already has.
 
 **Revoking a host's own token** stops it collecting work without deleting the instance, so its
-deployment history and the sites pointing at it survive. The host re-enrols with a fresh
-registration token.
+deployment history and the sites pointing at it survive.
+
+A host whose stored token is rejected will **enrol again once**, if `ENGINX_REGISTRATION_TOKEN` is
+still set — so recovery is restarting it with a fresh token rather than logging in to delete a
+file. Once per process start, whatever the outcome: a runner that re-enrolled on every rejection
+would spend a fresh registration on every restart against a misconfigured server, and a
+single-use token would be gone before anyone noticed.
+
+If the instance still exists and only its credential was revoked, that attempt fails with a
+conflict on the name, and the log says the host needs an operator. Delete the instance, or reissue
+its token, before restarting it.
 
 ### How work reaches a pull host
 
