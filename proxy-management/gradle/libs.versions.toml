@@ -1,0 +1,25 @@
+[versions]
+springBoot = "4.1.1"
+springdoc = "3.1.0"
+archunit = "1.5.0"
+acme4j = "5.1.0"
+# Matches what acme4j pulls in; pinned so the test classpath cannot drift from the runtime one.
+bouncycastle = "1.83"
+# Token-bucket rate limiting. The jdk17 variant is the current line; the older
+# com.bucket4j:bucket4j-core coordinates stop at 8.10.
+bucket4j = "8.19.0"
+
+[libraries]
+spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+acme4j-client = { module = "org.shredzone.acme4j:acme4j-client", version.ref = "acme4j" }
+bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
+bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
+# Testcontainers 2.x renamed every module to testcontainers-*; the old
+# org.testcontainers:postgresql coordinates stop at 1.21.
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

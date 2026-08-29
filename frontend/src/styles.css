@@ -1,0 +1,262 @@
+/*
+ * Design tokens for the Easy NGINX Admin console.
+ *
+ * The palette continues the one used in the architecture document, so the design and the tool it
+ * describes read as one system: cool, faintly green-biased neutrals with a muted pine accent
+ * drawn from NGINX's own lineage. Ochre and brick are reserved strictly for state — a warning
+ * colour that also appears as decoration stops meaning anything.
+ */
+
+:root {
+  --paper: #f6f8f7;
+  --surface: #ffffff;
+  --surface-2: #eef1ef;
+  --surface-3: #e4e9e5;
+  --ink: #141a1e;
+  --ink-2: #47535a;
+  --ink-3: #6f7c83;
+  --rule: #dde2de;
+  --rule-2: #c6cec8;
+
+  --accent: #1f6f4a;
+  --accent-hover: #17563a;
+  --accent-ink: #ffffff;
+  --accent-wash: #e4f0e9;
+
+  --ok: #1f6f4a;
+  --ok-wash: #e4f0e9;
+  --warn: #9a6212;
+  --warn-wash: #f8eeda;
+  --danger: #a4302d;
+  --danger-wash: #f8e5e4;
+  --info: #2c5c8f;
+  --info-wash: #e5edf6;
+  --muted-wash: #e9ece9;
+
+  --focus: #1f6f4a;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --shadow: 0 1px 2px rgb(20 26 30 / 6%), 0 4px 12px rgb(20 26 30 / 4%);
+
+  --f-sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --rail: 232px;
+}
+
+/*
+ * Three theme states, not two: an explicit choice stamps data-theme, and the default "system"
+ * setting stamps nothing at all, so the un-stamped document has to work from prefers-color-scheme
+ * alone. Every colour is defined on bare :root first and only redefined here, so no value exists
+ * solely inside a media query.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #0f1418;
+    --surface: #151b20;
+    --surface-2: #1c242a;
+    --surface-3: #253038;
+    --ink: #e7ece9;
+    --ink-2: #b0bab5;
+    --ink-3: #7f8b86;
+    --rule: #253038;
+    --rule-2: #35434c;
+
+    --accent: #57b184;
+    --accent-hover: #6ec296;
+    --accent-ink: #0f1418;
+    --accent-wash: #16302480;
+
+    --ok: #57b184;
+    --ok-wash: #16302480;
+    --warn: #d0a45f;
+    --warn-wash: #332714aa;
+    --danger: #e08b85;
+    --danger-wash: #3a1e1daa;
+    --info: #7aa6d6;
+    --info-wash: #1b2a3aaa;
+    --muted-wash: #1c242a;
+
+    --focus: #57b184;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #0f1418;
+  --surface: #151b20;
+  --surface-2: #1c242a;
+  --surface-3: #253038;
+  --ink: #e7ece9;
+  --ink-2: #b0bab5;
+  --ink-3: #7f8b86;
+  --rule: #253038;
+  --rule-2: #35434c;
+
+  --accent: #57b184;
+  --accent-hover: #6ec296;
+  --accent-ink: #0f1418;
+  --accent-wash: #16302480;
+
+  --ok: #57b184;
+  --ok-wash: #16302480;
+  --warn: #d0a45f;
+  --warn-wash: #332714aa;
+  --danger: #e08b85;
+  --danger-wash: #3a1e1daa;
+  --info: #7aa6d6;
+  --info-wash: #1b2a3aaa;
+  --muted-wash: #1c242a;
+
+  --focus: #57b184;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  /* Explicit, because the host paints its own ground behind the page. */
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  font-size: 14.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.1rem; }
+h3 { font-size: 0.95rem; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, .mono {
+  font-family: var(--f-mono);
+  font-size: 0.88em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- controls ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-danger { color: var(--danger); border-color: var(--rule-2); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-wash); border-color: var(--danger); }
+
+.btn-sm { padding: 0.25rem 0.55rem; font-size: 0.8rem; }
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+}
+input:disabled, select:disabled { background: var(--surface-2); color: var(--ink-3); }
+input[type='checkbox'] { width: auto; accent-color: var(--accent); }
+
+label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--ink-2); margin-bottom: 0.25rem; }
+.hint { font-size: 0.76rem; color: var(--ink-3); margin-top: 0.25rem; }
+.field-error { font-size: 0.76rem; color: var(--danger); margin-top: 0.25rem; }
+
+/* ---------- surfaces ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.card-body { padding: 1.1rem; }
+
+/* ---------- tables ---------- */
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+th {
+  text-align: left;
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding: 0.55rem 1.1rem;
+  border-bottom: 1px solid var(--rule-2);
+  white-space: nowrap;
+}
+td {
+  padding: 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+td.primary { color: var(--ink); font-weight: 500; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- utility ---------- */
+
+.row { display: flex; align-items: center; gap: 0.6rem; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.stack { display: flex; flex-direction: column; gap: 1rem; }
+.stack-sm { display: flex; flex-direction: column; gap: 0.5rem; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.muted { color: var(--ink-3); }
+.small { font-size: 0.8rem; }
+.spacer { flex: 1; }
+.nowrap { white-space: nowrap; }

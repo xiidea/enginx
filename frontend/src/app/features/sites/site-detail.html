@@ -1,0 +1,229 @@
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (site(); as site) {
+  <app-page-header [title]="site.domain" [subtitle]="site.name">
+    @if (canOperate()) {
+      <button class="btn" type="button" (click)="showPreview()">Preview config</button>
+      <button class="btn" type="button" (click)="toggle()">{{ site.enabled ? 'Disable' : 'Enable' }}</button>
+      <button class="btn btn-primary" type="button" (click)="deploy()">Deploy</button>
+    }
+    @if (canManage()) {
+      <a class="btn" [routerLink]="['/sites', site.id, 'edit']">Edit</a>
+      <button class="btn btn-danger" type="button" (click)="remove()">Delete</button>
+    }
+  </app-page-header>
+
+  @if (!permission()) {
+    <p class="muted small note">
+      Your effective permission could not be read, so actions are hidden. The server decides
+      regardless of what is shown here.
+    </p>
+  }
+
+  <div class="cols">
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h2>Status</h2><app-status-pill [status]="site.status" /></div>
+        <div class="card-body facts">
+          <div><span class="key">Enabled</span><span>{{ site.enabled ? 'Yes' : 'No' }}</span></div>
+          <div>
+            <span class="key">Active from</span>
+            <span [title]="site.activeFrom ?? ''">
+              {{ site.activeFrom ? (site.activeFrom | datetime) : 'immediately' }}
+            </span>
+          </div>
+          <div>
+            <span class="key">Expires</span>
+            <span [title]="site.expiresAt ?? ''">
+              @if (site.expiresAt) {
+                {{ site.expiresAt | datetime }} <span class="muted">({{ site.secondsUntilExpiry | relative }})</span>
+              } @else {
+                never
+              }
+            </span>
+          </div>
+          <div><span class="key">Your access</span><span class="mono">{{ permission()?.level ?? '—' }}</span></div>
+          <div><span class="key">Updated by</span><span>{{ site.updatedBy }}</span></div>
+          <div><span class="key">Version</span><span class="mono num">{{ site.version }}</span></div>
+        </div>
+
+        @if (canOperate()) {
+          <div class="card-body expiry">
+            <label for="renew">Extend expiry</label>
+            <div class="row">
+              <input id="renew" type="datetime-local" [ngModel]="renewUntil()" (ngModelChange)="renewUntil.set($event)" />
+              <button class="btn" type="button" [disabled]="!renewUntil()" (click)="renew()">Renew</button>
+              @if (site.expiresAt) {
+                <button class="btn" type="button" (click)="removeExpiry()">Remove expiry</button>
+              }
+            </div>
+          </div>
+        }
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Routing</h2>
+          <!--
+            The probe runs on the NGINX host, so it answers the question that matters: can the
+            machine that will proxy this actually open a connection? It is advisory — NGINX
+            resolves upstream names once at load time — so it is offered, never run automatically.
+          -->
+          <button class="btn btn-sm" type="button" (click)="checkUpstreams()" [disabled]="checkingUpstreams()">
+            {{ checkingUpstreams() ? 'Checking…' : 'Check upstreams' }}
+          </button>
+        </div>
+
+        @if (upstreamChecks(); as checks) {
+          <div class="card-body">
+            <ul class="checks">
+              @for (check of checks; track check.target) {
+                <li [class.bad]="!check.reachable">
+                  <span class="mono">{{ check.target }}</span>
+                  @if (check.reachable) {
+                    <span class="ok-text small">accepted a connection</span>
+                  } @else {
+                    <span class="bad-text small">{{ check.error || 'unreachable' }}</span>
+                  }
+                </li>
+              }
+            </ul>
+            <p class="muted small note">
+              Checked from the NGINX host just now. NGINX resolves upstream names when the
+              configuration loads, so this is a guide rather than a guarantee.
+            </p>
+          </div>
+        }
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Upstream</th><th>Weight</th><th>Health</th><th>Role</th></tr></thead>
+            <tbody>
+              @for (upstream of site.upstreams; track upstream.host + ':' + upstream.port) {
+                <tr>
+                  <td class="primary mono">{{ upstream.scheme }}://{{ upstream.host }}:{{ upstream.port }}</td>
+                  <td class="num">{{ upstream.weight ?? 1 }}</td>
+                  <td class="small mono">{{ upstream.maxFails ?? 3 }} fails / {{ upstream.failTimeoutSeconds ?? 10 }}s</td>
+                  <td class="small">{{ upstream.backup ? 'backup' : 'primary' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body facts">
+          <div><span class="key">Balancing</span><span class="mono">{{ site.loadBalancingMethod }}</span></div>
+          <div><span class="key">WebSocket</span><span>{{ site.websocketEnabled ? 'enabled' : 'disabled' }}</span></div>
+          <div><span class="key">Max body</span><span class="mono">{{ site.maxBodySizeBytes | bytes }}</span></div>
+          <div>
+            <span class="key">Timeouts</span>
+            <span class="mono small">
+              connect {{ site.connectTimeoutSeconds }}s · read {{ site.readTimeoutSeconds }}s ·
+              send {{ site.sendTimeoutSeconds }}s
+            </span>
+          </div>
+        </div>
+      </section>
+
+      @if (site.headers.length || site.locations.length) {
+        <section class="card">
+          <div class="card-head"><h2>Headers and locations</h2></div>
+          <div class="card-body stack-sm">
+            @for (header of site.headers; track header.direction + header.name) {
+              <div class="mono small">
+                <span class="muted">{{ header.direction }}</span> {{ header.name }}: "{{ header.value }}"
+              </div>
+            }
+            @for (location of site.locations; track location.pathPattern) {
+              <div class="mono small">
+                <span class="muted">{{ location.matchType ?? 'PREFIX' }}</span> {{ location.pathPattern }}
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h2>TLS</h2></div>
+        <div class="card-body">
+          @if (!site.sslEnabled) {
+            <p class="muted small">
+              This site serves plain HTTP. Attach a certificate to enable TLS.
+            </p>
+          } @else if (certificate(); as certificate) {
+            <div class="facts">
+              <div><span class="key">Certificate</span><a [routerLink]="'/certificates'">{{ certificate.name }}</a></div>
+              <div><span class="key">Status</span><app-status-pill [status]="certificate.status" /></div>
+              <div><span class="key">Expires</span><span>{{ certificate.expiresAt | datetime }}</span></div>
+              <div><span class="key">Renewal</span><span>{{ certificate.autoRenew ? 'automatic' : 'manual' }}</span></div>
+              <div><span class="key">Redirect</span><span>{{ site.forceHttps ? 'HTTP → HTTPS' : 'none' }}</span></div>
+              <div><span class="key">HSTS</span><span>{{ site.hstsEnabled ? 'enabled' : 'disabled' }}</span></div>
+            </div>
+          } @else {
+            <p class="small danger">
+              SSL is enabled but the certificate could not be read. The site will fail to render
+              until this is resolved.
+            </p>
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Recent deployments</h2><a class="small" routerLink="/deployments">All</a></div>
+        @if (deployments().length) {
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Trigger</th><th>When</th></tr></thead>
+              <tbody>
+                @for (deployment of deployments(); track deployment.id) {
+                  <tr>
+                    <td><app-status-pill [status]="deployment.status" [title]="deployment.errorMessage" /></td>
+                    <td class="mono small">{{ deployment.trigger }}</td>
+                    <td class="nowrap small">{{ deployment.createdAt | datetime }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="card-body"><p class="muted small">This instance has not been deployed yet.</p></div>
+        }
+      </section>
+    </div>
+  </div>
+
+  @if (previewOpen()) {
+    <div class="overlay" (click)="previewOpen.set(false)">
+      <div class="preview card" (click)="$event.stopPropagation()">
+        <div class="card-head">
+          <h2>Configuration preview</h2>
+          <button class="btn btn-sm" type="button" (click)="previewOpen.set(false)">Close</button>
+        </div>
+        @if (preview(); as preview) {
+          <div class="card-body">
+            <p class="small">
+              @if (preview.changed) {
+                <strong>This would change the deployed configuration.</strong>
+              } @else {
+                <strong>No change.</strong> The instance already serves this configuration.
+              }
+            </p>
+            @if (preview.changedPaths.length) {
+              <ul class="paths mono small">
+                @for (path of preview.changedPaths; track path) {
+                  <li>{{ path }}</li>
+                }
+              </ul>
+            }
+            <pre class="config">{{ preview.siteConfiguration }}</pre>
+          </div>
+        } @else {
+          <div class="card-body"><p class="muted">Rendering…</p></div>
+        }
+      </div>
+    </div>
+  }
+} @else {
+  <p class="muted">This site could not be loaded.</p>
+}

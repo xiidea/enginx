@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: enginx-config
+  namespace: enginx
+data:
+  # Everything here is non-secret configuration. Credentials are in the Secret below, mounted as
+  # files rather than set as environment variables — an environment variable is visible in
+  # `kubectl describe pod`, in /proc, and in the logs of anything that dumps its environment.
+  DB_URL: jdbc:postgresql://postgres:5432/enginx
+  DB_USERNAME: enginx
+  DB_POOL_SIZE: "20"
+
+  # The issuer is the URL a browser used to obtain the token, so it must be the public one. The
+  # JWKS URI is how pods reach Keycloak inside the cluster. They differ on purpose.
+  OIDC_ISSUER_URI: https://enginx.example.com/realms/enginx
+  OIDC_JWK_SET_URI: http://keycloak:8080/realms/enginx/protocol/openid-connect/certs
+  OIDC_CLIENT_ID: enginx-api
+  CORS_ALLOWED_ORIGINS: https://enginx.example.com
+
+  ACME_DIRECTORY_URL: acme://letsencrypt.org
+  ACME_CONTACT_EMAIL: platform@example.com
+  ACME_ACCEPT_TOS: "true"
+
+  NOTIFICATION_OPERATOR_ADDRESSES: platform@example.com
+  AUDIT_RETENTION_MONTHS: "0"
+
+  # Wraps data keys in Vault, so the key-encryption key is never in a pod's memory. Set to
+  # 'environment' only if you accept that a copy of the Secret below can read every private key.
+  CRYPTO_PROVIDER: vault
+  VAULT_ADDR: http://vault:8200
+  VAULT_TRANSIT_KEY: enginx
+
+  JAVA_OPTS: >-
+    -XX:MaxRAMPercentage=70
+    -XX:+ExitOnOutOfMemoryError
+    -XX:+UseG1GC
+    -XX:MaxGCPauseMillis=200
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: enginx-secrets
+  namespace: enginx
+type: Opaque
+stringData:
+  # Named for the property each one sets. Spring reads /run/secrets as a config tree, so a file
+  # called `spring.datasource.password` becomes that property — the same mechanism the Compose
+  # deployment uses, which is why no code changes between the two.
+  spring.datasource.password: "change-me"
+  enginx.crypto.vault.token: "change-me"
+  enginx.agent.key-store-password: "change-me"
+  enginx.agent.trust-store-password: "change-me"

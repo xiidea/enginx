@@ -1,0 +1,63 @@
+# Default deny, then the paths that must exist. Written out because the interesting part of this
+# platform's security is which component may talk to which, and a cluster that permits everything
+# quietly discards that.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: enginx
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: management-ingress
+  namespace: enginx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: proxy-management
+  policyTypes: [Ingress]
+  ingress:
+    # The ingress controller, for the API.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+    # A metrics scraper. /actuator/prometheus still requires a SUPER_ADMIN token — this only makes
+    # the port reachable, it does not make the endpoint open.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-control-ingress
+  namespace: enginx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: enginx-agent
+  policyTypes: [Ingress]
+  ingress:
+    # Only the management plane may reach the control port. Certificate pinning is the
+    # authentication; this makes the port unreachable from anywhere else regardless, which is the
+    # difference between one control and two.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: proxy-management
+      ports:
+        - port: 8443
+    # Proxied traffic, from anywhere. This is the data plane and its whole job is to be reachable.
+    - ports:
+        - port: 80
+        - port: 443

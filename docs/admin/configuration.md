@@ -1,0 +1,82 @@
+# Configuration
+
+Every setting the platform reads, and the schema behind it.
+
+## Configuration
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | local Postgres | |
+| `OIDC_ISSUER_URI` | `http://localhost:8081/realms/enginx` | Must match the issuer **inside** the token |
+| `OIDC_JWK_SET_URI` | unset | Where this service fetches signing keys, when that differs from the issuer |
+| `OIDC_CLIENT_ID` | `enginx-api` | Required audience |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | |
+
+### Why the issuer and the JWKS URI are separate
+
+They are the same URL only when every party reaches Keycloak by one name. In Docker they diverge:
+a browser gets its token from `http://localhost:8081`, so that is the issuer stamped into the
+token, but the management container must reach Keycloak as `http://keycloak:8081` on the compose
+network. OIDC discovery refuses to start when the issuer it reads differs from the location it
+asked, which is correct — the two really are different URLs.
+
+Setting `OIDC_JWK_SET_URI` splits the concerns: keys are fetched over the container network,
+while the issuer inside every token is still validated against `OIDC_ISSUER_URI`. Nothing is
+loosened; the alternative fixes are editing `/etc/hosts` on every developer machine, or disabling
+issuer validation, which would be a real weakening.
+
+Leave `OIDC_JWK_SET_URI` unset when running outside Docker: ordinary discovery works there.
+
+## Database schema
+
+Liquibase owns the schema. Two changelogs, both a baseline:
+
+```
+db/changelog/changes/001-baseline.sql   the platform's own schema
+db/changelog/changes/002-quartz.sql     Quartz's vendor DDL, copied verbatim
+```
+
+The incremental changelogs that built this up were squashed before the first release — nothing was
+published, so there was no deployed database whose history was worth preserving. The squash was
+verified by applying both the old chain and the new baseline to empty databases and diffing a
+semantic snapshot of each (columns, constraints, indexes, triggers, functions); they are identical.
+
+Hibernate runs with `ddl-auto: validate`, so any drift between a changelog and an entity mapping is
+a startup failure rather than a runtime surprise.
+
+**If you have a database from before the squash, delete it:**
+
+```bash
+cd docker && docker compose down -v && docker compose up -d
+```
+
+Its `databasechangelog` names changesets that no longer exist. Testcontainers builds a fresh schema
+per run, so tests are unaffected.
+
+## Key management
+
+Certificate private keys and the ACME account key are envelope-encrypted: a per-secret data key
+seals the material, and a key-encryption key wraps the data key. Two providers wrap:
+
+| `enginx.crypto.provider` | Key lives | Notes |
+|---|---|---|
+| `environment` (default) | This process's memory | Fine for development and file-based secrets |
+| `vault` | Inside Vault, never exported | A copy of the database plus this config reads nothing |
+
+```yaml
+enginx:
+  crypto:
+    provider: vault
+    vault: { address: https://vault.example.com, token: ..., transit-key: enginx }
+```
+
+**Changing provider, or rotating a key, is survivable.** Every secret records the key that wrapped
+it, and reads are routed to whichever configured provider recognises that id. So:
+
+1. Configure the new provider, keep the old one, restart. Old secrets stay readable.
+2. `POST /api/v1/certificates/rewrap-secrets` — moves every secret to the current key. Resumable,
+   audited, and reports what it could not read rather than failing the whole run.
+3. Remove the old provider once it reports nothing left to do.
+
+Without step 2 the old key can never be retired, which is the state the platform was previously in
+despite the schema being designed for exactly this.

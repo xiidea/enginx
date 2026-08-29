@@ -1,0 +1,138 @@
+name: CI
+
+# Three independent jobs rather than one. They fail for unrelated reasons — a renderer regression,
+# an agent bug, a broken console build — and a developer should be able to see which without
+# reading a log to find out where the run stopped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes an in-flight run on the same ref. Integration tests here start real
+# containers, so letting superseded runs finish costs minutes for an answer nobody reads.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  management:
+    name: Management server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # `build` runs the ArchUnit module-boundary rules, the golden-file renderer tests and the
+      # Testcontainers integration tests. Docker is present on ubuntu-latest, so Testcontainers
+      # needs no setup of its own.
+      - name: Build and test
+        working-directory: proxy-management
+        run: ./gradlew build --no-daemon
+
+      # Uploaded on failure only: on a green run nobody opens them, and they are large.
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: management-test-reports
+          path: proxy-management/*/build/reports/tests/
+          retention-days: 7
+
+  agent:
+    name: NGINX agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: enginx-agent/go.mod
+          cache-dependency-path: enginx-agent/go.sum
+
+      - name: Verify formatting
+        working-directory: enginx-agent
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # go vet catches the mistakes that compile: a printf verb that does not match its argument,
+      # a lock copied by value. Cheap enough to run on every push.
+      - name: Vet
+        working-directory: enginx-agent
+        run: go vet ./...
+
+      - name: Test
+        working-directory: enginx-agent
+        run: go test -race ./...
+
+      - name: Build
+        working-directory: enginx-agent
+        run: go build ./...
+
+  console:
+    name: Admin console
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` rather than `npm install`: it installs exactly the lockfile and fails if
+      # package.json and the lockfile disagree, which is the only useful behaviour in CI.
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      # The committed types must be what the committed spec produces. Without this the generated
+      # file drifts by hand-editing, and the whole point — that a server change breaks the build —
+      # quietly stops holding.
+      - name: Generated API types are up to date
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm run generate:api
+          if ! git diff --exit-code -- src/app/core/api/schema.d.ts; then
+            echo "::error::src/app/core/api/schema.d.ts is stale. Run 'npm run generate:api' and commit the result."
+            exit 1
+          fi
+
+      - name: Test
+        working-directory: frontend
+        run: npx ng test --watch=false
+
+      - name: Build
+        working-directory: frontend
+        run: npx ng build --configuration production
+
+  manifests:
+    name: Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Validated against real schemas rather than merely parsed as YAML. A manifest that parses
+      # and is rejected by the cluster is found at apply time, which is the wrong place.
+      - name: Validate
+        run: |
+          docker run --rm -v "$PWD/deploy/kubernetes:/manifests:ro" \
+            ghcr.io/yannh/kubeconform:latest \
+            -strict -summary -kubernetes-version 1.31.0 /manifests

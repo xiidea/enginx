@@ -1,0 +1,33 @@
+.filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(140px, 1fr)) auto;
+  gap: 0.6rem;
+}
+
+.sort {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.sort:hover { color: var(--accent); }
+
+/*
+ * A left stripe rather than a tinted row: the state stays visible when the row is hovered, and it
+ * does not fight the text for contrast.
+ */
+tbody tr.attention td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+
+.ok { color: var(--ok); }
+.row-actions { display: flex; gap: 0.35rem; justify-content: flex-end; }
+.actions-head { text-align: right; }
+.pager { border-bottom: 0; border-top: 1px solid var(--rule); }
+
+@media (max-width: 760px) {
+  .filters { grid-template-columns: 1fr; }
+}

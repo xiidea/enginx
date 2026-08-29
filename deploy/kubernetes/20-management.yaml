@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy-management
+  namespace: enginx
+  labels:
+    app.kubernetes.io/name: proxy-management
+spec:
+  # Safe to replicate, and that is a property of the design rather than an assumption: Quartz uses
+  # a clustered JDBC job store so a scheduled job fires on exactly one node, the outbox claims work
+  # with FOR UPDATE SKIP LOCKED, and deployments take a per-instance advisory lock. The one thing
+  # that does not scale by replication is the in-process rate limiter — N replicas allow N times
+  # the configured rate, which is a deliberate trade documented in operations.md §4.
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: proxy-management
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: proxy-management
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy-management
+          image: xiidea/enginx-management:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: enginx-config
+          env:
+            # Read from the mounted Secret rather than from the environment. This is the only
+            # entry that has to be set here, and it points at files rather than carrying values.
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configtree:/run/secrets/"
+          volumeMounts:
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+            - name: agent-pki
+              mountPath: /etc/enginx/pki
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+          # Liveness restarts; readiness only removes from the Service. Both deliberately exclude
+          # the estate indicators: an unreachable NGINX host must not cause Kubernetes to restart
+          # or de-register the one component capable of fixing it. `platform` is for dashboards.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+
+          resources:
+            requests: { cpu: "500m", memory: "768Mi" }
+            limits: { memory: "1536Mi" }
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: secrets
+          secret:
+            secretName: enginx-secrets
+            defaultMode: 0400
+        - name: agent-pki
+          secret:
+            # The client identity for mutual TLS with the agents. Created separately, because it
+            # is issued by your CA rather than generated here.
+            secretName: enginx-agent-pki
+            defaultMode: 0400
+        - name: tmp
+          emptyDir: {}
+
+      # Long enough for an in-flight deployment to finish. A deployment holds an advisory lock and
+      # is mid-conversation with a remote agent; killing it at 30s leaves a host half-updated and
+      # the lock to be reclaimed by timeout.
+      terminationGracePeriodSeconds: 90
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-management
+  namespace: enginx
+spec:
+  selector:
+    app.kubernetes.io/name: proxy-management
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: proxy-management
+  namespace: enginx
+spec:
+  # A node drain must not take the whole management plane away. Sites keep serving either way —
+  # this plane is not in the request path — but losing it means losing the ability to change
+  # anything, which is exactly when someone is most likely to need it.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: proxy-management

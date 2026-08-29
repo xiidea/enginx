@@ -1,0 +1,78 @@
+name: enginx-agent
+
+# Runs on each host that serves proxied traffic — not alongside the management plane.
+#
+# This is the whole point of the agent's existence: the management server never opens an SSH
+# session to a host, it makes an authenticated call to this. So this file is copied to each NGINX
+# host and brought up there, with that host's own agent certificate.
+#
+#   docker compose -f docker-compose.agent.yml up -d
+#
+# Then register the host with the platform, giving it this agent's URL and the SHA-256 fingerprint
+# of the certificate below. The management server pins that fingerprint: a replacement certificate
+# is not trusted until someone re-registers it, so an attacker who obtains a certificate signed by
+# the same CA still cannot impersonate this host.
+
+services:
+  nginx:
+    image: ${AGENT_IMAGE:-xiidea/enginx-agent:latest}
+    restart: unless-stopped
+    # NGINX and the agent share a container by necessity: the agent signals the NGINX process to
+    # reload, and a process in another container cannot be signalled. The agent is PID 1 and
+    # supervises NGINX as its child, which is also what lets it restore the previous release when
+    # a reload fails.
+    ports:
+      # The traffic this host exists to serve.
+      - "80:80"
+      - "443:443"
+      # The agent's mTLS control port. Restrict this to the management plane's address at the
+      # firewall as well: certificate pinning is the authentication, but there is no reason for
+      # the port to be reachable from anywhere else at all.
+      - "${AGENT_BIND_ADDR:-0.0.0.0}:8443:8443"
+    environment:
+      AGENT_LISTEN_ADDR: ":8443"
+      # Health is bound to loopback so the container's own healthcheck can reach it while nothing
+      # off-host can. It is unauthenticated, which is only safe because of that.
+      AGENT_HEALTH_ADDR: "127.0.0.1:9099"
+      AGENT_TLS_CERT: /etc/enginx/pki/agent.crt
+      AGENT_TLS_KEY: /etc/enginx/pki/agent.key
+      AGENT_CLIENT_CA: /etc/enginx/pki/ca.crt
+      # Only this common name may call, and only with a certificate signed by the CA above. Both
+      # halves matter: the CA proves who issued it, the CN proves which client it is.
+      AGENT_CLIENT_CN: ${AGENT_CLIENT_CN:-enginx-management}
+      AGENT_RELEASES_DIR: /etc/nginx/enginx
+      AGENT_NGINX_BINARY: /usr/sbin/nginx
+      AGENT_NGINX_CONF: /etc/nginx/nginx.conf
+    volumes:
+      # Config releases and the live symlink. A named volume, so an activated configuration
+      # survives a container replacement and the host comes back serving what it was serving.
+      - nginx-releases:/etc/nginx/enginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # This host's agent certificate and the CA that signs the management client. Mounted
+      # read-only: the agent has no reason to rewrite its own identity.
+      - ${AGENT_PKI_DIR:-./pki/out}:/etc/enginx/pki:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # Not read_only: the agent writes release bundles and NGINX writes its own runtime files.
+    # The directories it needs are volumes, and nothing else is granted.
+    cap_drop: [ALL]
+    cap_add:
+      # Binding 80 and 443, and dropping to the worker user after doing so. These two are what
+      # NGINX actually requires; the rest of root's capabilities it does not.
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${AGENT_CPUS:-2.0}", memory: "${AGENT_MEMORY:-512m}" }
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  nginx-releases:

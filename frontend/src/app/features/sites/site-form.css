@@ -1,0 +1,19 @@
+.form-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; align-items: start; }
+.span { grid-column: 1 / -1; }
+
+.check { display: flex; align-items: center; gap: 0.5rem; }
+.check label { margin: 0; font-size: 0.87rem; color: var(--ink); }
+.check.tall { align-items: flex-end; padding-bottom: 0.45rem; }
+
+.upstream {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 2fr) 6rem 5rem auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.header-row { display: grid; grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 0.5rem; align-items: center; }
+
+@media (max-width: 780px) {
+  .upstream, .header-row { grid-template-columns: 1fr; }
+}

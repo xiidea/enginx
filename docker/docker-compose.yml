@@ -1,0 +1,228 @@
+name: enginx
+
+# Development stack. Production overrides (real secrets, no exposed database port, an image
+# registry instead of a local build) belong in a separate compose file, added in Phase 8.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: enginx-postgres
+    environment:
+      POSTGRES_DB: enginx
+      POSTGRES_USER: enginx
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-enginx}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-keycloak-db.sql:/docker-entrypoint-initdb.d/10-keycloak.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enginx -d enginx"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [enginx]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    container_name: enginx-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: enginx
+      KC_DB_PASSWORD: ${DB_PASSWORD:-enginx}
+      KC_HTTP_PORT: 8081
+      KC_HEALTH_ENABLED: "true"
+      # The issuer in a token must match what the API validates against. Using the same
+      # hostname inside and outside the network keeps one issuer URI for both.
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./keycloak/realm-enginx.json:/opt/keycloak/data/import/realm-enginx.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [enginx]
+
+  proxy-management:
+    build:
+      context: ../proxy-management
+      dockerfile: ../docker/proxy-management/Dockerfile
+    container_name: enginx-management
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/enginx
+      DB_USERNAME: enginx
+      DB_PASSWORD: ${DB_PASSWORD:-enginx}
+      # The issuer is the URL a browser used to obtain the token, so it must match what
+      # Keycloak stamps into it. The JWKS URI is how this container reaches Keycloak on the
+      # Docker network. They differ, and that is exactly what jwk-set-uri exists for.
+      OIDC_ISSUER_URI: http://localhost:8081/realms/enginx
+      OIDC_JWK_SET_URI: http://keycloak:8081/realms/enginx/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: enginx-api
+      CORS_ALLOWED_ORIGINS: http://localhost:4200
+      AGENT_KEYSTORE: /etc/enginx/pki/management.p12
+      AGENT_TRUSTSTORE: /etc/enginx/pki/truststore.p12
+      AGENT_KEYSTORE_PASSWORD: changeit
+      AGENT_TRUSTSTORE_PASSWORD: changeit
+      # Development key only. Generate a real one with: openssl rand -base64 32
+      # Switch to 'vault' to wrap data keys with Vault's transit engine, where the key-encryption
+      # key is created and never leaves. Secrets already wrapped by the environment provider name
+      # their own key id and are not readable by the other provider — rotate deliberately.
+      CRYPTO_PROVIDER: ${CRYPTO_PROVIDER:-environment}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-enginx-dev-root}
+      CRYPTO_ACTIVE_KEY_ID: dev
+      CRYPTO_ACTIVE_KEY: ${CRYPTO_ACTIVE_KEY:-ZW5naW54LWRldmVsb3BtZW50LWtleS0zMi1ieXRlcyE=}
+      # Pebble: a local ACME server, so issuance can be exercised without touching a real
+      # authority or spending its rate limits.
+      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-https://pebble:14000/dir}
+      ACME_ACCEPT_TOS: "true"
+      # Lets wildcard issuance be exercised end to end: pebble already resolves names through
+      # challtestsrv, so a TXT record written here is a record the authority actually queries.
+      ACME_DNS_CHALLTESTSRV_URL: http://challtestsrv:8055
+      ACME_CONTACT_EMAIL: platform@example.com
+      # Pebble signs with its own throwaway root, so the JVM must be told to trust it.
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -Djavax.net.ssl.trustStore=/etc/enginx/pki/pebble-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Notifications. No SMTP in the development stack, so the logging channel is what carries
+      # them — which is also what proves nothing is silently dropped.
+      NOTIFICATION_OPERATOR_ADDRESSES: ${NOTIFICATION_OPERATOR_ADDRESSES:-ops@example.com}
+      NOTIFICATION_INTERVAL_SECONDS: ${NOTIFICATION_INTERVAL_SECONDS:-3600}
+    volumes:
+      # The management client identity for mutual TLS with the agents.
+      - ./pki/out:/etc/enginx/pki:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    networks: [enginx]
+
+  # NGINX and its agent share one container by necessity: the agent signals the NGINX process,
+  # and a process in another container cannot be signalled. The agent is PID 1 and supervises
+  # NGINX as its child.
+  nginx:
+    build:
+      context: ../enginx-agent
+      dockerfile: Dockerfile
+    container_name: enginx-nginx
+    environment:
+      AGENT_LISTEN_ADDR: ":8443"
+      AGENT_HEALTH_ADDR: "127.0.0.1:9099"
+      AGENT_TLS_CERT: /etc/enginx/pki/agent.crt
+      AGENT_TLS_KEY: /etc/enginx/pki/agent.key
+      AGENT_CLIENT_CA: /etc/enginx/pki/ca.crt
+      AGENT_CLIENT_CN: enginx-management
+      AGENT_RELEASES_DIR: /etc/nginx/enginx
+      AGENT_NGINX_BINARY: /usr/sbin/nginx
+      AGENT_NGINX_CONF: /etc/nginx/nginx.conf
+    ports:
+      - "8090:80"
+      # NGINX's TLS port, so HTTPS sites can be reached from the host during development.
+      - "8453:443"
+      - "8443:8443"
+    volumes:
+      - nginx-releases:/etc/nginx/enginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Produced by docker/pki/generate-dev-certs.sh. Run that before starting the stack.
+      - ./pki/out:/etc/enginx/pki:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      enginx:
+        # Fixed so the local ACME server can be told where to send HTTP-01 validation.
+        ipv4_address: 172.31.0.10
+
+  # The admin console. Served as static files; it talks to the management API from the browser,
+  # which is why that API publishes a CORS policy naming this origin.
+  console:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    container_name: enginx-console
+    environment:
+      API_BASE: http://localhost:8080/api/v1
+      OIDC_AUTHORITY: http://localhost:8081/realms/enginx
+      OIDC_CLIENT_ID: enginx-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - proxy-management
+    networks: [enginx]
+
+  # HashiCorp Vault in dev mode, so the transit-engine KEK provider can be exercised against a
+  # real Vault rather than a stub. Dev mode keeps everything in memory and uses a fixed root
+  # token: fine for a laptop, never for anything else.
+  vault:
+    image: hashicorp/vault:1.20
+    container_name: enginx-vault
+    cap_add: [IPC_LOCK]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: enginx-dev-root
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"
+    networks: [enginx]
+
+  # A local ACME authority. Real issuance, real HTTP-01 validation, no rate limits and no
+  # dependency on a public domain. Development only; it is never part of a deployed stack.
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:2.10.1
+    container_name: enginx-pebble
+    command: ["-config", "/test/config/pebble-config.json", "-dnsserver", "challtestsrv:8053"]
+    environment:
+      # Answer every validation on the first try. The default introduces random delays and
+      # failures to shake out client bugs; useful for acme4j's own tests, not for ours.
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    volumes:
+      - ./pebble/pebble-config.json:/test/config/pebble-config.json:ro
+    ports:
+      - "14000:14000"
+    networks: [enginx]
+
+  # Resolves every name to the NGINX container, so Pebble's HTTP-01 validation reaches the host
+  # this platform actually manages.
+  challtestsrv:
+    image: ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1
+    container_name: enginx-challtestsrv
+    # An A record must answer with an address, not a name, so the NGINX container is given a
+    # fixed one on this network and challtestsrv points every domain at it.
+    command: ["-defaultIPv4", "172.31.0.10", "-defaultIPv6", ""]
+    ports:
+      # The management API for setting TXT records, so DNS-01 can be driven from a test.
+      - "8055:8055"
+    networks: [enginx]
+
+volumes:
+  postgres-data:
+  nginx-releases:
+
+networks:
+  enginx:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24

@@ -1,0 +1,125 @@
+<app-page-header title="Proxy sites" subtitle="Every reverse-proxy site you have access to.">
+  @if (!auth.isReadOnly()) {
+    <a class="btn btn-primary" routerLink="/sites/new">New site</a>
+  }
+</app-page-header>
+
+<div class="card">
+  <div class="card-head filters">
+    <input
+      type="search"
+      placeholder="Search domain or name"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      (keyup.enter)="applyFilters()"
+      aria-label="Search sites" />
+
+    <select [ngModel]="status()" (ngModelChange)="status.set($event); applyFilters()" aria-label="Filter by status">
+      <option value="">All statuses</option>
+      @for (value of statuses; track value) {
+        <option [value]="value">{{ value }}</option>
+      }
+    </select>
+
+    <select
+      [ngModel]="instanceId()"
+      (ngModelChange)="instanceId.set($event); applyFilters()"
+      aria-label="Filter by NGINX instance">
+      <option value="">All instances</option>
+      @for (instance of instances(); track instance.id) {
+        <option [value]="instance.id">{{ instance.name }}</option>
+      }
+    </select>
+
+    <button class="btn" type="button" (click)="applyFilters()">Apply</button>
+  </div>
+
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!page()?.content?.length) {
+    <app-empty
+      title="No sites match"
+      detail="Adjust the filters, or create a site to get started.">
+      @if (!auth.isReadOnly()) {
+        <a class="btn btn-primary" routerLink="/sites/new">New site</a>
+      }
+    </app-empty>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th><button class="sort" type="button" (click)="sortBy('DOMAIN')">Domain</button></th>
+            <th><button class="sort" type="button" (click)="sortBy('STATUS')">Status</button></th>
+            <th>Upstream</th>
+            <th>SSL</th>
+            <th><button class="sort" type="button" (click)="sortBy('EXPIRES_AT')">Expires</button></th>
+            <th>Instance</th>
+            <th><button class="sort" type="button" (click)="sortBy('UPDATED_AT')">Updated</button></th>
+            <th class="actions-head">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (site of page()!.content; track site.id) {
+            <tr [class.attention]="isExpiringSoon(site)" [class.alarm]="site.status === 'EXPIRED' || site.status === 'ERROR'">
+              <td class="primary">
+                <a class="mono" [routerLink]="['/sites', site.id]">{{ site.domain }}</a>
+                <div class="muted small">{{ site.name }}</div>
+              </td>
+              <td><app-status-pill [status]="site.status" /></td>
+              <td class="mono small">
+                {{ site.primaryUpstream }}
+                @if (site.upstreamCount > 1) {
+                  <span class="muted"> +{{ site.upstreamCount - 1 }}</span>
+                }
+              </td>
+              <td>
+                @if (site.sslEnabled) {
+                  <span class="mono small ok">TLS</span>
+                } @else {
+                  <span class="mono small muted">—</span>
+                }
+              </td>
+              <td class="nowrap" [title]="site.expiresAt ?? 'never expires'">
+                @if (site.expiresAt) {
+                  {{ site.secondsUntilExpiry | relative }}
+                } @else {
+                  <span class="muted">never</span>
+                }
+              </td>
+              <td class="small">{{ instanceName()(site.nginxInstanceId) }}</td>
+              <td class="nowrap small" [title]="site.updatedAt">{{ site.updatedAt | datetime }}</td>
+              <td>
+                <div class="row-actions">
+                  @if (!auth.isReadOnly()) {
+                    <button class="btn btn-sm" type="button" (click)="toggle(site)">
+                      {{ site.enabled ? 'Disable' : 'Enable' }}
+                    </button>
+                    <button class="btn btn-sm" type="button" (click)="deploy(site)">Deploy</button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-head pager">
+      <span class="muted small">{{ rangeLabel() }}</span>
+      <div class="row">
+        <button class="btn btn-sm" type="button" [disabled]="page()!.page === 0" (click)="goToPage(page()!.page - 1)">
+          Previous
+        </button>
+        <span class="small muted">Page {{ page()!.page + 1 }} of {{ page()!.totalPages || 1 }}</span>
+        <button
+          class="btn btn-sm"
+          type="button"
+          [disabled]="page()!.page + 1 >= page()!.totalPages"
+          (click)="goToPage(page()!.page + 1)">
+          Next
+        </button>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,74 @@
+.filters { margin-bottom: 1rem; }
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+.filter-grid label { display: flex; flex-direction: column; gap: 0.3rem; }
+.filter-actions { display: flex; gap: 0.4rem; }
+
+.key { color: var(--ink-3); margin: 0; }
+
+tbody tr.alarm td:nth-child(6) { box-shadow: inset 3px 0 0 var(--danger); }
+
+.rid {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
+
+/*
+ * The outcome is what the eye should find first when scanning for trouble, so it carries colour
+ * of its own rather than relying on the row.
+ */
+.outcome {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-2);
+  color: var(--ink-3);
+}
+.outcome-success { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.outcome-failure { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.outcome-denied { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+.disclose {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--f-mono);
+  line-height: 1;
+  cursor: pointer;
+}
+.disclose:hover { background: var(--surface-2); }
+
+.detail-row td { background: var(--surface-2); padding: 0.9rem 1.1rem; }
+.detail { display: flex; flex-direction: column; gap: 0.8rem; }
+.error { color: var(--danger); margin: 0; }
+
+.states { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 44rem) {
+  .states { grid-template-columns: 1fr; }
+}
+
+.detail-text {
+  margin: 0.3rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font-family: var(--f-mono);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.pager { border-bottom: 0; border-top: 1px solid var(--rule); }

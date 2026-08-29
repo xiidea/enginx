@@ -1,0 +1,254 @@
+spring:
+  application:
+    name: proxy-management
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/enginx}
+    username: ${DB_USERNAME:enginx}
+    password: ${DB_PASSWORD:enginx}
+    hikari:
+      pool-name: enginx-pool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+  jpa:
+    # Liquibase owns the schema. `validate` turns any drift between a changelog and an entity
+    # into a startup failure rather than a runtime surprise.
+    hibernate:
+      ddl-auto: validate
+    # Lazy loading outside a transaction hides N+1 queries in the view layer.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      # Liquibase owns the QRTZ_* tables. Quartz's own script starts by dropping every one of
+      # them, so running it at startup would discard the scheduler's state — triggers, misfire
+      # records and the lock rows that stop two nodes firing the same job — on every boot.
+      initialize-schema: never
+    # A job that is still running when the application stops should finish rather than be killed
+    # halfway through a deployment.
+    wait-for-jobs-to-complete-on-shutdown: true
+    overwrite-existing-jobs: true
+    properties:
+      org.quartz:
+        scheduler:
+          instanceName: enginx-scheduler
+          # AUTO derives a distinct id per process, which is what lets several replicas share the
+          # job store without pretending to be the same node.
+          instanceId: AUTO
+        jobStore:
+          class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
+          driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+          tablePrefix: QRTZ_
+          isClustered: true
+          # How often a node renews its claim. A node that dies is detected after roughly this
+          # long, and its in-flight jobs are recovered by another.
+          clusterCheckinInterval: 15000
+          misfireThreshold: 60000
+        threadPool:
+          class: org.quartz.simpl.SimpleThreadPool
+          threadCount: 4
+          threadPriority: 5
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/enginx}
+
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  error:
+    whitelabel:
+      enabled: false
+
+enginx:
+  security:
+    client-id: ${OIDC_CLIENT_ID:enginx-api}
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+    # Set only when this service reaches Keycloak by a different name than the browser does,
+    # which is the case inside Docker. See SecurityProperties for why.
+    jwk-set-uri: ${OIDC_JWK_SET_URI:}
+
+  agent:
+    # Client identity and trust anchor for mutual TLS with the node agents. Generated for
+    # development by docker/pki/generate-dev-certs.sh.
+    key-store: ${AGENT_KEYSTORE:}
+    key-store-password: ${AGENT_KEYSTORE_PASSWORD:changeit}
+    trust-store: ${AGENT_TRUSTSTORE:}
+    trust-store-password: ${AGENT_TRUSTSTORE_PASSWORD:changeit}
+    connect-timeout: 5s
+    request-timeout: 60s
+
+  crypto:
+    # 'environment' reads keys from configuration below. 'vault' wraps data keys with HashiCorp
+    # Vault's transit engine, where the key-encryption key is created and never leaves — a copy of
+    # the database plus a copy of this configuration is then not enough to read anything.
+    provider: ${CRYPTO_PROVIDER:environment}
+    vault:
+      address: ${VAULT_ADDR:}
+      token: ${VAULT_TOKEN:}
+      transit-key: ${VAULT_TRANSIT_KEY:enginx}
+    # Certificate private keys and the ACME account key are encrypted at rest with these.
+    # The platform refuses to start without one: an application that came up and then could not
+    # read any certificate it already held would be a far worse way to find out.
+    # Generate with: openssl rand -base64 32
+    active-key-id: ${CRYPTO_ACTIVE_KEY_ID:dev}
+    keys:
+      # A placeholder cannot be a YAML map key, so the convenience slot is named 'dev'.
+      # Additional keys, and the ones a rotation needs, are supplied directly as
+      # ENGINX_CRYPTO_KEYS_<ID> so that several can exist at once.
+      dev: ${CRYPTO_ACTIVE_KEY:}
+
+  acme:
+    # Staging by default. Production has hard rate limits counted per week, and a misconfiguration
+    # found against the real endpoint can lock the account out for days.
+    directory-url: ${ACME_DIRECTORY_URL:acme://letsencrypt.org/staging}
+    contact-email: ${ACME_CONTACT_EMAIL:}
+    # Must be set deliberately: agreeing to an authority's terms on an operator's behalf is not
+    # the platform's decision to make.
+    accept-terms-of-service: ${ACME_ACCEPT_TOS:false}
+    challenge-timeout: 60s
+    order-timeout: 120s
+    dns:
+      # DNS-01 validation, which is the only method an authority accepts for a wildcard.
+      # Without a provider here, a wildcard request fails with a clear message rather than
+      # spending rate-limit budget discovering it at the authority.
+      #
+      # challtestsrv is a development component: it answers every query for every name, which is
+      # what makes it useful for tests and useless anywhere else.
+      challtestsrv-url: ${ACME_DNS_CHALLTESTSRV_URL:}
+      # Use DNS-01 even for non-wildcards. Worth setting where port 80 is not reachable from the
+      # public internet, which is the usual reason HTTP-01 fails in an internal estate.
+      prefer-dns-01: ${ACME_PREFER_DNS01:false}
+
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:true}
+    # A sweep is one indexed range scan over the two partial indexes on proxy_sites, so it is
+    # cheap to run often. Sixty seconds is also the precision the API promises for an expiry.
+    lifecycle-interval-seconds: ${LIFECYCLE_INTERVAL_SECONDS:60}
+    outbox-interval-seconds: ${OUTBOX_INTERVAL_SECONDS:5}
+    # Renewal windows are measured in days; an authority's rate limits punish eagerness
+    # far more than a certificate cares about an hour's delay.
+    certificate-interval-seconds: ${CERTIFICATE_INTERVAL_SECONDS:3600}
+    # One status call per registered instance. This is what keeps last_seen_at moving, and
+    # so what makes the agent health indicator able to report green at all.
+    heartbeat-interval-seconds: ${HEARTBEAT_INTERVAL_SECONDS:60}
+    # Expiry thresholds are measured in days, so a finer interval buys nothing. The ledger
+    # makes repeated runs harmless regardless.
+    notification-interval-seconds: ${NOTIFICATION_INTERVAL_SECONDS:3600}
+
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    # Per authenticated subject, per instance. Generous for reads because a console page issues
+    # several at once; strict for the operations that reach real hosts or a certificate authority.
+    read-capacity: ${RATE_LIMIT_READ:300}
+    read-refill-period: 1m
+    write-capacity: ${RATE_LIMIT_WRITE:60}
+    write-refill-period: 1m
+    sensitive-capacity: ${RATE_LIMIT_SENSITIVE:10}
+    sensitive-refill-period: 1m
+    max-tracked-callers: 10000
+
+  audit:
+    # Months of audit history to keep. Zero keeps everything, and is the default deliberately:
+    # silently destroying an audit trail because nobody set a property is a worse failure than an
+    # unbounded table, and it is the kind discovered during an investigation. When set, whole
+    # monthly partitions are dropped — and the deletion is itself recorded in the trail.
+    retention-months: ${AUDIT_RETENTION_MONTHS:0}
+
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    # Instance and outbox problems have no owner, so without at least one address here they are
+    # only ever found by someone looking at a dashboard. Comma-separated.
+    operator-addresses: ${NOTIFICATION_OPERATOR_ADDRESSES:}
+    # Also tell whoever created the site or certificate. Their address comes from the identity
+    # mirror, which is display only — a stale mirror can misdirect an email and can never widen
+    # anyone's access.
+    notify-owner: ${NOTIFICATION_NOTIFY_OWNER:true}
+    # Days before expiry at which to warn. One notice a week out is easy to postpone and forget;
+    # one notice a day out may arrive on a Saturday.
+    expiry-thresholds: ${NOTIFICATION_EXPIRY_THRESHOLDS:7,3,1}
+    minimum-severity: ${NOTIFICATION_MIN_SEVERITY:INFO}
+    from: ${NOTIFICATION_FROM:enginx@localhost}
+    # Set to receive a generic JSON payload per notification, for chat or incident tooling.
+    webhook-url: ${NOTIFICATION_WEBHOOK_URL:}
+
+  observability:
+    # One database read serves every gauge on a scrape and every health probe within this window.
+    statistics-cache-ttl: ${OBSERVABILITY_CACHE_TTL:15s}
+    # How long an instance may go unheard-from before it counts as unreachable. Should be a small
+    # multiple of the agent's check-in interval, never shorter than it.
+    agent-silence: ${AGENT_SILENCE_THRESHOLD:5m}
+    outbox-warn-depth: ${OUTBOX_WARN_DEPTH:25}
+    certificate-warn-days: ${CERTIFICATE_WARN_DAYS:7}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # prometheus is included but not public: everything under /actuator except health and info
+        # requires the SUPER_ADMIN role, so a scraper authenticates with a client-credentials token
+        # from its own Keycloak service account. See docs/admin/production.md.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      status:
+        # WARNING sits below UP but still answers 200. The platform indicators report on the
+        # managed estate rather than on this service, and an unreachable agent must not cause an
+        # orchestrator to restart or de-register the one component able to fix it.
+        order: DOWN,OUT_OF_SERVICE,WARNING,UP,UNKNOWN
+        http-mapping:
+          WARNING: 200
+      group:
+        # Readiness answers one question: can this instance serve requests? It therefore covers the
+        # database and the application's own state, and deliberately excludes the fleet indicators.
+        readiness:
+          include: readinessState,db
+        # Everything about the estate, in one place for a dashboard to poll.
+        platform:
+          include: agents,outbox,certificates
+          show-details: always
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: enginx-management
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+logging:
+  level:
+    net.xiidea.enginx: ${LOG_LEVEL:INFO}
+    org.springframework.security: INFO

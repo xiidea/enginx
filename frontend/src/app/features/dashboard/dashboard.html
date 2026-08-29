@@ -1,0 +1,138 @@
+<app-page-header
+  title="Dashboard"
+  subtitle="What needs attention across the estate, and what changed recently." />
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else {
+  <section class="tiles">
+    <div class="tile">
+      <span class="figure num">{{ active() }}</span>
+      <span class="caption">Active sites</span>
+    </div>
+    <div class="tile" [class.attention]="expiringSoon().length">
+      <span class="figure num">{{ expiringSoon().length }}</span>
+      <span class="caption">Expiring within 14 days</span>
+    </div>
+    <div class="tile" [class.alarm]="expired().length">
+      <span class="figure num">{{ expired().length }}</span>
+      <span class="caption">Expired</span>
+    </div>
+    <div class="tile" [class.alarm]="failedDeployments().length">
+      <span class="figure num">{{ failedDeployments().length }}</span>
+      <span class="caption">Failed deployments</span>
+    </div>
+    <div class="tile" [class.attention]="certificatesNeedingAttention().length">
+      <span class="figure num">{{ certificatesNeedingAttention().length }}</span>
+      <span class="caption">Certificates to watch</span>
+    </div>
+    <div class="tile" [class.alarm]="offlineInstances().length">
+      <span class="figure num">{{ instances().length }}</span>
+      <span class="caption">NGINX instances</span>
+    </div>
+  </section>
+
+  @if (allClear()) {
+    <div class="card all-clear">
+      <div class="card-body">
+        <strong>Nothing needs attention.</strong>
+        <p class="muted small">
+          No site is expiring in the next fortnight, no deployment has failed, and every certificate
+          is valid.
+        </p>
+      </div>
+    </div>
+  }
+
+  <div class="panels">
+    @if (expiringSoon().length || expired().length) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Expiring and expired</h2>
+          <a routerLink="/sites" class="small">All sites</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Domain</th><th>Status</th><th>Expiry</th></tr>
+            </thead>
+            <tbody>
+              @for (site of expired(); track site.id) {
+                <tr>
+                  <td class="primary mono"><a [routerLink]="['/sites', site.id]">{{ site.domain }}</a></td>
+                  <td><app-status-pill [status]="site.status" /></td>
+                  <td class="nowrap" [title]="site.expiresAt ?? ''">{{ site.secondsUntilExpiry | relative }}</td>
+                </tr>
+              }
+              @for (site of expiringSoon(); track site.id) {
+                <tr>
+                  <td class="primary mono"><a [routerLink]="['/sites', site.id]">{{ site.domain }}</a></td>
+                  <td><app-status-pill [status]="site.status" /></td>
+                  <td class="nowrap warn" [title]="site.expiresAt ?? ''">{{ site.secondsUntilExpiry | relative }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (certificatesNeedingAttention().length) {
+      <section class="card">
+        <div class="card-head">
+          <h2>Certificates</h2>
+          <a routerLink="/certificates" class="small">All certificates</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Status</th><th>Expiry</th></tr>
+            </thead>
+            <tbody>
+              @for (certificate of certificatesNeedingAttention(); track certificate.id) {
+                <tr>
+                  <td class="primary">{{ certificate.name }}</td>
+                  <td><app-status-pill [status]="certificate.status" [title]="certificate.lastError" /></td>
+                  <td class="nowrap" [title]="certificate.expiresAt ?? ''">
+                    @if (certificate.daysRemaining !== null) {
+                      {{ certificate.daysRemaining }} days
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent deployments</h2>
+        <a routerLink="/deployments" class="small">All deployments</a>
+      </div>
+      @if (recentDeployments().length) {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Status</th><th>Trigger</th><th>When</th></tr>
+            </thead>
+            <tbody>
+              @for (deployment of recentDeployments(); track deployment.id) {
+                <tr>
+                  <td><app-status-pill [status]="deployment.status" [title]="deployment.errorMessage" /></td>
+                  <td class="mono small">{{ deployment.trigger }}</td>
+                  <td class="nowrap" [title]="deployment.createdAt">{{ deployment.createdAt | datetime }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="card-body"><p class="muted small">No deployments yet.</p></div>
+      }
+    </section>
+  </div>
+}

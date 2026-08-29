@@ -1,0 +1,229 @@
+<app-page-header
+  [title]="editing() ? 'Edit proxy site' : 'New proxy site'"
+  subtitle="Configuration is generated from these fields. Raw NGINX directives are never accepted.">
+  <a class="btn" routerLink="/sites">Cancel</a>
+  <button class="btn btn-primary" type="button" [disabled]="saving()" (click)="save()">
+    {{ saving() ? 'Saving…' : editing() ? 'Save changes' : 'Create site' }}
+  </button>
+</app-page-header>
+
+<div class="form-cols">
+  <section class="card">
+    <div class="card-head"><h2>Identity</h2></div>
+    <div class="card-body stack">
+      <div>
+        <label for="name">Name</label>
+        <input id="name" [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="Checkout service" />
+        <p class="hint">A label for people. The domain is what NGINX matches on.</p>
+      </div>
+      <div>
+        <label for="domain">Domain</label>
+        <input
+          id="domain"
+          class="mono"
+          [ngModel]="domain()"
+          (ngModelChange)="domain.set($event)"
+          placeholder="app.example.com" />
+        <p class="hint">Fully qualified. One site per domain per NGINX instance.</p>
+      </div>
+      <div>
+        <label for="instance">NGINX instance</label>
+        <select id="instance" [ngModel]="nginxInstanceId()" (ngModelChange)="nginxInstanceId.set($event)" [disabled]="editing()">
+          <option value="">Select an instance</option>
+          @for (instance of instances(); track instance.id) {
+            <option [value]="instance.id">{{ instance.name }} — {{ instance.hostname }}</option>
+          }
+        </select>
+        @if (editing()) {
+          <p class="hint">A site cannot move between instances. Clone it onto the target instead.</p>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Availability</h2></div>
+    <div class="card-body stack">
+      <div class="check">
+        <input id="enabled" type="checkbox" [ngModel]="enabled()" (ngModelChange)="enabled.set($event)" />
+        <label for="enabled">Enabled</label>
+      </div>
+      <div>
+        <label for="activeFrom">Active from</label>
+        <input id="activeFrom" type="datetime-local" [ngModel]="activeFrom()" (ngModelChange)="activeFrom.set($event)" />
+        <p class="hint">Leave empty to serve as soon as it is deployed. Before this, the site is PENDING and not served.</p>
+      </div>
+      <div>
+        <label for="expiresAt">Expires at</label>
+        <input id="expiresAt" type="datetime-local" [ngModel]="expiresAt()" (ngModelChange)="expiresAt.set($event)" />
+        <p class="hint">
+          Leave empty to never expire. At this moment the site stops being served automatically,
+          within a minute.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card span">
+    <div class="card-head">
+      <h2>Upstreams</h2>
+      <button class="btn btn-sm" type="button" (click)="addUpstream()">Add upstream</button>
+    </div>
+    <div class="card-body stack">
+      @for (upstream of upstreams(); track $index) {
+        <div class="upstream">
+          <select
+            [ngModel]="upstream.scheme"
+            (ngModelChange)="updateUpstream($index, { scheme: $event })"
+            aria-label="Scheme">
+            <option value="http">http</option>
+            <option value="https">https</option>
+          </select>
+          <input
+            class="mono"
+            placeholder="10.10.10.20"
+            [ngModel]="upstream.host"
+            (ngModelChange)="updateUpstream($index, { host: $event })"
+            aria-label="Host" />
+          <input
+            type="number"
+            class="mono"
+            placeholder="8080"
+            [ngModel]="upstream.port"
+            (ngModelChange)="updateUpstream($index, { port: +$event })"
+            aria-label="Port" />
+          <input
+            type="number"
+            min="1"
+            max="100"
+            [ngModel]="upstream.weight ?? 1"
+            (ngModelChange)="updateUpstream($index, { weight: +$event })"
+            aria-label="Weight"
+            title="Weight" />
+          <div class="check">
+            <input
+              type="checkbox"
+              [id]="'backup' + $index"
+              [ngModel]="upstream.backup ?? false"
+              (ngModelChange)="updateUpstream($index, { backup: $event })" />
+            <label [for]="'backup' + $index">Backup</label>
+          </div>
+          <button class="btn btn-sm" type="button" [disabled]="upstreams().length === 1" (click)="removeUpstream($index)">
+            Remove
+          </button>
+        </div>
+      }
+      <p class="hint">
+        Host only — no scheme, path or port in this field. At least one upstream must be a primary.
+      </p>
+
+      <div class="grid-2">
+        <div>
+          <label for="lb">Load balancing</label>
+          <select id="lb" [ngModel]="loadBalancingMethod()" (ngModelChange)="loadBalancingMethod.set($event)">
+            <option value="ROUND_ROBIN">Round robin</option>
+            <option value="LEAST_CONN">Least connections</option>
+            <option value="IP_HASH">IP hash</option>
+          </select>
+        </div>
+        <div class="check tall">
+          <input id="ws" type="checkbox" [ngModel]="websocketEnabled()" (ngModelChange)="websocketEnabled.set($event)" />
+          <label for="ws">WebSocket proxying</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>TLS</h2></div>
+    <div class="card-body stack">
+      <div class="check">
+        <input id="ssl" type="checkbox" [ngModel]="sslEnabled()" (ngModelChange)="onSslChange($event)" />
+        <label for="ssl">Serve over HTTPS</label>
+      </div>
+
+      @if (sslEnabled()) {
+        <div>
+          <label for="cert">Certificate</label>
+          <select id="cert" [ngModel]="sslCertificateId()" (ngModelChange)="sslCertificateId.set($event)">
+            <option value="">Select a certificate</option>
+            @for (certificate of usableCertificates(); track certificate.id) {
+              <option [value]="certificate.id">{{ certificate.name }} — {{ certificate.domains.join(', ') }}</option>
+            }
+          </select>
+          @if (!usableCertificates().length) {
+            <p class="hint">
+              No usable certificate covers this domain. Request one from the Certificates page first.
+            </p>
+          } @else {
+            <p class="hint">Only certificates that cover this domain are listed.</p>
+          }
+        </div>
+        <div class="check">
+          <input id="force" type="checkbox" [ngModel]="forceHttps()" (ngModelChange)="forceHttps.set($event)" />
+          <label for="force">Redirect HTTP to HTTPS</label>
+        </div>
+        <div class="check">
+          <input id="hsts" type="checkbox" [ngModel]="hstsEnabled()" (ngModelChange)="hstsEnabled.set($event)" />
+          <label for="hsts">Send HSTS</label>
+        </div>
+      } @else {
+        <p class="hint">The site will serve plain HTTP on port 80.</p>
+      }
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Limits</h2></div>
+    <div class="card-body grid-2">
+      <div>
+        <label for="connect">Connect timeout (s)</label>
+        <input id="connect" type="number" min="1" max="3600" [ngModel]="connectTimeoutSeconds()" (ngModelChange)="connectTimeoutSeconds.set(+$event)" />
+      </div>
+      <div>
+        <label for="read">Read timeout (s)</label>
+        <input id="read" type="number" min="1" max="3600" [ngModel]="readTimeoutSeconds()" (ngModelChange)="readTimeoutSeconds.set(+$event)" />
+      </div>
+      <div>
+        <label for="send">Send timeout (s)</label>
+        <input id="send" type="number" min="1" max="3600" [ngModel]="sendTimeoutSeconds()" (ngModelChange)="sendTimeoutSeconds.set(+$event)" />
+      </div>
+      <div>
+        <label for="body">Max request body (MB)</label>
+        <input id="body" type="number" min="1" [ngModel]="maxBodySizeMb()" (ngModelChange)="maxBodySizeMb.set(+$event)" />
+      </div>
+    </div>
+  </section>
+
+  <section class="card span">
+    <div class="card-head">
+      <h2>Custom headers</h2>
+      <button class="btn btn-sm" type="button" (click)="addHeader()">Add header</button>
+    </div>
+    <div class="card-body stack">
+      @if (!headers().length) {
+        <p class="hint">
+          None. The standard forwarding headers — Host, X-Real-IP, X-Forwarded-For and
+          X-Forwarded-Proto — are always sent.
+        </p>
+      }
+      @for (header of headers(); track $index) {
+        <div class="header-row">
+          <select [ngModel]="header.direction" (ngModelChange)="updateHeader($index, { direction: $event })" aria-label="Direction">
+            <option value="REQUEST">To upstream</option>
+            <option value="RESPONSE">To client</option>
+          </select>
+          <input class="mono" placeholder="X-Tenant-Id" [ngModel]="header.name" (ngModelChange)="updateHeader($index, { name: $event })" aria-label="Header name" />
+          <input class="mono" placeholder="acme" [ngModel]="header.value" (ngModelChange)="updateHeader($index, { value: $event })" aria-label="Header value" />
+          <button class="btn btn-sm" type="button" (click)="removeHeader($index)">Remove</button>
+        </div>
+      }
+      @if (headers().length) {
+        <p class="hint">
+          Values may not contain newlines, quotes, semicolons, braces or <code>$</code> — each
+          could escape the generated directive.
+        </p>
+      }
+    </div>
+  </section>
+</div>

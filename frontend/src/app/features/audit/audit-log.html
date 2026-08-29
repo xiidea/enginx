@@ -1,0 +1,141 @@
+<app-page-header
+  title="Audit log"
+  subtitle="Every security-sensitive and configuration-changing operation, in the order it happened. Append-only: nothing here can be edited or removed.">
+  <button class="btn" type="button" (click)="reload(page()?.page ?? 0)">Refresh</button>
+</app-page-header>
+
+<div class="card filters">
+  <div class="card-body">
+    <div class="filter-grid">
+      <label>
+        <span class="key small">Actor</span>
+        <input type="search" [ngModel]="actor()" (ngModelChange)="actor.set($event)"
+          (keyup.enter)="reload()" placeholder="username or subject" autocomplete="off" />
+      </label>
+      <label>
+        <span class="key small">Action</span>
+        <select [ngModel]="action()" (ngModelChange)="action.set($event); reload()">
+          <option value="">Any action</option>
+          @for (name of actions(); track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        <span class="key small">Outcome</span>
+        <select [ngModel]="result()" (ngModelChange)="result.set($event); reload()">
+          <option value="">Any outcome</option>
+          <option value="SUCCESS">Succeeded</option>
+          <option value="FAILURE">Failed</option>
+          <option value="DENIED">Denied</option>
+        </select>
+      </label>
+      <label>
+        <span class="key small">From</span>
+        <input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); reload()" />
+      </label>
+      <label>
+        <span class="key small">To</span>
+        <input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); reload()" />
+      </label>
+      <div class="filter-actions">
+        <button class="btn btn-sm" type="button" (click)="reload()">Search</button>
+        @if (filtered()) {
+          <button class="btn btn-sm btn-quiet" type="button" (click)="clear()">Clear</button>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!page()?.content?.length) {
+    @if (refused()) {
+      <app-empty
+        title="You do not have access to the audit log"
+        detail="The trail spans every domain in the estate, so reading it requires a global administrator role. Ask an administrator if you need access." />
+    } @else {
+      <app-empty
+        [title]="filtered() ? 'Nothing matches those filters' : 'No audit entries yet'"
+        [detail]="filtered() ? 'Widen the date range or clear the filters.' : 'Entries appear as soon as anything is changed.'" />
+    }
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th><th>When</th><th>Actor</th><th>Action</th><th>Resource</th><th>Outcome</th><th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of page()!.content; track entry.id) {
+            <tr [class.alarm]="entry.result !== 'SUCCESS'">
+              <td>
+                @if (hasDetail(entry)) {
+                  <button class="disclose" type="button" (click)="toggle(entry)"
+                    [attr.aria-expanded]="expanded() === entry.id" aria-label="Change detail">
+                    {{ expanded() === entry.id ? '−' : '+' }}
+                  </button>
+                }
+              </td>
+              <td class="nowrap small" [title]="entry.occurredAt">{{ entry.occurredAt | datetime }}</td>
+              <td class="primary small">{{ entry.actor ?? 'system' }}</td>
+              <td class="mono small">{{ entry.action }}</td>
+              <td class="mono small muted">
+                {{ entry.resourceType ?? '—' }}
+                @if (entry.resourceId) {
+                  <span class="rid">{{ entry.resourceId.slice(0, 8) }}</span>
+                }
+              </td>
+              <td><span class="outcome" [class]="'outcome-' + entry.result.toLowerCase()">{{ entry.result }}</span></td>
+              <td class="mono small muted">{{ entry.ipAddress ?? '—' }}</td>
+            </tr>
+            @if (expanded() === entry.id) {
+              <tr class="detail-row">
+                <td colspan="7">
+                  <div class="detail">
+                    @if (entry.errorMessage) {
+                      <p class="error small">{{ entry.errorMessage }}</p>
+                    }
+                    <!--
+                      Before and after side by side: the question an audit entry is opened to
+                      answer is almost always "what actually changed", and two states next to
+                      each other answer it faster than either one alone.
+
+                      Skipped entirely when there is no state to show. A denial records why it was
+                      refused and nothing else, and two empty panels would suggest the detail had
+                      failed to load rather than that there was never any.
+                    -->
+                    @if (entry.beforeState || entry.afterState) {
+                      <div class="states">
+                        <div>
+                          <p class="key small">Before</p>
+                          <pre class="detail-text">{{ format(entry.beforeState) }}</pre>
+                        </div>
+                        <div>
+                          <p class="key small">After</p>
+                          <pre class="detail-text">{{ format(entry.afterState) }}</pre>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-head pager">
+      <span class="muted small">{{ page()!.totalElements }} entries</span>
+      <div class="row">
+        <button class="btn btn-sm" type="button" [disabled]="page()!.page === 0" (click)="reload(page()!.page - 1)">Previous</button>
+        <span class="small muted">Page {{ page()!.page + 1 }} of {{ page()!.totalPages || 1 }}</span>
+        <button class="btn btn-sm" type="button" [disabled]="page()!.page + 1 >= page()!.totalPages" (click)="reload(page()!.page + 1)">Next</button>
+      </div>
+    </div>
+  }
+</div>

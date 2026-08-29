@@ -1,0 +1,10 @@
+.form-card { margin-bottom: 1rem; }
+.check { display: flex; align-items: center; gap: 0.5rem; }
+.check label { margin: 0; font-size: 0.87rem; color: var(--ink); }
+textarea { resize: vertical; font-size: 0.78rem; line-height: 1.5; }
+
+tbody tr.attention td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+
+.right { text-align: right; }
+.row-actions { display: flex; gap: 0.3rem; justify-content: flex-end; flex-wrap: wrap; }

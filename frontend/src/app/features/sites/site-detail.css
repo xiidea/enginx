@@ -1,0 +1,59 @@
+.cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.note { margin-top: -0.6rem; margin-bottom: 1rem; }
+
+.facts { display: grid; gap: 0.5rem; }
+.facts > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0.6rem; align-items: center; font-size: 0.87rem; }
+.key { color: var(--ink-3); font-size: 0.78rem; }
+
+.expiry { border-top: 1px solid var(--rule); }
+.expiry .row { flex-wrap: wrap; }
+.expiry input { max-width: 15rem; }
+
+.danger { color: var(--danger); }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(15 20 24 / 55%);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+.preview { width: min(52rem, 100%); max-height: 82vh; display: flex; flex-direction: column; }
+.preview .card-body { overflow: auto; }
+.paths { margin: 0 0 0.8rem; padding-left: 1.1rem; color: var(--ink-2); }
+
+/* The generated file is the thing being inspected, so it gets its own ground and scrolls. */
+.config {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font-family: var(--f-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+@media (max-width: 980px) {
+  .cols { grid-template-columns: 1fr; }
+}
+
+/*
+ * Upstream probe results. Reachability is binary and the eye should find the failure first, so
+ * the failing row carries the colour rather than the list carrying a legend.
+ */
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.checks li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--ok);
+}
+.checks li.bad { border-left-color: var(--danger); }
+.ok-text { color: var(--ok); }
+.bad-text { color: var(--danger); }

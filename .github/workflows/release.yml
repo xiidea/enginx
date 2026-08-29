@@ -1,0 +1,226 @@
+name: Release
+
+# Cutting a release is pushing a tag. Nothing else publishes: a workflow that also released from a
+# branch would eventually release something nobody meant to, and a version that exists in two
+# places is a version somebody will disagree about.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  # Buildable without publishing, so the release path itself can be exercised before it matters.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without a leading v (dry run; nothing is published)'
+        required: true
+        default: '0.0.0-test'
+
+permissions:
+  contents: write
+
+jobs:
+  agent:
+    name: Agent binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: enginx-agent/go.mod
+          cache-dependency-path: enginx-agent/go.sum
+
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # refs/tags/v1.2.3 -> 1.2.3. The tag keeps its v for humans; the artefacts do not,
+            # because "enginx-agent-v1.2.3" reads as a typo and sorts badly next to a bare number.
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION"
+
+      # Tests run here as well as in CI. A tag can be pushed to a commit CI never saw — a
+      # fast-forward, a tag moved after the fact — and a release built from untested code is
+      # exactly the artefact that must not exist.
+      - name: Test
+        working-directory: enginx-agent
+        run: go test -race ./...
+
+      - name: Build
+        working-directory: enginx-agent
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          PKG=github.com/xiidea/enginx/enginx-agent/internal/version
+          LDFLAGS="-s -w -X ${PKG}.Version=${VERSION} -X ${PKG}.Commit=${GITHUB_SHA::7}"
+
+          # The agent is copied onto hosts whose libc is not ours to assume, so every binary is
+          # static. -trimpath keeps build paths out of the binary, which is both smaller and one
+          # less thing leaked into a stack trace on someone else's machine.
+          for target in linux/amd64 linux/arm64 linux/arm/7; do
+            GOOS="${target%%/*}"
+            rest="${target#*/}"
+            GOARCH="${rest%%/*}"
+            GOARM=""
+            case "$target" in */arm/*) GOARM="${rest#*/}";; esac
+
+            name="enginx-agent-${GOOS}-${GOARCH}${GOARM:+v$GOARM}"
+            echo "→ $name"
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" \
+              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" ./cmd/agent
+          done
+          ls -l dist
+
+      # Registers binfmt handlers so a cross-compiled binary can actually be executed here.
+      # Anything less than running them is not verification: see the note in the step below.
+      - uses: docker/setup-qemu-action@v3
+
+      # Proves the version was actually stamped, by asking each binary what it is.
+      #
+      # The obvious cheaper check — grepping the binary for the version string — is worthless, and
+      # measurably so: an *unstamped* build of this agent also contains "1.2.3", because the bytes
+      # turn up elsewhere in a Go binary. `go version -m` does not help either; it does not record
+      # -ldflags. An -ldflags path that names a package that does not exist fails silently, every
+      # binary reports "dev", and nobody notices until an agent in production cannot say what it
+      # is. Running them is the only check that distinguishes the two cases.
+      - name: Verify the version was stamped
+        working-directory: enginx-agent
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          check() {
+            platform="$1"; binary="$2"
+            reported="$(docker run --rm --platform "$platform" -v "$PWD/dist:/dist:ro" \
+              alpine:3.20 "/dist/$binary" -version)"
+            echo "$platform -> $reported"
+            case "$reported" in
+              "enginx-agent ${VERSION} "*) ;;
+              *) echo "::error::$binary reports '$reported', expected version ${VERSION}"; exit 1;;
+            esac
+          }
+          check linux/amd64  enginx-agent-linux-amd64
+          check linux/arm64  enginx-agent-linux-arm64
+          check linux/arm/v7 enginx-agent-linux-armv7
+
+      - name: Checksums
+        working-directory: enginx-agent/dist
+        run: |
+          set -euo pipefail
+          sha256sum enginx-agent-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-binaries
+          path: enginx-agent/dist/
+          retention-days: 7
+
+  management:
+    name: Management server jar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # The same reasoning as the agent: a tag may point at a commit CI never built.
+      - name: Build and test
+        working-directory: proxy-management
+        run: ./gradlew build -Pversion=${{ steps.version.outputs.version }} --no-daemon
+
+      - name: Name the jar for the release
+        working-directory: proxy-management
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp management-boot/build/libs/proxy-management.jar "dist/proxy-management-${VERSION}.jar"
+          (cd dist && sha256sum ./*.jar > SHA256SUMS.jar)
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: management-jar
+          path: proxy-management/dist/
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    # Only for a real tag. A dispatch run builds and verifies everything above and stops there,
+    # which is what makes the release path safe to rehearse.
+    if: github.event_name == 'push'
+    needs: [agent, management]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/agent-binaries/* release/
+          cp artifacts/management-jar/* release/
+          # Two SHA256SUMS files would overwrite each other; merge them into one the release can
+          # be verified against with a single command.
+          cat release/SHA256SUMS release/SHA256SUMS.jar > release/SHA256SUMS.txt
+          rm -f release/SHA256SUMS release/SHA256SUMS.jar
+          ls -l release
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # --generate-notes builds the changelog from merged pull requests, so release notes are
+          # not a thing someone has to remember to write by hand and therefore eventually does not.
+          # A pre-release is marked as one: "1.2.3-rc1" must not become the latest release.
+          prerelease=""
+          case "$VERSION" in *-*) prerelease="--prerelease";; esac
+
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --generate-notes \
+            $prerelease \
+            release/*
+
+      - name: Summary
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## Released $VERSION"
+            echo
+            echo '```'
+            cat release/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

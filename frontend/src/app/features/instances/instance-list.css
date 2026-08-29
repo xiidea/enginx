@@ -1,0 +1,3 @@
+.form-card { margin-bottom: 1rem; }
+tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.right { text-align: right; }

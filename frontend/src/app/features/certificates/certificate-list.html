@@ -1,0 +1,151 @@
+<app-page-header
+  title="Certificates"
+  subtitle="Obtained over ACME or supplied by you. Private keys are encrypted at rest and never leave through this API.">
+  @if (!auth.isReadOnly()) {
+    <button class="btn" type="button" (click)="mode.set(mode() === 'upload' ? 'none' : 'upload')">Upload</button>
+    <button class="btn btn-primary" type="button" (click)="mode.set(mode() === 'request' ? 'none' : 'request')">
+      Request certificate
+    </button>
+  }
+</app-page-header>
+
+@if (mode() === 'request') {
+  <section class="card form-card">
+    <div class="card-head"><h2>Request over ACME</h2></div>
+    <div class="card-body stack">
+      <div class="grid-2">
+        <div>
+          <label for="cname">Name</label>
+          <input id="cname" [ngModel]="requestName()" (ngModelChange)="requestName.set($event)" placeholder="checkout" />
+        </div>
+        <div>
+          <label for="renewbefore">Renew when this many days remain</label>
+          <input id="renewbefore" type="number" min="1" max="89" [ngModel]="requestRenewBefore()" (ngModelChange)="requestRenewBefore.set(+$event)" />
+        </div>
+      </div>
+      <div>
+        <label for="cdomains">Domains</label>
+        <input
+          id="cdomains"
+          class="mono"
+          [ngModel]="requestDomains()"
+          (ngModelChange)="requestDomains.set($event)"
+          placeholder="app.example.com api.example.com" />
+        <p class="hint">
+          Separate with spaces or commas. Validation is HTTP-01, so every domain must already
+          resolve to a managed NGINX host on port 80. Wildcards need DNS-01 and are refused.
+        </p>
+      </div>
+      <div class="check">
+        <input id="autorenew" type="checkbox" [ngModel]="requestAutoRenew()" (ngModelChange)="requestAutoRenew.set($event)" />
+        <label for="autorenew">Renew automatically</label>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" type="button" [disabled]="busy() || !requestDomains()" (click)="request()">
+          {{ busy() ? 'Requesting…' : 'Request' }}
+        </button>
+        <button class="btn" type="button" (click)="mode.set('none')">Cancel</button>
+      </div>
+    </div>
+  </section>
+}
+
+@if (mode() === 'upload') {
+  <section class="card form-card">
+    <div class="card-head"><h2>Upload existing material</h2></div>
+    <div class="card-body stack">
+      <div>
+        <label for="uname">Name</label>
+        <input id="uname" [ngModel]="uploadName()" (ngModelChange)="uploadName.set($event)" />
+      </div>
+      <div>
+        <label for="uchain">Certificate chain (PEM)</label>
+        <textarea id="uchain" rows="6" class="mono" [ngModel]="uploadChain()" (ngModelChange)="uploadChain.set($event)"
+          placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+        <p class="hint">Leaf first, then intermediates. The domains and dates are read from the certificate itself.</p>
+      </div>
+      <div>
+        <label for="ukey">Private key (PEM)</label>
+        <textarea id="ukey" rows="4" class="mono" [ngModel]="uploadKey()" (ngModelChange)="uploadKey.set($event)"
+          placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+        <p class="hint">Encrypted before storage, and never returned by any endpoint afterwards.</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" type="button" [disabled]="busy() || !uploadChain() || !uploadKey()" (click)="upload()">
+          {{ busy() ? 'Storing…' : 'Store certificate' }}
+        </button>
+        <button class="btn" type="button" (click)="mode.set('none')">Cancel</button>
+      </div>
+    </div>
+  </section>
+}
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!certificates().length) {
+    <app-empty
+      title="No certificates yet"
+      detail="Request one over ACME, or upload material you already hold." />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Status</th><th>Domains</th><th>Issuer</th>
+            <th>Expires</th><th>Renewal</th><th>Used by</th><th class="right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (certificate of ordered(); track certificate.id) {
+            <tr [class.attention]="certificate.status === 'EXPIRING_SOON'"
+                [class.alarm]="certificate.status === 'EXPIRED' || certificate.status === 'ERROR' || certificate.status === 'REVOKED'">
+              <td class="primary">
+                {{ certificate.name }}
+                <div class="muted small mono">{{ certificate.provider }}</div>
+              </td>
+              <td><app-status-pill [status]="certificate.status" [title]="certificate.lastError" /></td>
+              <td class="mono small">{{ certificate.domains.join(', ') }}</td>
+              <td class="small muted">{{ certificate.issuer ?? '—' }}</td>
+              <td class="nowrap small" [title]="certificate.expiresAt ?? ''">
+                @if (certificate.expiresAt) {
+                  {{ certificate.expiresAt | datetime }}
+                  <div class="muted">{{ certificate.daysRemaining }} days</div>
+                } @else {
+                  —
+                }
+              </td>
+              <td class="small">
+                @if (certificate.provider === 'MANUAL') {
+                  <span class="muted">manual</span>
+                } @else {
+                  {{ certificate.autoRenew ? 'auto at ' + certificate.renewBeforeDays + 'd' : 'off' }}
+                }
+              </td>
+              <td class="small">{{ certificate.inUse ? 'a site' : '—' }}</td>
+              <td>
+                <div class="row-actions">
+                  @if (!auth.isReadOnly()) {
+                    @if (certificate.provider === 'ACME' && certificate.status !== 'REVOKED') {
+                      <button class="btn btn-sm" type="button" (click)="renew(certificate)">Renew</button>
+                      <button class="btn btn-sm" type="button" (click)="toggleAutoRenew(certificate)">
+                        {{ certificate.autoRenew ? 'Auto off' : 'Auto on' }}
+                      </button>
+                    }
+                    @if (certificate.status !== 'REVOKED') {
+                      <button class="btn btn-sm btn-danger" type="button" (click)="revoke(certificate)">Revoke</button>
+                    }
+                    <button class="btn btn-sm btn-danger" type="button" [disabled]="certificate.inUse" (click)="remove(certificate)"
+                      [title]="certificate.inUse ? 'Detach it from every site first' : 'Delete'">
+                      Delete
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

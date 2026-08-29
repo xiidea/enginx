@@ -1,0 +1,265 @@
+<app-page-header
+  title="Permissions"
+  subtitle="Access is granted per domain, not only per role. A grant on a parent group reaches every site beneath it.">
+</app-page-header>
+
+<div class="cols">
+  <div class="stack">
+    @if (!auth.isReadOnly()) {
+      <section class="card">
+        <div class="card-head"><h2>Grant access</h2></div>
+        <div class="card-body stack">
+          <div class="grid-2">
+            <div>
+              <label for="subjectType">Subject</label>
+              <select id="subjectType" [ngModel]="subjectType()" (ngModelChange)="subjectType.set($event); subjectRef.set('')">
+                <option value="USER">A person</option>
+                <option value="GROUP">A team</option>
+              </select>
+            </div>
+            <div>
+              <label for="subjectRef">{{ subjectType() === 'USER' ? 'Person' : 'Team' }}</label>
+              <select id="subjectRef" [ngModel]="subjectRef()" (ngModelChange)="subjectRef.set($event)">
+                <option value="">Select…</option>
+                @if (subjectType() === 'USER') {
+                  @for (user of users(); track user.subjectRef) {
+                    <option [value]="user.subjectRef">{{ user.displayName }}</option>
+                  }
+                } @else {
+                  @for (group of directoryGroups(); track group.subjectRef) {
+                    <option [value]="group.subjectRef">{{ group.subjectRef }}</option>
+                  }
+                }
+              </select>
+              @if (subjectType() === 'USER' && !users().length) {
+                <p class="hint">People appear here once they have signed in at least once.</p>
+              }
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="scopeType">Over</label>
+              <select id="scopeType" [ngModel]="scopeType()" (ngModelChange)="scopeType.set($event)">
+                <option value="DOMAIN_GROUP">A domain group</option>
+                <option value="DOMAIN_PATTERN">A domain pattern</option>
+                <option value="SITE">One site</option>
+                <option value="GLOBAL">Everything</option>
+              </select>
+            </div>
+            <div>
+              <label for="level">Level</label>
+              <select id="level" [ngModel]="level()" (ngModelChange)="level.set($event)">
+                @for (value of levels; track value) {
+                  <option [value]="value">{{ value }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (scopeType() === 'DOMAIN_GROUP') {
+            <div>
+              <label for="scopeGroup">Group</label>
+              <select id="scopeGroup" [ngModel]="scopeGroupId()" (ngModelChange)="scopeGroupId.set($event)">
+                <option value="">Select a group</option>
+                @for (group of groups(); track group.id) {
+                  <option [value]="group.id">{{ group.path }}</option>
+                }
+              </select>
+            </div>
+          } @else if (scopeType() === 'SITE') {
+            <div>
+              <label for="scopeSite">Site</label>
+              <select id="scopeSite" [ngModel]="scopeSiteId()" (ngModelChange)="scopeSiteId.set($event)">
+                <option value="">Select a site</option>
+                @for (site of sites(); track site.id) {
+                  <option [value]="site.id">{{ site.domain }}</option>
+                }
+              </select>
+            </div>
+          } @else if (scopeType() === 'DOMAIN_PATTERN') {
+            <div>
+              <label for="pattern">Pattern</label>
+              <input id="pattern" class="mono" [ngModel]="domainPattern()" (ngModelChange)="domainPattern.set($event)"
+                placeholder="*.test.example.com" />
+              <p class="hint">
+                A wildcard covers one label: <code>*.test.example.com</code> matches
+                <code>app.test.example.com</code>, not <code>test.example.com</code> itself.
+              </p>
+            </div>
+          }
+
+          <div>
+            <label for="expires">Expires (optional)</label>
+            <input id="expires" type="datetime-local" [ngModel]="expiresAt()" (ngModelChange)="expiresAt.set($event)" />
+            <p class="hint">A time-boxed grant is the safest way to hand out broad access — it cannot be forgotten.</p>
+          </div>
+
+          <div class="row">
+            <!--
+              Preview sits before Grant, and is offered for every scope rather than only wildcards:
+              a group grant reaches whatever is filed under it and its children, which is no more
+              obvious than a pattern.
+            -->
+            <button class="btn" type="button" [disabled]="previewing() || !subjectRef()" (click)="showPreview()">
+              {{ previewing() ? 'Checking…' : 'Preview reach' }}
+            </button>
+            <button class="btn btn-primary" type="button" [disabled]="granting() || !subjectRef()" (click)="grant()">
+              {{ granting() ? 'Granting…' : 'Grant' }}
+            </button>
+          </div>
+
+          @if (preview(); as reach) {
+            <div class="reach" [class.wide]="reach.coversFutureDomains">
+              <p class="reach-head">
+                Reaches <strong>{{ reach.totalMatched }}</strong>
+                {{ reach.totalMatched === 1 ? 'site' : 'sites' }} today,
+                <strong>{{ reach.newlyVisibleToSubject }}</strong> of which
+                {{ reach.newlyVisibleToSubject === 1 ? 'is' : 'are' }} new for this subject.
+              </p>
+
+              @if (reach.coversFutureDomains) {
+                <!-- The caveat R5 is really about: the list is a snapshot of an open-ended rule. -->
+                <p class="reach-warn small">
+                  This scope also covers domains that do not exist yet. Any site added under it
+                  later is included automatically, without a further grant.
+                </p>
+              }
+
+              @if (reach.matched.length) {
+                <ul class="reach-list">
+                  @for (site of reach.matched; track site.id) {
+                    <li [class.already]="site.alreadyReachable">
+                      <span class="mono">{{ site.domain }}</span>
+                      @if (site.alreadyReachable) {
+                        <span class="small muted">already reachable</span>
+                      }
+                    </li>
+                  }
+                </ul>
+                @if (reach.truncated) {
+                  <p class="small muted">Showing the first {{ reach.matched.length }}.</p>
+                }
+              } @else {
+                <p class="small muted">No sites match this scope today.</p>
+              }
+            </div>
+          }
+          <p class="hint">
+            You can only grant what you hold, and only where you hold ADMIN. Re-granting the same
+            scope changes the level rather than adding a second rule.
+          </p>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <div class="card-head"><h2>Grants</h2></div>
+      @if (loading()) {
+        <div class="card-body"><p class="muted">Loading…</p></div>
+      } @else if (!canSeeAllGrants()) {
+        <app-empty
+          title="Listing every grant needs global ADMIN"
+          detail="You can still grant and revoke within the scopes you administer." />
+      } @else if (!grants().length) {
+        <app-empty title="No grants yet" detail="Realm roles alone decide access until you add one." />
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Subject</th><th>Scope</th><th>Level</th><th>Expires</th><th class="right"></th></tr></thead>
+            <tbody>
+              @for (grant of grants(); track grant.id) {
+                <tr [class.lapsed]="grant.expired">
+                  <td class="primary">
+                    <span class="mono small">{{ grant.subjectType }}</span>
+                    <div class="mono small muted">{{ grant.subjectRef }}</div>
+                  </td>
+                  <td class="small">
+                    {{ scopeLabel(grant) }}
+                    <div class="muted mono small">{{ grant.scopeType }}</div>
+                  </td>
+                  <td><span class="level mono">{{ grant.level }}</span></td>
+                  <td class="small nowrap">
+                    @if (grant.expiresAt) {
+                      {{ grant.expiresAt | datetime }}
+                    } @else {
+                      <span class="muted">never</span>
+                    }
+                  </td>
+                  <td class="right">
+                    @if (!auth.isReadOnly()) {
+                      <button class="btn btn-sm btn-danger" type="button" (click)="revoke(grant)">Revoke</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Domain groups</h2>
+      @if (!auth.isReadOnly()) {
+        <button class="btn btn-sm" type="button" (click)="showGroupForm.set(!showGroupForm())">New group</button>
+      }
+    </div>
+
+    @if (showGroupForm()) {
+      <div class="card-body stack group-form">
+        <div>
+          <label for="gname">Name</label>
+          <input id="gname" [ngModel]="newGroupName()" (ngModelChange)="newGroupName.set($event)" placeholder="Production" />
+        </div>
+        <div>
+          <label for="gslug">Slug</label>
+          <input id="gslug" class="mono" [ngModel]="newGroupSlug()" (ngModelChange)="newGroupSlug.set($event)" placeholder="production" />
+          <p class="hint">The path segment. The full path comes from the parent, so it cannot be forged.</p>
+        </div>
+        <div>
+          <label for="gparent">Parent</label>
+          <select id="gparent" [ngModel]="newGroupParent()" (ngModelChange)="newGroupParent.set($event)">
+            <option value="">Top level</option>
+            @for (group of groups(); track group.id) {
+              <option [value]="group.id">{{ group.path }}</option>
+            }
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary" type="button" [disabled]="!newGroupName() || !newGroupSlug()" (click)="createGroup()">
+            Create
+          </button>
+          <button class="btn" type="button" (click)="showGroupForm.set(false)">Cancel</button>
+        </div>
+      </div>
+    }
+
+    @if (!groups().length) {
+      <app-empty title="No groups" detail="Group sites so one grant covers a set that changes over time." />
+    } @else {
+      <ul class="groups">
+        @for (group of groups(); track group.id) {
+          <li [style.padding-left]="indentOf(group)">
+            <div class="group-row">
+              <div>
+                <span class="mono">{{ group.path }}</span>
+                <div class="muted small">{{ group.name }} · {{ group.memberCount }} site(s)</div>
+              </div>
+              <div class="row">
+                @if (group.yourLevel) {
+                  <span class="level mono small">{{ group.yourLevel }}</span>
+                }
+                @if (!auth.isReadOnly() && group.yourLevel === 'ADMIN') {
+                  <button class="btn btn-sm btn-danger" type="button" (click)="deleteGroup(group)">Delete</button>
+                }
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

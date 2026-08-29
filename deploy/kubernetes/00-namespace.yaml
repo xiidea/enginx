@@ -1,0 +1,8 @@
+# The management plane. Agents deliberately do not live here — they run on the hosts that serve
+# proxied traffic, which may not be this cluster at all.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: enginx
+  labels:
+    app.kubernetes.io/name: enginx

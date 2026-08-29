@@ -1,0 +1,94 @@
+package net.xiidea.enginx.application.nginx;
+
+import net.xiidea.enginx.application.shared.AuditRecorder;
+import net.xiidea.enginx.domain.audit.AuditAction;
+import net.xiidea.enginx.domain.nginx.NginxInstance;
+import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
+import net.xiidea.enginx.domain.shared.ConflictException;
+import net.xiidea.enginx.domain.shared.NotFoundException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Registration and lookup of managed NGINX hosts.
+ *
+ * <p>Phase 2 covers registration and listing only. Reaching out to an agent over mTLS to observe
+ * its real status arrives with the agent client in Phase 4.
+ */
+@Service
+public class NginxInstanceService {
+
+    private static final String RESOURCE_TYPE = "NGINX_INSTANCE";
+
+    private final NginxInstanceRepository instances;
+    private final AuditRecorder audit;
+    private final Clock clock;
+
+    public NginxInstanceService(NginxInstanceRepository instances, AuditRecorder audit, Clock clock) {
+        this.instances = instances;
+        this.audit = audit;
+        this.clock = clock;
+    }
+
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','OPERATOR','READ_ONLY')")
+    @Transactional(readOnly = true)
+    public List<NginxInstance> findAll() {
+        return instances.findAll();
+    }
+
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','OPERATOR','READ_ONLY')")
+    @Transactional(readOnly = true)
+    public NginxInstance get(UUID id) {
+        return instances.findById(id).orElseThrow(() -> new NotFoundException(RESOURCE_TYPE, id));
+    }
+
+    /**
+     * Trusts a new agent certificate for this host.
+     *
+     * <p>Rotating an agent's certificate previously meant deleting and re-registering the
+     * instance, which discards its deployment history and its link from every site on it. This
+     * changes the one field that actually changed.
+     */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public NginxInstance rotateAgentCertificate(UUID id, String newFingerprint) {
+        NginxInstance instance = instances.findById(id)
+                .orElseThrow(() -> new NotFoundException("NGINX_INSTANCE", id));
+
+        Map<String, Object> before = Map.of("agentCertFingerprint", instance.agentCertFingerprint());
+        instance.agentCertificateRotated(newFingerprint, clock.instant());
+        NginxInstance saved = instances.save(instance);
+
+        // Audited with both fingerprints. Which certificate a host is trusted under, and when that
+        // changed, is precisely the question an incident review asks.
+        audit.success(AuditAction.NGINX_INSTANCE_CERT_ROTATED, "NGINX_INSTANCE", id, before,
+                Map.of("agentCertFingerprint", saved.agentCertFingerprint()));
+        return saved;
+    }
+
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public NginxInstance register(String name, String hostname, String agentBaseUrl,
+                                  String agentCertFingerprint, String environment) {
+        NginxInstance instance = NginxInstance.register(
+                UUID.randomUUID(), name, hostname, agentBaseUrl, agentCertFingerprint, environment, clock.instant());
+
+        if (instances.existsByName(instance.name())) {
+            throw new ConflictException("An NGINX instance named '" + instance.name() + "' already exists");
+        }
+
+        NginxInstance saved = instances.save(instance);
+        audit.success(AuditAction.NGINX_INSTANCE_REGISTERED, RESOURCE_TYPE, saved.id(), null,
+                Map.of("name", saved.name(),
+                        "hostname", saved.hostname(),
+                        "agentBaseUrl", saved.agentBaseUrl().toString(),
+                        "environment", saved.environment()));
+        return saved;
+    }
+}

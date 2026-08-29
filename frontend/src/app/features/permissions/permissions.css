@@ -1,0 +1,65 @@
+.cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+
+.level {
+  display: inline-block;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+/* An expired grant is shown rather than hidden: it explains access someone used to have. */
+tbody tr.lapsed { opacity: 0.55; }
+tbody tr.lapsed .level { text-decoration: line-through; }
+
+.group-form { border-bottom: 1px solid var(--rule); }
+.groups { list-style: none; margin: 0; padding: 0.4rem 0; }
+.groups li { padding: 0.3rem 1.1rem; }
+.group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-left: 2px solid var(--rule);
+  padding-left: 0.7rem;
+}
+
+.right { text-align: right; }
+
+@media (max-width: 980px) {
+  .cols { grid-template-columns: 1fr; }
+}
+
+/*
+ * Grant reach preview. Framed as a caution rather than a result: the point of showing it is that
+ * the number is usually larger than the person expected, so it should read as something to check
+ * rather than as confirmation.
+ */
+.reach {
+  margin-top: 0.9rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--rule-2);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.reach.wide { border-left-color: var(--danger); }
+.reach-head { margin: 0 0 0.4rem; }
+.reach-warn { color: var(--danger); margin: 0 0 0.5rem; }
+
+.reach-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.reach-list li { display: flex; gap: 0.6rem; align-items: baseline; }
+/* Dimmed, because these are the ones that change nothing. */
+.reach-list li.already { opacity: 0.55; }

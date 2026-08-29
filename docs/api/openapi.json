@@ -1,0 +1,3177 @@
+{
+  "components": {
+    "schemas": {
+      "AuditResponse": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "actorSubject": {
+            "type": "string"
+          },
+          "afterState": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "beforeState": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ipAddress": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "id",
+          "occurredAt",
+          "result"
+        ],
+        "type": "object"
+      },
+      "BundleFileResponse": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "BundleResponse": {
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/BundleFileResponse"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nginxInstanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "siteCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BundleSummaryResponse": {
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "siteCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CertificateResponse": {
+        "description": "One certificate, without any key material.",
+        "properties": {
+          "autoRenew": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "daysRemaining": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fingerprintSha256": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notBefore": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "renewBeforeDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serialNumber": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "autoRenew",
+          "createdAt",
+          "createdBy",
+          "domains",
+          "id",
+          "inUse",
+          "name",
+          "provider",
+          "renewBeforeDays",
+          "status",
+          "version"
+        ],
+        "type": "object"
+      },
+      "CloneRequest": {
+        "properties": {
+          "domain": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ConfigurationPreviewResponse": {
+        "description": "The configuration a site would produce, and what would change on the host.",
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "changedPaths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "currentContentHash": {
+            "type": "string"
+          },
+          "proposedContentHash": {
+            "type": "string"
+          },
+          "siteConfiguration": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "changed",
+          "changedPaths",
+          "proposedContentHash",
+          "siteConfiguration"
+        ],
+        "type": "object"
+      },
+      "ConfigureRenewalRequest": {
+        "properties": {
+          "autoRenew": {
+            "type": "boolean"
+          },
+          "renewBeforeDays": {
+            "format": "int32",
+            "maximum": 89,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateDomainGroupRequest": {
+        "description": "A new domain group.",
+        "properties": {
+          "description": {
+            "maxLength": 512,
+            "minLength": 0,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "parentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "slug": {
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "type": "object"
+      },
+      "DeploymentEventResponse": {
+        "description": "One deployment phase.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "phase",
+          "result"
+        ],
+        "type": "object"
+      },
+      "DeploymentResponse": {
+        "description": "One deployment and its phase history.",
+        "properties": {
+          "attempt": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "configBundleId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentEventResponse"
+            },
+            "type": "array"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nginxInstanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nginxTestOutput": {
+            "type": "string"
+          },
+          "previousBundleId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempt",
+          "createdAt",
+          "createdBy",
+          "events",
+          "id",
+          "nginxInstanceId",
+          "status",
+          "trigger"
+        ],
+        "type": "object"
+      },
+      "DomainGroupResponse": {
+        "description": "One domain group.",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "depth": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "memberCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "yourLevel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "createdBy",
+          "depth",
+          "id",
+          "memberCount",
+          "name",
+          "path",
+          "version"
+        ],
+        "type": "object"
+      },
+      "EffectivePermissionResponse": {
+        "description": "What the caller may do to a site.",
+        "properties": {
+          "canAdmin": {
+            "type": "boolean"
+          },
+          "canManage": {
+            "type": "boolean"
+          },
+          "canOperate": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "proxySiteId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "canAdmin",
+          "canManage",
+          "canOperate",
+          "canRead",
+          "domain",
+          "proxySiteId"
+        ],
+        "type": "object"
+      },
+      "GrantPreviewResponse": {
+        "description": "What a grant would reach, before it is created.",
+        "properties": {
+          "coversFutureDomains": {
+            "type": "boolean"
+          },
+          "matched": {
+            "items": {
+              "$ref": "#/components/schemas/MatchedSiteResponse"
+            },
+            "type": "array"
+          },
+          "newlyVisibleToSubject": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalMatched": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "coversFutureDomains",
+          "matched",
+          "newlyVisibleToSubject",
+          "totalMatched",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "GrantRequest": {
+        "properties": {
+          "domainPattern": {
+            "maxLength": 255,
+            "minLength": 0,
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "scopeGroupId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scopeSiteId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scopeType": {
+            "type": "string"
+          },
+          "subjectRef": {
+            "maxLength": 512,
+            "minLength": 0,
+            "type": "string"
+          },
+          "subjectType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "scopeType",
+          "subjectRef",
+          "subjectType"
+        ],
+        "type": "object"
+      },
+      "HeaderDto": {
+        "description": "A header rule.",
+        "properties": {
+          "direction": {
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "direction",
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
+      "LocationDto": {
+        "description": "A location rule.",
+        "properties": {
+          "matchType": {
+            "type": "string"
+          },
+          "pathPattern": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "matchType",
+          "pathPattern"
+        ],
+        "type": "object"
+      },
+      "MatchedSiteResponse": {
+        "description": "A site a grant would reach.",
+        "properties": {
+          "alreadyReachable": {
+            "type": "boolean"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alreadyReachable",
+          "domain",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NginxInstanceResponse": {
+        "description": "A managed NGINX host.",
+        "properties": {
+          "agentBaseUrl": {
+            "type": "string"
+          },
+          "agentCertFingerprint": {
+            "type": "string"
+          },
+          "agentVersion": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nginxVersion": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agentBaseUrl",
+          "agentCertFingerprint",
+          "createdAt",
+          "environment",
+          "hostname",
+          "id",
+          "name",
+          "status",
+          "version"
+        ],
+        "type": "object"
+      },
+      "PageResponseAuditResponse": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/AuditResponse"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalElements": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PageResponseDeploymentResponse": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentResponse"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalElements": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PageResponseProxySiteSummaryResponse": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/ProxySiteSummaryResponse"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalElements": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PermissionGrantResponse": {
+        "description": "One permission grant.",
+        "properties": {
+          "domainPattern": {
+            "type": "string"
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grantedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grantedBy": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "scopeGroupId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scopeSiteId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scopeType": {
+            "type": "string"
+          },
+          "subjectRef": {
+            "type": "string"
+          },
+          "subjectType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expired",
+          "grantedAt",
+          "grantedBy",
+          "id",
+          "level",
+          "scopeType",
+          "subjectRef",
+          "subjectType"
+        ],
+        "type": "object"
+      },
+      "ProxySiteRequest": {
+        "properties": {
+          "activeFrom": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "connectTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "domain": {
+            "maxLength": 253,
+            "minLength": 0,
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "forceHttps": {
+            "type": "boolean"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HeaderDto"
+            },
+            "type": "array"
+          },
+          "hstsEnabled": {
+            "type": "boolean"
+          },
+          "loadBalancingMethod": {
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/LocationDto"
+            },
+            "type": "array"
+          },
+          "maxBodySizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "nginxInstanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "readTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sendTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sslCertificateId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sslEnabled": {
+            "type": "boolean"
+          },
+          "upstreams": {
+            "items": {
+              "$ref": "#/components/schemas/UpstreamDto"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "websocketEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "domain",
+          "name",
+          "nginxInstanceId",
+          "upstreams"
+        ],
+        "type": "object"
+      },
+      "ProxySiteResponse": {
+        "description": "One proxy site in full.",
+        "properties": {
+          "activeFrom": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "connectTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "forceHttps": {
+            "type": "boolean"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HeaderDto"
+            },
+            "type": "array"
+          },
+          "hstsEnabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "loadBalancingMethod": {
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/LocationDto"
+            },
+            "type": "array"
+          },
+          "maxBodySizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nginxInstanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "readTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "secondsUntilExpiry": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sendTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sslCertificateId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sslEnabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "upstreams": {
+            "items": {
+              "$ref": "#/components/schemas/UpstreamDto"
+            },
+            "type": "array"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "websocketEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connectTimeoutSeconds",
+          "createdAt",
+          "createdBy",
+          "domain",
+          "enabled",
+          "forceHttps",
+          "headers",
+          "hstsEnabled",
+          "id",
+          "loadBalancingMethod",
+          "locations",
+          "maxBodySizeBytes",
+          "name",
+          "nginxInstanceId",
+          "readTimeoutSeconds",
+          "sendTimeoutSeconds",
+          "sslEnabled",
+          "status",
+          "updatedAt",
+          "updatedBy",
+          "upstreams",
+          "version",
+          "websocketEnabled"
+        ],
+        "type": "object"
+      },
+      "ProxySiteSummaryResponse": {
+        "description": "A proxy site, for listings.",
+        "properties": {
+          "activeFrom": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nginxInstanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "primaryUpstream": {
+            "type": "string"
+          },
+          "secondsUntilExpiry": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sslEnabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upstreamCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "enabled",
+          "id",
+          "name",
+          "nginxInstanceId",
+          "sslEnabled",
+          "status",
+          "updatedAt",
+          "upstreamCount",
+          "version"
+        ],
+        "type": "object"
+      },
+      "RegisterNginxInstanceRequest": {
+        "properties": {
+          "agentBaseUrl": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "agentCertFingerprint": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "hostname": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentBaseUrl",
+          "agentCertFingerprint",
+          "hostname",
+          "name"
+        ],
+        "type": "object"
+      },
+      "RenewRequest": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "RequestAcmeRequest": {
+        "properties": {
+          "autoRenew": {
+            "type": "boolean"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "renewBeforeDays": {
+            "format": "int32",
+            "maximum": 89,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domains",
+          "name"
+        ],
+        "type": "object"
+      },
+      "RewrapResponse": {
+        "properties": {
+          "examined": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "failed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rewrapped": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RotateAgentCertificateRequest": {
+        "properties": {
+          "agentCertFingerprint": {
+            "maxLength": 95,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentCertFingerprint"
+        ],
+        "type": "object"
+      },
+      "SubjectResponse": {
+        "description": "A grantable subject.",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "subjectRef": {
+            "type": "string"
+          },
+          "subjectType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "subjectRef",
+          "subjectType"
+        ],
+        "type": "object"
+      },
+      "UpdateDomainGroupRequest": {
+        "description": "Changes to a domain group.",
+        "properties": {
+          "description": {
+            "maxLength": 512,
+            "minLength": 0,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "UploadRequest": {
+        "properties": {
+          "fullChainPem": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "privateKeyPem": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "fullChainPem",
+          "name",
+          "privateKeyPem"
+        ],
+        "type": "object"
+      },
+      "UpstreamCheckResponse": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reachable",
+          "target"
+        ],
+        "type": "object"
+      },
+      "UpstreamDto": {
+        "description": "One upstream target.",
+        "properties": {
+          "backup": {
+            "type": "boolean"
+          },
+          "failTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "host": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxFails": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "port": {
+            "format": "int32",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "scheme": {
+            "type": "string"
+          },
+          "weight": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "scheme"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer-jwt": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Management API for reverse-proxy sites across one or more NGINX hosts.\n\nAuthentication is OIDC: obtain an access token from Keycloak and send it as\na bearer token. Errors are RFC 9457 problem documents; branch on the stable\n`type` URI rather than on the human-readable `detail`.\n",
+    "license": {
+      "name": "Proprietary"
+    },
+    "title": "Easy NGINX Admin API",
+    "version": "v1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/audit-logs": {
+      "get": {
+        "description": "Requires global ADMIN: the trail spans every domain in the estate. Narrow the time range where possible \u2014 it lets PostgreSQL skip whole monthly partitions.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceType",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseAuditResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Search the audit trail",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/api/v1/audit-logs/actions": {
+      "get": {
+        "operationId": "actions",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The actions that can appear in the trail, for building a filter",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/api/v1/certificates": {
+      "get": {
+        "description": "Metadata only. Private key material is never returned by any endpoint.",
+        "operationId": "list_4",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CertificateResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List certificates",
+        "tags": [
+          "Certificates"
+        ]
+      },
+      "post": {
+        "description": "Validates with HTTP-01 against the managed NGINX hosts. Wildcards need DNS-01 and are refused. Requires MANAGE over the namespace of every domain requested, because a certificate is authority to terminate TLS for that name.",
+        "operationId": "request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAcmeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Request a certificate over ACME",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/rewrap-secrets": {
+      "post": {
+        "description": "For a key rotation or a change of key provider. Every secret records the key that wrapped it, so keep the previous key or provider configured until this reports nothing left to do \u2014 then it can be removed. Resumable: a secret that cannot be read is counted and skipped, not retried forever.",
+        "operationId": "rewrapSecrets",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewrapResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Re-encrypt stored private keys under the current key-encryption key",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/upload": {
+      "post": {
+        "description": "The domains and dates are read from the certificate, not from the request. Uploaded certificates are never renewed automatically; the platform has no relationship with whoever issued them.",
+        "operationId": "upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Upload certificate material",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/{id}": {
+      "delete": {
+        "description": "Refused while any proxy site still references it.",
+        "operationId": "delete_2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Delete a certificate",
+        "tags": [
+          "Certificates"
+        ]
+      },
+      "get": {
+        "operationId": "get_4",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Fetch one certificate",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/{id}/renew": {
+      "post": {
+        "description": "Renewal normally happens on its own inside the renewal window. This forces it, and counts against the authority's rate limits like any other request.",
+        "operationId": "renew_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Renew now",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/{id}/renewal": {
+      "put": {
+        "operationId": "configureRenewal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigureRenewalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Configure automatic renewal",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/{id}/revoke": {
+      "post": {
+        "description": "Asks the issuing authority to revoke it where that is supported, and marks it unusable here either way. Revoked material is never deployed.",
+        "operationId": "revoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Revoke a certificate",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/config-bundles/{id}": {
+      "get": {
+        "description": "Private key material is excluded from the file list at every permission level.",
+        "operationId": "bundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Inspect a configuration bundle",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/deployments": {
+      "get": {
+        "operationId": "list_5",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "nginxInstanceId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseDeploymentResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List deployments",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/deployments/{id}": {
+      "get": {
+        "operationId": "get_3",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Fetch one deployment with its phase history",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/deployments/{id}/rollback": {
+      "post": {
+        "description": "Queues a new deployment of the previous bundle. Rollback is never automatic: the only automatic revert is the agent restoring the previous release when a reload fails, which is a refusal to leave the host broken.",
+        "operationId": "rollback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Re-activate the configuration this deployment replaced",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/domain-groups": {
+      "get": {
+        "operationId": "list_3",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DomainGroupResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List domain groups visible to you",
+        "tags": [
+          "Domain groups"
+        ]
+      },
+      "post": {
+        "description": "A top-level group requires global MANAGE; a subgroup requires MANAGE on its parent.",
+        "operationId": "create_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDomainGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainGroupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Create a domain group",
+        "tags": [
+          "Domain groups"
+        ]
+      }
+    },
+    "/api/v1/domain-groups/{id}": {
+      "delete": {
+        "description": "Refused while the group has subgroups or members, because deleting it would silently revoke every grant made over it.",
+        "operationId": "delete_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Delete an empty domain group",
+        "tags": [
+          "Domain groups"
+        ]
+      },
+      "get": {
+        "operationId": "get_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainGroupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Fetch one domain group",
+        "tags": [
+          "Domain groups"
+        ]
+      },
+      "put": {
+        "description": "The path is identity and cannot be changed: moving a group would silently change which sites every grant beneath it reaches.",
+        "operationId": "update_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDomainGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainGroupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Rename a domain group",
+        "tags": [
+          "Domain groups"
+        ]
+      }
+    },
+    "/api/v1/domain-groups/{id}/members": {
+      "get": {
+        "operationId": "members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the sites in a group",
+        "tags": [
+          "Domain groups"
+        ]
+      }
+    },
+    "/api/v1/domain-groups/{id}/members/{siteId}": {
+      "delete": {
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "siteId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Remove a site from a group",
+        "tags": [
+          "Domain groups"
+        ]
+      },
+      "post": {
+        "description": "Requires MANAGE on both the group and the site. Requiring only the group would let someone add a site they have no rights to and inherit control of it.",
+        "operationId": "addMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "siteId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Add a site to a group",
+        "tags": [
+          "Domain groups"
+        ]
+      }
+    },
+    "/api/v1/groups": {
+      "get": {
+        "operationId": "groups",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubjectResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List Keycloak groups seen in tokens",
+        "tags": [
+          "Identity"
+        ]
+      }
+    },
+    "/api/v1/nginx-instances": {
+      "get": {
+        "operationId": "list_2",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NginxInstanceResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List managed NGINX instances",
+        "tags": [
+          "NGINX instances"
+        ]
+      },
+      "post": {
+        "description": "Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterNginxInstanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/NginxInstanceResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Register an NGINX instance",
+        "tags": [
+          "NGINX instances"
+        ]
+      }
+    },
+    "/api/v1/nginx-instances/{id}": {
+      "get": {
+        "operationId": "get_2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/NginxInstanceResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Fetch one NGINX instance",
+        "tags": [
+          "NGINX instances"
+        ]
+      }
+    },
+    "/api/v1/nginx-instances/{id}/agent-certificate": {
+      "put": {
+        "description": "The fingerprint is pinned in addition to CA verification, so replacing an agent's certificate makes the host unreachable until this is called. Swap the certificate on the host first, then call this: the window between the two is a loss of control, never of traffic \u2014 the host keeps serving throughout.",
+        "operationId": "rotateAgentCertificate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateAgentCertificateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/NginxInstanceResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Trust a new agent certificate for this host",
+        "tags": [
+          "NGINX instances"
+        ]
+      }
+    },
+    "/api/v1/nginx-instances/{id}/bundles": {
+      "get": {
+        "operationId": "bundles",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BundleSummaryResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Recent configuration bundles for an instance, newest first",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/nginx-instances/{id}/deploy": {
+      "post": {
+        "operationId": "deployInstance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Deploy an entire NGINX instance",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/permissions": {
+      "get": {
+        "description": "Filter by scope with groupId or siteId. Listing every grant requires global ADMIN.",
+        "operationId": "list_1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "groupId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "siteId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PermissionGrantResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List permission grants",
+        "tags": [
+          "Permissions"
+        ]
+      },
+      "post": {
+        "description": "Requires ADMIN on the target scope, and you may never grant more than you hold.",
+        "operationId": "grant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionGrantResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Grant a permission",
+        "tags": [
+          "Permissions"
+        ]
+      }
+    },
+    "/api/v1/permissions/effective": {
+      "get": {
+        "operationId": "effective",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "siteId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectivePermissionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Your effective permission on a site",
+        "tags": [
+          "Permissions"
+        ]
+      }
+    },
+    "/api/v1/permissions/preview": {
+      "post": {
+        "description": "Authorised exactly like creating the grant. Answers the question a wildcard pattern hides: '*.example.com' at MANAGE is one line of configuration and authority over every subdomain, including ones created later. The list is what the scope reaches today; coversFutureDomains says whether it will keep admitting new ones.",
+        "operationId": "preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantPreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Show what a grant would reach, without creating it",
+        "tags": [
+          "Permissions"
+        ]
+      }
+    },
+    "/api/v1/permissions/{id}": {
+      "delete": {
+        "operationId": "revoke_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Revoke a permission grant",
+        "tags": [
+          "Permissions"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites": {
+      "get": {
+        "description": "Filtering, sorting and pagination are applied in the query, never over an already-fetched page. Sort as sort=domain,asc; repeat the parameter for multiple sorts.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nginxInstanceId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sslEnabled",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiringBefore",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseProxySiteSummaryResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List proxy sites",
+        "tags": [
+          "Proxy sites"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxySiteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Create a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}": {
+      "delete": {
+        "operationId": "delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Delete a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      },
+      "get": {
+        "operationId": "get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Fetch one proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      },
+      "put": {
+        "description": "Send the version last read as If-Match to have concurrent edits rejected.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxySiteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Replace a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/clone": {
+      "post": {
+        "description": "The copy is created disabled so a half-edited duplicate cannot take traffic.",
+        "operationId": "clone",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Clone a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/deploy": {
+      "post": {
+        "description": "Returns 202: the bundle is rendered from current state and applied by the dispatcher, so the response arrives before the host has been changed. Poll the deployment for the outcome.",
+        "operationId": "deploySite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Deploy the NGINX instance this site belongs to",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/disable": {
+      "post": {
+        "operationId": "disable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Disable a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/enable": {
+      "post": {
+        "operationId": "enable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Enable a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/expiration": {
+      "delete": {
+        "operationId": "removeExpiry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Remove the expiry so the site never expires",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/preview": {
+      "get": {
+        "description": "Renders without deploying, and reports which files would change on the host.",
+        "operationId": "preview_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationPreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Show the configuration this site would produce",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/renew": {
+      "post": {
+        "operationId": "renew",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxySiteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Extend or set the expiry",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/{id}/upstream-check": {
+      "get": {
+        "description": "Advisory. NGINX Open Source resolves upstream names once when the configuration loads, so a reachable upstream now may still fail later; this catches a typo or a service that is not running. The probe runs on the NGINX host, which is where the answer means something and where NGINX will connect from \u2014 the management server never dials a user-supplied address.",
+        "operationId": "checkUpstreams",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UpstreamCheckResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Ask the host whether this site's upstreams accept a connection",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "description": "A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token.",
+        "operationId": "users",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubjectResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List users who have signed in",
+        "tags": [
+          "Identity"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer-jwt": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Generated server url",
+      "url": "http://localhost:8080"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Reverse-proxy site management",
+      "name": "Proxy sites"
+    },
+    {
+      "description": "Rendering, validating and activating NGINX configuration",
+      "name": "Deployments"
+    },
+    {
+      "description": "Managed NGINX hosts",
+      "name": "NGINX instances"
+    },
+    {
+      "description": "TLS certificate lifecycle",
+      "name": "Certificates"
+    },
+    {
+      "description": "Append-only record of security-sensitive and configuration-changing operations",
+      "name": "Audit"
+    },
+    {
+      "description": "Users and groups available as permission subjects",
+      "name": "Identity"
+    },
+    {
+      "description": "Grouping proxy sites so permissions can be granted over a set",
+      "name": "Domain groups"
+    },
+    {
+      "description": "Domain-scoped permission grants",
+      "name": "Permissions"
+    }
+  ]
+}

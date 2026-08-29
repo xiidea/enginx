@@ -1,0 +1,205 @@
+{
+  "realm": "enginx",
+  "displayName": "Easy NGINX Admin",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "failureFactor": 10,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "SUPER_ADMIN",
+        "description": "Full control, including permission administration and NGINX instance registration."
+      },
+      {
+        "name": "ADMIN",
+        "description": "Implicit MANAGE on every scope; may grant permissions at or below MANAGE."
+      },
+      {
+        "name": "OPERATOR",
+        "description": "No implicit scope access. Enables, disables, renews and deploys where explicitly granted."
+      },
+      {
+        "name": "READ_ONLY",
+        "description": "Read access only. Explicit grants above READ are clamped down to READ."
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "platform",
+      "path": "/platform",
+      "subGroups": [
+        {
+          "name": "production",
+          "path": "/platform/production",
+          "subGroups": []
+        },
+        {
+          "name": "testing",
+          "path": "/platform/testing",
+          "subGroups": []
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "enginx-api",
+      "name": "Easy NGINX Admin API",
+      "description": "Resource server. Exists so tokens can carry it as an audience; it starts no flows of its own.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-only-not-a-real-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "enginx-frontend",
+      "name": "Easy NGINX Admin console",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4200",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4200/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "enginx-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "enginx-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@example.com",
+      "firstName": "Ada",
+      "lastName": "Super",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "SUPER_ADMIN"
+      ],
+      "groups": [
+        "/platform"
+      ]
+    },
+    {
+      "username": "manager",
+      "email": "manager@example.com",
+      "firstName": "Mia",
+      "lastName": "Manager",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ],
+      "groups": [
+        "/platform/production"
+      ]
+    },
+    {
+      "username": "operator",
+      "email": "operator@example.com",
+      "firstName": "Omar",
+      "lastName": "Operator",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "operator123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "OPERATOR"
+      ],
+      "groups": [
+        "/platform/testing"
+      ]
+    },
+    {
+      "username": "viewer",
+      "email": "viewer@example.com",
+      "firstName": "Vera",
+      "lastName": "Viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "READ_ONLY"
+      ],
+      "groups": [
+        "/platform/testing"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+<app-page-header
+  title="Deployments"
+  subtitle="Every attempt to make an NGINX instance serve a configuration, and where each one got to.">
+  <button class="btn" type="button" (click)="reload(page()?.page ?? 0)">Refresh</button>
+</app-page-header>
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!page()?.content?.length) {
+    <app-empty title="No deployments yet" detail="Deploy a site to see its history here." />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th>Status</th><th>Instance</th><th>Trigger</th><th>Attempt</th><th>Started</th><th class="right">Actions</th></tr>
+        </thead>
+        <tbody>
+          @for (deployment of page()!.content; track deployment.id) {
+            <tr [class.alarm]="deployment.status === 'FAILED'">
+              <td>
+                <button class="disclose" type="button" (click)="toggle(deployment)"
+                  [attr.aria-expanded]="expanded() === deployment.id" [attr.aria-label]="'Phase detail'">
+                  {{ expanded() === deployment.id ? '−' : '+' }}
+                </button>
+              </td>
+              <td><app-status-pill [status]="deployment.status" [title]="deployment.errorMessage" /></td>
+              <td class="primary small">{{ instanceName(deployment.nginxInstanceId) }}</td>
+              <td class="mono small">{{ deployment.trigger }}</td>
+              <td class="num small">{{ deployment.attempt }}</td>
+              <td class="nowrap small" [title]="deployment.createdAt">{{ deployment.createdAt | datetime }}</td>
+              <td>
+                <div class="row-actions">
+                  @if (!auth.isReadOnly() && deployment.previousBundleId) {
+                    <button class="btn btn-sm" type="button" (click)="rollback(deployment)">Roll back</button>
+                  }
+                </div>
+              </td>
+            </tr>
+            @if (expanded() === deployment.id) {
+              <tr class="detail-row">
+                <td colspan="7">
+                  <div class="detail">
+                    @if (deployment.errorMessage) {
+                      <p class="error small">{{ deployment.errorMessage }}</p>
+                    }
+                    <ol class="phases">
+                      @for (event of deployment.events; track event.at + event.phase) {
+                        <li [class]="'result-' + event.result.toLowerCase()">
+                          <span class="phase mono">{{ event.phase }}</span>
+                          <span class="result mono">{{ event.result }}</span>
+                          <span class="when small muted">{{ event.at | datetime }}</span>
+                          @if (event.detail) {
+                            <pre class="detail-text">{{ event.detail }}</pre>
+                          }
+                        </li>
+                      }
+                    </ol>
+                    @if (deployment.nginxTestOutput) {
+                      <div>
+                        <p class="key small">nginx -t output</p>
+                        <pre class="detail-text">{{ deployment.nginxTestOutput }}</pre>
+                      </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-head pager">
+      <span class="muted small">{{ page()!.totalElements }} deployments</span>
+      <div class="row">
+        <button class="btn btn-sm" type="button" [disabled]="page()!.page === 0" (click)="reload(page()!.page - 1)">Previous</button>
+        <span class="small muted">Page {{ page()!.page + 1 }} of {{ page()!.totalPages || 1 }}</span>
+        <button class="btn btn-sm" type="button" [disabled]="page()!.page + 1 >= page()!.totalPages" (click)="reload(page()!.page + 1)">Next</button>
+      </div>
+    </div>
+  }
+</div>

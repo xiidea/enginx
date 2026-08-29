@@ -1,0 +1,112 @@
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.25rem 0.9rem;
+  background: var(--surface);
+  border-right: 1px solid var(--rule);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.4rem;
+}
+.name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * A proxy: two stacked routes converging on one node. Drawn rather than lettered so the brand
+ * does not depend on a font that may not have loaded.
+ */
+.mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(to bottom right, transparent 45%, var(--accent-ink) 45%, var(--accent-ink) 55%, transparent 55%),
+    var(--accent);
+}
+.mark.large { width: 2.4rem; height: 2.4rem; display: block; margin-bottom: 0.9rem; }
+
+.nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.nav a {
+  display: block;
+  padding: 0.42rem 0.6rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: 0.87rem;
+  font-weight: 500;
+  border-left: 2px solid transparent;
+}
+.nav a:hover { background: var(--surface-2); color: var(--ink); text-decoration: none; }
+.nav a.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+.foot { margin-top: auto; display: flex; flex-direction: column; gap: 0.6rem; }
+.who { display: flex; align-items: center; gap: 0.55rem; padding: 0 0.3rem; }
+.avatar {
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.details { display: flex; flex-direction: column; min-width: 0; }
+.user { font-size: 0.82rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.roles {
+  font-family: var(--f-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content { padding: 1.75rem 2rem 4rem; min-width: 0; }
+
+.signin { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
+.signin-card { max-width: 24rem; }
+.signin-card h1 { font-size: 1.25rem; margin-bottom: 0.4rem; }
+.signin-card p { margin: 0 0 1.1rem; font-size: 0.88rem; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .nav { flex-direction: row; flex-wrap: wrap; }
+  .foot { margin-top: 0; margin-left: auto; flex-direction: row; align-items: center; }
+  .content { padding: 1.25rem 1rem 3rem; }
+}

@@ -1,0 +1,90 @@
+<app-page-header
+  title="NGINX instances"
+  subtitle="The hosts this platform configures. Each is reached through its agent over mutual TLS.">
+  @if (auth.isSuperAdmin()) {
+    <button class="btn btn-primary" type="button" (click)="showForm.set(!showForm())">Register instance</button>
+  }
+</app-page-header>
+
+@if (showForm()) {
+  <section class="card form-card">
+    <div class="card-head"><h2>Register an NGINX instance</h2></div>
+    <div class="card-body stack">
+      <div class="grid-2">
+        <div>
+          <label for="iname">Name</label>
+          <input id="iname" class="mono" [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="nginx-prod-01" />
+          <p class="hint">Lowercase letters, digits and hyphens.</p>
+        </div>
+        <div>
+          <label for="ihost">Hostname</label>
+          <input id="ihost" class="mono" [ngModel]="hostname()" (ngModelChange)="hostname.set($event)" placeholder="nginx-01.internal" />
+        </div>
+      </div>
+      <div>
+        <label for="iurl">Agent base URL</label>
+        <input id="iurl" class="mono" [ngModel]="agentBaseUrl()" (ngModelChange)="agentBaseUrl.set($event)" placeholder="https://nginx-01.internal:8443" />
+        <p class="hint">HTTPS only. The agent requires a client certificate, so this is never reachable without one.</p>
+      </div>
+      <div>
+        <label for="ifp">Agent certificate fingerprint (SHA-256)</label>
+        <input id="ifp" class="mono" [ngModel]="fingerprint()" (ngModelChange)="fingerprint.set($event)" placeholder="A0FD…" />
+        <p class="hint">
+          Printed by the PKI script. Pinned in addition to CA verification: the CA has signed every
+          agent, so it alone cannot prove <em>which</em> host is answering.
+        </p>
+      </div>
+      <div>
+        <label for="ienv">Environment</label>
+        <input id="ienv" [ngModel]="environment()" (ngModelChange)="environment.set($event)" />
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" type="button"
+          [disabled]="registering() || !name() || !hostname() || !fingerprint()" (click)="register()">
+          {{ registering() ? 'Registering…' : 'Register' }}
+        </button>
+        <button class="btn" type="button" (click)="showForm.set(false)">Cancel</button>
+      </div>
+    </div>
+  </section>
+}
+
+<div class="card">
+  @if (loading()) {
+    <div class="card-body"><p class="muted">Loading…</p></div>
+  } @else if (!instances().length) {
+    <app-empty
+      title="No NGINX instances registered"
+      detail="Register a host before creating sites — every site belongs to one." />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Status</th><th>Agent</th><th>NGINX</th><th>Last seen</th><th class="right">Actions</th></tr>
+        </thead>
+        <tbody>
+          @for (instance of instances(); track instance.id) {
+            <tr [class.alarm]="instance.status === 'OFFLINE' || instance.status === 'DEGRADED'">
+              <td class="primary">
+                {{ instance.name }}
+                <div class="muted small mono">{{ instance.hostname }} · {{ instance.environment }}</div>
+              </td>
+              <td><app-status-pill [status]="instance.status" /></td>
+              <td class="mono small">
+                {{ instance.agentBaseUrl }}
+                <div class="muted">{{ instance.agentCertFingerprint.slice(0, 16) }}…</div>
+              </td>
+              <td class="mono small">{{ instance.nginxVersion ?? '—' }}</td>
+              <td class="small nowrap">{{ instance.lastSeenAt | datetime }}</td>
+              <td class="right">
+                @if (auth.isSuperAdmin()) {
+                  <button class="btn btn-sm" type="button" (click)="deploy(instance)">Deploy all</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

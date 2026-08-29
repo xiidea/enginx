@@ -1,0 +1,54 @@
+@if (auth.authenticated()) {
+  <div class="shell">
+    <nav class="rail">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="name">Easy NGINX<br />Admin</span>
+      </div>
+
+      <ul class="nav">
+        @for (item of navigation(); track item.path) {
+          <li>
+            <a [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
+          </li>
+        }
+      </ul>
+
+      <div class="foot">
+        <div class="who">
+          <span class="avatar" aria-hidden="true">{{ auth.initials() }}</span>
+          <span class="details">
+            <span class="user">{{ auth.username() }}</span>
+            <span class="roles">{{ roleLabel() }}</span>
+          </span>
+        </div>
+        <div class="row">
+          <button class="btn btn-sm" type="button" (click)="cycleTheme()">
+            Theme: {{ theme() }}
+          </button>
+          <button class="btn btn-sm" type="button" (click)="auth.logout()">Sign out</button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+} @else {
+  <div class="signin">
+    <div class="card signin-card">
+      <div class="card-body">
+        <span class="mark large" aria-hidden="true"></span>
+        <h1>Easy NGINX Admin</h1>
+        <p class="muted">
+          Reverse-proxy management across your NGINX estate. Sign in with your organisation account
+          to continue.
+        </p>
+        <button class="btn btn-primary" type="button" (click)="auth.login()">Sign in</button>
+      </div>
+    </div>
+  </div>
+}
+
+<app-toasts />

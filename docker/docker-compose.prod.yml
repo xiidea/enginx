@@ -1,0 +1,228 @@
+name: enginx-prod
+
+# Production stack for the management plane.
+#
+# Three things differ from the development compose, and each is a deliberate correction of
+# something that is fine on a laptop and wrong on a server:
+#
+#   1. Nothing but the reverse proxy is published. Postgres, Keycloak's management port and the
+#      management API itself are reachable only on the internal network. A database port bound to
+#      0.0.0.0 is the single most common way a stack like this is lost.
+#   2. Secrets arrive as files, never as environment variables. Environment variables are visible
+#      in `docker inspect`, in the process table of anything that reads /proc, and in the logs of
+#      any tool that dumps its own environment on error.
+#   3. Every container drops privileges it does not use: read-only root filesystem, no new
+#      privileges, all capabilities dropped, non-root user. NGINX's own container is not here at
+#      all — agents run on the hosts they manage, from docker-compose.agent.yml.
+#
+# Bring up with:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Secrets are read from ./secrets/, which must exist and must not be committed. See
+# docs/admin/production.md for generating them.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # No `ports:`. The database is reachable from the other services on the enginx network and
+    # from nowhere else. Backups and psql sessions go through `docker compose exec`.
+    environment:
+      POSTGRES_DB: enginx
+      POSTGRES_USER: enginx
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      # Checksums turn silent corruption into a loud error. The cost is a few percent of write
+      # throughput; the alternative is discovering the corruption from a restored backup.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    secrets:
+      - db_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-keycloak-db.sql:/docker-entrypoint-initdb.d/10-keycloak.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enginx -d enginx"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2g }
+        reservations: { memory: 512m }
+    networks: [enginx]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    restart: unless-stopped
+    # `start`, not `start-dev`: production mode requires an explicit hostname, refuses to run
+    # without HTTPS unless told it is behind a proxy, and enables the caches the dev mode skips.
+    command: ["start", "--optimized"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: enginx
+      KC_DB_PASSWORD_FILE: /run/secrets/db_password
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL, e.g. https://id.example.com}
+      # Terminating TLS at the edge is the normal arrangement; this tells Keycloak to trust the
+      # forwarded protocol and host so the issuer it stamps into tokens is the public one.
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/keycloak_admin_password
+    secrets:
+      - db_password
+      - keycloak_admin_password
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 1500m }
+    networks: [enginx]
+
+  proxy-management:
+    image: ${MANAGEMENT_IMAGE:-xiidea/enginx-management:latest}
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/enginx
+      DB_USERNAME: enginx
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+
+      # Secrets as a config tree: each file under /run/secrets whose name is a property path is
+      # bound to that property. This is why no password appears in this file or in the container's
+      # environment. Spring reads them at startup; nothing writes them anywhere else.
+      SPRING_CONFIG_IMPORT: "optional:configtree:/run/secrets/"
+
+      # The issuer is the URL a browser used to get the token, so it must be the public one. The
+      # JWKS URI is how this container reaches Keycloak internally. They differ on purpose.
+      OIDC_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:?}/realms/enginx
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/enginx/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-enginx-api}
+      CORS_ALLOWED_ORIGINS: ${CONSOLE_PUBLIC_URL:?set CONSOLE_PUBLIC_URL, e.g. https://nginx.example.com}
+
+      AGENT_KEYSTORE: /etc/enginx/pki/management.p12
+      AGENT_TRUSTSTORE: /etc/enginx/pki/truststore.p12
+
+      CRYPTO_ACTIVE_KEY_ID: ${CRYPTO_ACTIVE_KEY_ID:-k1}
+
+      # Production issuance. Let's Encrypt counts certificates per registered domain per week, and
+      # exceeding it is a lockout measured in days, so staging is the right place to prove a
+      # configuration before this line is switched over.
+      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-acme://letsencrypt.org}
+      ACME_CONTACT_EMAIL: ${ACME_CONTACT_EMAIL:?set ACME_CONTACT_EMAIL for expiry notices}
+      ACME_ACCEPT_TOS: ${ACME_ACCEPT_TOS:?set ACME_ACCEPT_TOS=true to accept the CA terms}
+
+      # -XX:+ExitOnOutOfMemoryError rather than a heap dump: a JVM that has run out of memory
+      # cannot be trusted to keep deploying configuration to live hosts, and the orchestrator
+      # replacing it is a better outcome than it limping. MaxRAMPercentage rather than -Xmx so the
+      # heap follows the container limit below instead of being pinned to a number that has to be
+      # kept in step with it by hand.
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=70
+        -XX:+ExitOnOutOfMemoryError
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+        -Djava.security.egd=file:/dev/urandom
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets:
+      - spring.datasource.password
+      - enginx.crypto.keys.k1
+      - enginx.agent.key-store-password
+      - enginx.agent.trust-store-password
+    volumes:
+      - ./pki/out:/etc/enginx/pki:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    healthcheck:
+      # Readiness, not the aggregate: the platform indicators report on the managed estate, and an
+      # unreachable agent must not make an orchestrator restart the one service able to fix it.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    read_only: true
+    tmpfs:
+      # The JVM needs somewhere to write perf data and temporary files; nothing else does.
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 1500m }
+        reservations: { memory: 768m }
+    networks: [enginx]
+
+  console:
+    image: ${CONSOLE_IMAGE:-xiidea/enginx-console:latest}
+    restart: unless-stopped
+    environment:
+      API_BASE: ${API_PUBLIC_URL:?set API_PUBLIC_URL, e.g. https://nginx.example.com/api/v1}/
+      OIDC_AUTHORITY: ${KEYCLOAK_PUBLIC_URL:?}/realms/enginx
+      OIDC_CLIENT_ID: ${OIDC_FRONTEND_CLIENT_ID:-enginx-frontend}
+    depends_on:
+      - proxy-management
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    cap_drop: [ALL]
+    # NGINX binds 80 as an unprivileged user in this image, so it needs nothing back.
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    networks: [enginx]
+
+  # The one published service. Everything above is reachable only through here, which is also
+  # where TLS is terminated and where a global rate limit belongs — the in-process limiter is
+  # per replica, and an exact estate-wide limit has to live in front of all of them.
+  edge:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+      - "${EDGE_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${EDGE_TLS_DIR:-./edge/tls}:/etc/nginx/tls:ro
+    depends_on:
+      - console
+      - proxy-management
+      - keycloak
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256m }
+    networks: [enginx]
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  keycloak_admin_password:
+    file: ./secrets/keycloak_admin_password
+  # Named for the property each one sets, because the config tree binds by file name.
+  spring.datasource.password:
+    file: ./secrets/db_password
+  enginx.crypto.keys.k1:
+    file: ./secrets/crypto_key_k1
+  enginx.agent.key-store-password:
+    file: ./secrets/agent_keystore_password
+  enginx.agent.trust-store-password:
+    file: ./secrets/agent_truststore_password
+
+volumes:
+  postgres-data:
+
+networks:
+  enginx:
+    driver: bridge
