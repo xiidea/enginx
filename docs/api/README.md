@@ -44,6 +44,12 @@ URI, never on the human-readable `detail`.
 `/api/v1/auth/methods` and `/api/v1/auth/login` are the only two endpoints that do not require a
 token. Neither reveals whether an account exists.
 
+A request that never reaches a handler is reported as the caller's mistake, not the server's:
+`404 no-such-endpoint` for an unknown path, `405 method-not-allowed` (with `Allow`) for the wrong
+method, `415 unsupported-media-type` and `406 not-acceptable` for a body or a representation this
+API cannot handle. An unknown path still answers `401` without a token, so it cannot be used to
+enumerate endpoints.
+
 ## Generated client
 
 

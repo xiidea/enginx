@@ -10,7 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import net.xiidea.enginx.application.identity.LocalAuthenticationService;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -20,7 +22,12 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
 import java.util.List;
@@ -131,6 +138,73 @@ public class ApiExceptionHandler {
                 ? "'" + mismatch.getName() + "' is not in the expected format"
                 : "The request body or parameters could not be read";
         return problem(HttpStatus.BAD_REQUEST, "malformed-request", "Malformed request", detail, request);
+    }
+
+    /**
+     * The request never matched a handler: an unknown path, the wrong method for a known one, a
+     * body this endpoint cannot read, or a response type it cannot produce.
+     *
+     * <p>Spring raises these before any controller runs, and each already carries the right status.
+     * Without this they fall through to {@link #handleUnexpected}, which reports a client's typo as
+     * a server fault -- a 500 that pages somebody, and that tells the caller to report a bug that
+     * is theirs. They are not logged as errors for the same reason.
+     *
+     * <p>Answering 404 here discloses nothing: every path under {@code /api} requires
+     * authentication, so an anonymous caller is still turned away with 401 before reaching this.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, HttpRequestMethodNotSupportedException.class,
+            HttpMediaTypeNotSupportedException.class, HttpMediaTypeNotAcceptableException.class})
+    public ResponseEntity<ProblemDetail> handleUnmatchedRequest(ErrorResponse e, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.valueOf(e.getStatusCode().value());
+        ProblemDetail problem = problem(status, slugFor(status), titleFor(status), detailFor(e, request), request);
+
+        // RFC 9110 requires Allow on a 405, and it is the only thing that tells a caller which
+        // method to use instead.
+        HttpHeaders headers = new HttpHeaders();
+        if (e instanceof HttpRequestMethodNotSupportedException methodNotSupported
+                && methodNotSupported.getSupportedHttpMethods() != null) {
+            headers.setAllow(methodNotSupported.getSupportedHttpMethods());
+        }
+        return new ResponseEntity<>(problem, headers, status);
+    }
+
+    private static String slugFor(HttpStatus status) {
+        return switch (status) {
+            case METHOD_NOT_ALLOWED -> "method-not-allowed";
+            case UNSUPPORTED_MEDIA_TYPE -> "unsupported-media-type";
+            case NOT_ACCEPTABLE -> "not-acceptable";
+            default -> "no-such-endpoint";
+        };
+    }
+
+    private static String titleFor(HttpStatus status) {
+        return switch (status) {
+            case METHOD_NOT_ALLOWED -> "Method not allowed";
+            case UNSUPPORTED_MEDIA_TYPE -> "Unsupported media type";
+            case NOT_ACCEPTABLE -> "Not acceptable";
+            default -> "No such endpoint";
+        };
+    }
+
+    /**
+     * Says what to change, without echoing anything the caller did not already send. The method and
+     * path came from the request line; the supported types came from this application's own
+     * mappings.
+     */
+    private static String detailFor(ErrorResponse e, HttpServletRequest request) {
+        return switch (e) {
+            case HttpRequestMethodNotSupportedException methodNotSupported ->
+                    request.getMethod() + " is not supported here. Supported: "
+                            + String.join(", ", methodNotSupported.getSupportedMethods() == null
+                                    ? new String[0] : methodNotSupported.getSupportedMethods()) + ".";
+            case HttpMediaTypeNotSupportedException mediaType ->
+                    "The request body's Content-Type is not supported. Supported: "
+                            + mediaType.getSupportedMediaTypes() + ".";
+            case HttpMediaTypeNotAcceptableException acceptable ->
+                    "No representation matches the Accept header. Available: "
+                            + acceptable.getSupportedMediaTypes() + ".";
+            default -> "No endpoint exists at " + request.getRequestURI() + ".";
+        };
     }
 
     @ExceptionHandler(Exception.class)

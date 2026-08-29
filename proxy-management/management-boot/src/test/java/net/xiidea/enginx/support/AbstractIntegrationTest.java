@@ -25,7 +25,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "enginx.crypto.active-key-id=test",
         "enginx.crypto.keys.test=ZW5naW54LWludGVncmF0aW9uLXRlc3Qta2V5LTMyYiE=",
         // Never reach a real authority from a test, whatever else goes wrong.
-        "enginx.acme.directory-url=http://localhost:1/dir"
+        "enginx.acme.directory-url=http://localhost:1/dir",
+        // No identity provider. Building the OIDC decoder performs discovery, which is a network
+        // call these tests have no reason to make -- and one that would make the whole suite
+        // depend on a Keycloak container being up. The local issuer needs no network at all.
+        // Token decoding is mocked below regardless; this only decides what the context builds.
+        "enginx.auth.oidc-enabled=false",
+        "enginx.auth.local-enabled=true",
+        "enginx.auth.jwt-secret=an-integration-test-signing-secret-long-enough-for-hs256"
 })
 public abstract class AbstractIntegrationTest {
 
@@ -49,7 +56,7 @@ public abstract class AbstractIntegrationTest {
     }
 
     /**
-     * Replaces the real decoder so the context never reaches out to Keycloak. These tests drive
+     * Replaces the routing decoder outright. These tests drive
      * the application services directly and inject the caller through {@link TestSubjectProvider},
      * which is the same port the production security layer implements.
      */

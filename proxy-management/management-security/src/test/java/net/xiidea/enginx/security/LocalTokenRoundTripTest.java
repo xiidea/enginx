@@ -32,7 +32,14 @@ class LocalTokenRoundTripTest {
 
     private static final String SECRET = "a-test-signing-secret-that-is-long-enough-for-hs256";
     private static final String CLIENT_ID = "enginx-api";
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC);
+    /**
+     * Fixed for determinism, but anchored to now rather than to a literal instant.
+     *
+     * <p>The decoder validates {@code exp} against the system clock, which no test can fix. A
+     * literal instant therefore produces a token whose validity depends on what time of day the
+     * suite runs — green all morning, and expired from the moment the wall clock passes the TTL.
+     */
+    private static final Clock CLOCK = Clock.fixed(Instant.now(), ZoneOffset.UTC);
 
     private static AuthProperties auth(String secret) {
         return new AuthProperties(false, true, secret, Duration.ofHours(8), null, null);

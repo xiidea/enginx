@@ -51,6 +51,10 @@ public class JwtDecoderConfiguration {
      * <p>Exposed as a map rather than a single {@code JwtDecoder} because
      * {@link IssuerRoutingJwtDecoder} needs to choose, and because an empty map would mean a
      * misconfiguration that {@link AuthProperties#validate()} has already refused to start on.
+     *
+     * <p>Built eagerly, and deliberately so: constructing the OIDC decoder performs discovery, so
+     * an unreachable or wrong issuer stops the application here rather than surfacing as a 500 on
+     * whichever request happens to arrive first.
      */
     @Bean
     Map<String, JwtDecoder> jwtDecodersByIssuer(
