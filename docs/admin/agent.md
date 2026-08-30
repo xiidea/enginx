@@ -194,12 +194,32 @@ the sites pointing at it belong to the instance, so both are lost; the sites hav
 the new one. Cloning a site onto the new instance before deleting the old one is the least
 disruptive order.
 
-## Two things it does not do yet
+## Health and readiness
 
-**A pull-mode agent exposes no health endpoint.** The loopback liveness listener is part of the
-dialled listener, which pull mode never starts, so there is nothing local to probe. A container
-running in pull mode should have no healthcheck rather than one that always fails.
+Two endpoints on the loopback listener, in both modes. Neither requires a client certificate and
+neither reveals anything about the host beyond whether it is serving.
 
-**A pull-mode host cannot answer HTTP-01 challenges.** Publishing a challenge is a question asked of
-the host within seconds, and only queued work is delivered today. Certificates for a pull host have
-to come from DNS-01 or be uploaded.
+| | | |
+|---|---|---|
+| `GET /agent/v1/health` | always `200` while the agent runs | **liveness** |
+| `GET /agent/v1/ready` | `200` when NGINX is running, `503` when it is not | **readiness** |
+
+**Liveness deliberately ignores NGINX, and that separation is load-bearing.** The agent stays up
+when NGINX will not start — an unresolvable upstream on a cold boot is enough to do it — precisely
+so a corrected bundle can be deployed. If liveness reported that failure, an orchestrator would
+restart the container, the agent would find the same broken configuration, and the only route to
+repairing the host would be destroyed by the thing meant to protect it.
+
+**Readiness is what tells you the host is not serving.** Probe it, and a container whose NGINX
+never started shows `unhealthy` instead of `healthy`. Docker does not restart on an unhealthy
+check, and the Kubernetes DaemonSet uses it as a `readinessProbe`, so failing takes the host out of
+rotation and reports it without restarting anything.
+
+Carry a slow start in `start_period` rather than in `retries`. Retries are how long a *genuine*
+failure takes to surface, and a host that stopped serving should say so quickly.
+
+## One thing it does not do yet
+
+**A pull-mode host cannot answer HTTP-01 challenges.** Publishing a challenge is a question asked
+of the host within seconds, and only queued work is delivered today. Certificates for a pull host
+have to come from DNS-01 or be uploaded.

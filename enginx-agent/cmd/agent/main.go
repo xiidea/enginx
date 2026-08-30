@@ -79,13 +79,19 @@ func main() {
 	defer stop()
 
 	server := api.NewServer(cfg, controller, bundle.NewStore(cfg.ReleasesDir))
-	serverErr := make(chan error, 1)
+	// Two writers in pull mode: the runner and the health listener. Buffered for both, so the
+	// loser of the race does not block forever on a send nobody will receive.
+	serverErr := make(chan error, 2)
 
 	if cfg.PullMode() {
-		// No listener at all. That is the point of pull mode: this host needs no inbound
-		// connectivity, so opening a port would only widen its surface for nothing.
+		// No listener anything can reach: pull mode needs no inbound connectivity, so opening a
+		// port would widen this host's surface for nothing. The loopback health listener is the
+		// exception, and is not reachable from off the host — without it there would be nothing
+		// on this host to probe, and a container could only be called healthy by not asking.
 		go func() { serverErr <- runner.New(cfg, server).Run(ctx) }()
-		slog.Info("agent running in pull mode", "server", cfg.ServerURL, "instance", cfg.InstanceName)
+		go func() { serverErr <- server.RunHealth(ctx) }()
+		slog.Info("agent running in pull mode",
+			"server", cfg.ServerURL, "instance", cfg.InstanceName, "health", cfg.HealthAddr)
 	} else {
 		go func() { serverErr <- server.Run(ctx) }()
 		slog.Info("agent listening", "mtls", cfg.ListenAddr, "health", cfg.HealthAddr,

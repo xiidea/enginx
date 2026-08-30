@@ -51,11 +51,18 @@ services:
       # This host's agent certificate and the CA that signs the management client. Mounted
       # read-only: the agent has no reason to rewrite its own identity.
       - ${AGENT_PKI_DIR:-./pki/out}:/etc/enginx/pki:ro
+    # Readiness, not liveness: "healthy" should mean this host is serving, and probing the agent
+    # alone reported healthy for as long as it answered — while NGINX beside it was down. Docker
+    # does not restart an unhealthy container, so this reports the condition without destroying
+    # the repair path: the agent stays up so a corrected bundle can be deployed to it.
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/ready"]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 3
+      # Absorbs a slow start, so retries do not have to. Carrying the grace in retries meant
+      # a host that genuinely stopped serving took all of them to elapse before it said so.
+      start_period: 40s
     # Not read_only: the agent writes release bundles and NGINX writes its own runtime files.
     # The directories it needs are volumes, and nothing else is granted.
     cap_drop: [ALL]

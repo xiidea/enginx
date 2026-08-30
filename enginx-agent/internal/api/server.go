@@ -59,13 +59,71 @@ func (s *Server) Handler() http.Handler {
 }
 
 // HealthHandler is served on a separate loopback listener without client certificates, so an
-// orchestrator can probe liveness. It reveals nothing about the host.
+// orchestrator can probe the agent. It reveals nothing about the host beyond whether it is
+// serving.
 func (s *Server) HealthHandler() http.Handler {
 	mux := http.NewServeMux()
+
+	// Liveness: is the agent itself alive. Deliberately says nothing about NGINX, and that is the
+	// whole point of keeping the two apart. The agent stays up when NGINX will not start, so a
+	// corrected bundle can be deployed to it — if this reported the failure, an orchestrator would
+	// restart the container, the agent would find the same broken configuration, and the only
+	// route to repairing the host would be destroyed by the thing meant to protect it.
 	mux.HandleFunc("GET /agent/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 	})
+
+	// Readiness: is this host actually serving traffic. Separate from liveness because the answer
+	// "no" means take it out of rotation and tell somebody, never restart it.
+	//
+	// Checks the supervised process rather than running `nginx -t`: a probe runs every few seconds
+	// and forking a validation each time would cost more than the question is worth. Whether the
+	// process is up is the signal that was missing — a host whose NGINX died read as healthy for
+	// as long as the agent beside it kept answering.
+	mux.HandleFunc("GET /agent/v1/ready", func(w http.ResponseWriter, r *http.Request) {
+		if !s.nginx.Running() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "DOWN",
+				"reason": "nginx is not running on this host",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":   "UP",
+			"nginxPid": s.nginx.MasterPID(),
+		})
+	})
 	return mux
+}
+
+// RunHealth serves only the loopback health listener.
+//
+// Split out so a pull-mode agent has one too. It never starts the mTLS listener — nothing dials
+// it — and without this it exposed nothing to probe at all, so a container running that way could
+// only be described as healthy by not asking.
+func (s *Server) RunHealth(ctx context.Context) error {
+	healthServer := &http.Server{
+		Addr:              s.cfg.HealthAddr,
+		Handler:           s.HealthHandler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errs <- fmt.Errorf("health listener: %w", err)
+		}
+	}()
+
+	select {
+	case err := <-errs:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = healthServer.Shutdown(shutdownCtx)
+		return nil
+	}
 }
 
 // TLSConfig requires and verifies a client certificate signed by the configured CA.

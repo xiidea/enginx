@@ -76,10 +76,23 @@ spec:
               mountPath: /etc/enginx/pki
               readOnly: true
 
+          # Liveness asks only whether the agent is alive, and deliberately does not consult
+          # NGINX. The agent stays up when NGINX will not start so a corrected bundle can be
+          # deployed to it; a liveness probe that failed would restart the pod, the agent would
+          # find the same broken configuration, and kubelet would destroy the only route to
+          # repairing the host.
           livenessProbe:
             exec:
               command: ["wget", "-qO-", "http://127.0.0.1:9099/agent/v1/health"]
             periodSeconds: 15
+            failureThreshold: 3
+          # Readiness asks whether this host is actually serving. Failing takes it out of any
+          # Service that fronts it and shows in `kubectl get pods`, which is the reporting that
+          # was missing — without restarting anything.
+          readinessProbe:
+            exec:
+              command: ["wget", "-qO-", "http://127.0.0.1:9099/agent/v1/ready"]
+            periodSeconds: 10
             failureThreshold: 3
 
           resources:

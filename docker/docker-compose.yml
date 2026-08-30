@@ -155,11 +155,18 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       # Produced by docker/pki/generate-dev-certs.sh. Run that before starting the stack.
       - ./pki/out:/etc/enginx/pki:ro
+    # Readiness, not liveness: "healthy" should mean this host is serving, and probing the agent
+    # alone reported healthy for as long as it answered — while NGINX beside it was down. Docker
+    # does not restart an unhealthy container, so this reports the condition without destroying
+    # the repair path: the agent stays up so a corrected bundle can be deployed to it.
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/ready"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 3
+      # Absorbs a slow start, so retries do not have to. Carrying the grace in retries meant
+      # a host that genuinely stopped serving took all of them to elapse before it said so.
+      start_period: 40s
     networks:
       enginx:
         # Fixed so the local ACME server can be told where to send HTTP-01 validation.
@@ -194,6 +201,14 @@ services:
       # Only the traffic this host serves. Nothing is published for the control plane.
       - "8091:80"
       - "8454:443"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9099/agent/v1/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # Absorbs a slow start, so retries do not have to. Carrying the grace in retries meant
+      # a host that genuinely stopped serving took all of them to elapse before it said so.
+      start_period: 40s
     volumes:
       - nginx-pull-releases:/etc/nginx/enginx
       # Survives a restart: without it the agent enrols again, and a single-use registration
