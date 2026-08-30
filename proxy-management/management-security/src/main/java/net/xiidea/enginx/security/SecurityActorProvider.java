@@ -78,18 +78,20 @@ public class SecurityActorProvider implements ActorProvider, SubjectProvider {
     }
 
     /**
-     * Trusts {@code X-Forwarded-For} only for its first entry, and only because this API is
-     * expected to sit behind a reverse proxy that overwrites the header. If it is ever exposed
-     * directly, this must become a configured trusted-proxy list.
+     * The peer address, as resolved by the container.
+     *
+     * <p>Deliberately {@code getRemoteAddr()} and not the raw {@code X-Forwarded-For} header:
+     * reading the header directly would let a caller write any address it liked into the audit
+     * trail. {@code getRemoteAddr()} already reflects {@code X-Forwarded-For}, but only where
+     * Tomcat's RemoteIpValve trusts the proxy that set it (server.tomcat.remoteip.internal-proxies)
+     * -- so a forwarded address is honoured behind a configured edge and ignored from a direct
+     * client. One trust boundary, applied here and to the rate limiter alike.
      */
     private static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            String first = forwarded.split(",")[0].trim();
-            if (!first.isEmpty()) {
-                return first.length() > 64 ? first.substring(0, 64) : first;
-            }
+        String address = request.getRemoteAddr();
+        if (address == null) {
+            return null;
         }
-        return request.getRemoteAddr();
+        return address.length() > 64 ? address.substring(0, 64) : address;
     }
 }

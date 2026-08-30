@@ -72,7 +72,24 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
-  forward-headers-strategy: framework
+  # 'native' (Tomcat's RemoteIpValve), not 'framework' (Spring's ForwardedHeaderFilter). The
+  # difference is a security boundary: ForwardedHeaderFilter believes X-Forwarded-* from any
+  # caller, so a client could set its own source address -- and with it its rate-limit bucket and
+  # the IP written to the audit trail. RemoteIpValve honours those headers only from an address in
+  # internal-proxies below, and leaves getRemoteAddr() as the real peer for everyone else.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: x-forwarded-host
+      port-header: x-forwarded-port
+      # Which upstreams are trusted to have set X-Forwarded-*. Defaults to loopback only: a
+      # deployment that does not name its edge trusts the header from nobody, so a client cannot
+      # forge its address by sending it -- the un-fronted case fails closed rather than open. Set
+      # this to the ingress network in front of the service (e.g. the reverse proxy's subnet) so
+      # the real client address is recovered there. A regex matched against the peer address.
+      internal-proxies: ${ENGINX_TRUSTED_PROXIES:127\.0\.0\.1|0:0:0:0:0:0:0:1|::1}
   error:
     whitelabel:
       enabled: false

@@ -107,6 +107,16 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-enginx-api}
       CORS_ALLOWED_ORIGINS: ${CONSOLE_PUBLIC_URL:?set CONSOLE_PUBLIC_URL, e.g. https://nginx.example.com}
 
+      # Which upstream addresses are trusted to set X-Forwarded-* (client IP, scheme, host). This
+      # must be the network the reverse proxy in front of this service connects from -- and nothing
+      # wider. The client's source address drives its login/enrolment rate limit and the IP written
+      # to the audit trail, so trusting the header from an untrusted hop lets a caller forge both.
+      # A regex matched against the peer address, e.g. the Docker/ingress subnet: 10\.0\.0\.\d+ .
+      # Left unset it defaults to loopback only, which fails closed: X-Forwarded-For is ignored and
+      # every caller is rate-limited by its real address, but a shared edge collapses to one bucket
+      # until this is set correctly.
+      ENGINX_TRUSTED_PROXIES: ${ENGINX_TRUSTED_PROXIES:?set to the reverse-proxy subnet, e.g. 10\.0\.0\.\d+}
+
       AGENT_KEYSTORE: /etc/enginx/pki/management.p12
       AGENT_TRUSTSTORE: /etc/enginx/pki/truststore.p12
 
