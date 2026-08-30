@@ -336,9 +336,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Named, not "everything". The image job also uploads a build record per image, which this
+      # job has no use for and which it downloaded anyway — and then failed the release when one
+      # of them would not come down. A release is made of two things; ask for those two.
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: agent-binaries
+          path: artifacts/agent-binaries
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: management-jar
+          path: artifacts/management-jar
 
       - name: Collect
         run: |
