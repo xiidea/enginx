@@ -111,6 +111,11 @@ services:
       # them — which is also what proves nothing is silently dropped.
       NOTIFICATION_OPERATOR_ADDRESSES: ${NOTIFICATION_OPERATOR_ADDRESSES:-ops@example.com}
       NOTIFICATION_INTERVAL_SECONDS: ${NOTIFICATION_INTERVAL_SECONDS:-3600}
+      # Which kinds each channel carries. Empty means all of them, which is what the development
+      # stack wants; NONE mutes a channel without disabling it.
+      NOTIFICATION_ROUTE_MAIL: ${NOTIFICATION_ROUTE_MAIL:-}
+      NOTIFICATION_ROUTE_WEBHOOK: ${NOTIFICATION_ROUTE_WEBHOOK:-}
+      NOTIFICATION_ROUTE_LOG: ${NOTIFICATION_ROUTE_LOG:-}
     volumes:
       # The management client identity for mutual TLS with the agents.
       - ./pki/out:/etc/enginx/pki:ro

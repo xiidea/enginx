@@ -83,7 +83,23 @@ public class NotificationService {
     }
 
     private boolean dispatch(NotificationEvent event, UUID ledgerId, Set<String> addresses) {
-        List<NotificationChannel> enabled = channels.stream().filter(NotificationChannel::isEnabled).toList();
+        // Configured, then routed. A channel carries everything unless it has been given a list,
+        // so this is inert until somebody names one.
+        List<NotificationChannel> enabled = channels.stream()
+                .filter(NotificationChannel::isEnabled)
+                .filter(channel -> properties.kindsFor(channel.name()).contains(event.kind()))
+                .toList();
+
+        if (enabled.isEmpty()) {
+            // Routed nowhere by configuration, which is not the same as attempted and failed.
+            // Recording it as a failure would send somebody looking for a broken channel.
+            ledger.recordSuppressed(ledgerId,
+                    "No channel is configured to carry " + event.kind());
+            log.debug("Notification {} for {} is not routed to any channel",
+                    event.kind(), event.resourceId());
+            return false;
+        }
+
         StringBuilder outcome = new StringBuilder();
         boolean anyDelivered = false;
 

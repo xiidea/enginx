@@ -214,6 +214,31 @@ enginx:
     # Set to receive a generic JSON payload per notification, for chat or incident tooling.
     webhook-url: ${NOTIFICATION_WEBHOOK_URL:}
 
+    # Which kinds each channel carries. Left empty a channel carries everything, which is what
+    # every channel did before this existed — so upgrading into this version changes nothing.
+    #
+    # Empty has to mean "everything" rather than "nothing", because an unset environment variable
+    # arrives as an empty string: the other reading would silently stop a deployment sending
+    # anything the moment it took this version. Muting a channel is therefore explicit, with NONE.
+    #
+    # Naming kinds makes the list exhaustive. An unrecognised kind stops the application at
+    # startup rather than quietly routing nothing — a channel that silently carries no messages
+    # is only noticed during the incident it was meant to warn about.
+    #
+    # The severity floor above still applies first: routing decides where a notification goes,
+    # never whether it happens at all.
+    #
+    #   routing:
+    #     mail:    SITE_EXPIRING,SITE_EXPIRED,CERTIFICATE_EXPIRING,CERTIFICATE_RENEWAL_FAILED
+    #     webhook: INSTANCE_OFFLINE,INSTANCE_DRIFTED,OUTBOX_MESSAGE_DEAD
+    #     log:     SITE_EXPIRED,CERTIFICATE_RENEWAL_FAILED,OUTBOX_MESSAGE_DEAD
+    #
+    # Or NOTIFICATION_ROUTE_WEBHOOK=NONE to mute the webhook while leaving it configured.
+    routing:
+      mail: ${NOTIFICATION_ROUTE_MAIL:}
+      webhook: ${NOTIFICATION_ROUTE_WEBHOOK:}
+      log: ${NOTIFICATION_ROUTE_LOG:}
+
   observability:
     # One database read serves every gauge on a scrape and every health probe within this window.
     statistics-cache-ttl: ${OBSERVABILITY_CACHE_TTL:15s}

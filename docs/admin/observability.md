@@ -126,6 +126,49 @@ The limiter is per instance, so N replicas allow up to N times the configured ra
 where to put an exact global limit instead, is explained in
 [production.md](production.md#4-rate-limiting).
 
+## Choosing which channel carries what
+
+Every channel carries every kind by default. `enginx.notifications.routing` narrows that per
+channel, so the conditions a person should read about by email are separable from the ones a chat
+or incident tool should pick up:
+
+```yaml
+enginx:
+  notifications:
+    routing:
+      mail:    SITE_EXPIRING,SITE_EXPIRED,CERTIFICATE_EXPIRING,CERTIFICATE_RENEWAL_FAILED
+      webhook: INSTANCE_OFFLINE,INSTANCE_DRIFTED,OUTBOX_MESSAGE_DEAD
+      log:     SITE_EXPIRED,OUTBOX_MESSAGE_DEAD
+```
+
+or by environment: `NOTIFICATION_ROUTE_MAIL`, `NOTIFICATION_ROUTE_WEBHOOK`, `NOTIFICATION_ROUTE_LOG`.
+
+The channels are `mail`, `webhook` and `log`. The kinds are `SITE_EXPIRING`, `SITE_EXPIRED`,
+`CERTIFICATE_EXPIRING`, `CERTIFICATE_RENEWAL_FAILED`, `INSTANCE_OFFLINE`, `INSTANCE_DRIFTED` and
+`OUTBOX_MESSAGE_DEAD`.
+
+Four rules, and the first is the one that matters when upgrading:
+
+- **Empty means everything, not nothing.** A channel nobody has routed carries every kind, exactly
+  as it did before this setting existed. It has to work this way: every setting here is written
+  `${VAR:}`, so an unset environment variable arrives as an empty string — and the other reading
+  would silently stop a deployment sending anything the moment it took this version, which is the
+  worst possible failure for the subsystem whose job is to tell you when something is wrong.
+- **Naming kinds makes the list exhaustive.** A channel that names two kinds carries those two.
+- **`NONE` mutes a channel** without disabling it, and cannot be combined with anything else.
+  "Carry nothing, and also carry these" has no reading, so it is refused rather than guessed at.
+- **An unrecognised kind stops the application at startup**, naming the valid ones. A channel
+  configured with a typo carries nothing, and carrying nothing looks exactly like having nothing
+  to say — which is only discovered during the incident it was meant to warn about.
+
+A kind may go to several channels; some conditions are worth two places. A kind routed to none is
+recorded in the ledger as `SUPPRESSED` — *"No channel is configured to carry …"* — not `FAILED`.
+The distinction is load-bearing: the failed-notification metric counts `FAILED` rows, and a channel
+you narrowed on purpose must not read as a channel that broke.
+
+Routing decides **where** a notification goes, never whether it happens. `minimum-severity` still
+applies first, and a site opted out of expiry warnings is still opted out.
+
 ## Per-site notification settings
 
 Expiry warnings are on for every site, and the platform's operator addresses receive them. A site

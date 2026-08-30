@@ -62,6 +62,15 @@ public class JpaNotificationLedger implements NotificationLedger {
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSuppressed(UUID ledgerId, String reason) {
+        repository.findById(ledgerId).ifPresent(entity -> {
+            entity.recordOutcome("SUPPRESSED", "", reason);
+            repository.save(entity);
+        });
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public long countFailed() {
         return repository.countFailed();

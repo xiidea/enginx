@@ -24,6 +24,15 @@ public interface NotificationLedger {
     /** Records what happened, so a channel that is failing is visible rather than merely quiet. */
     void recordOutcome(UUID ledgerId, boolean delivered, String recipients, String detail);
 
+    /**
+     * Records that nothing carried this notification because no channel is configured to.
+     *
+     * <p>Separate from {@link #recordOutcome} deliberately: a notification routed nowhere by
+     * configuration is not a channel that broke, and a metric counting failures must not include
+     * it — an operator who narrowed a channel on purpose would otherwise be paged about it.
+     */
+    void recordSuppressed(UUID ledgerId, String reason);
+
     /** How many notifications failed to deliver. Surfaced as a metric. */
     long countFailed();
 }

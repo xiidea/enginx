@@ -494,6 +494,9 @@ Everything below is an environment variable on the management container. Default
 | `NOTIFICATION_INTERVAL_SECONDS` | 3600 | Thresholds are in days; the ledger makes repeats harmless |
 | `NOTIFICATION_OPERATOR_ADDRESSES` | — | Comma-separated. Without it, estate-wide conditions reach nobody |
 | `NOTIFICATION_EXPIRY_THRESHOLDS` | `7,3,1` | Days before expiry at which to warn |
+| `NOTIFICATION_ROUTE_MAIL` | all kinds | Which kinds email carries. Empty means all; `NONE` mutes |
+| `NOTIFICATION_ROUTE_WEBHOOK` | all kinds | Which kinds the webhook carries |
+| `NOTIFICATION_ROUTE_LOG` | all kinds | Which kinds are logged |
 | `NOTIFICATION_WEBHOOK_URL` | — | Generic JSON payload per notification |
 | `NOTIFICATION_MIN_SEVERITY` | `INFO` | Floor below which nothing is delivered |
 | `AUDIT_RETENTION_MONTHS` | 0 | 0 keeps everything. When set, whole months are dropped daily |
