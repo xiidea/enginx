@@ -31,8 +31,10 @@ tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
   font-weight: 400;
 }
 .modes label.chosen { border-color: var(--accent); background: var(--accent-wash); }
-.modes label span { display: flex; flex-direction: column; gap: 0.2rem; }
-.modes input { margin-top: 0.2rem; flex: none; }
+/* The text takes the rest of the card; min-width:0 lets it wrap normally instead of forcing the
+   card wider. Only the direct child is the text column — the inner description span nests inside. */
+.modes label > span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.modes input { margin-top: 0.2rem; flex: 0 0 auto; }
 
 .pull-note {
   padding: 0.85rem;

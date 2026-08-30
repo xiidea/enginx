@@ -198,7 +198,9 @@ input, select, textarea {
   font-size: 0.88rem;
 }
 input:disabled, select:disabled { background: var(--surface-2); color: var(--ink-3); }
-input[type='checkbox'] { width: auto; accent-color: var(--accent); }
+/* Toggles are not text fields: the width:100% and padding above would stretch a radio or
+   checkbox into a full-width box and shove its label aside. Reset both back to their natural size. */
+input[type='checkbox'], input[type='radio'] { width: auto; padding: 0; accent-color: var(--accent); }
 
 label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--ink-2); margin-bottom: 0.25rem; }
 .hint { font-size: 0.76rem; color: var(--ink-3); margin-top: 0.25rem; }
