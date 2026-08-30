@@ -1,5 +1,6 @@
 package net.xiidea.enginx.security;
 
+import net.xiidea.enginx.security.local.LocalTokenRevocationFilter;
 import net.xiidea.enginx.security.local.PasswordChangeRequiredFilter;
 import net.xiidea.enginx.security.ratelimit.RateLimitFilter;
 import jakarta.servlet.Filter;
@@ -42,14 +43,17 @@ public class SecurityConfig {
     private final IdentityMirrorFilter identityMirrorFilter;
     private final RateLimitFilter rateLimitFilter;
     private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
+    private final LocalTokenRevocationFilter localTokenRevocationFilter;
 
     public SecurityConfig(SecurityProperties properties, IdentityMirrorFilter identityMirrorFilter,
                           RateLimitFilter rateLimitFilter,
-                          PasswordChangeRequiredFilter passwordChangeRequiredFilter) {
+                          PasswordChangeRequiredFilter passwordChangeRequiredFilter,
+                          LocalTokenRevocationFilter localTokenRevocationFilter) {
         this.properties = properties;
         this.identityMirrorFilter = identityMirrorFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
+        this.localTokenRevocationFilter = localTokenRevocationFilter;
     }
 
     @Bean
@@ -77,6 +81,9 @@ public class SecurityConfig {
                 // and still appears in the identity mirror. Placing it earlier would let an
                 // account that cannot use the API spend nothing to keep asking.
                 .addFilterAfter(passwordChangeRequiredFilter, IdentityMirrorFilter.class)
+                // Turns away a local token whose account has since been disabled, deleted or
+                // re-privileged, before it reaches a controller.
+                .addFilterAfter(localTokenRevocationFilter, PasswordChangeRequiredFilter.class)
                 // Bearer tokens, no cookies and no session mean this chain has no CSRF surface.
                 // A cookie-backed endpoint added later must re-enable it rather than inherit this.
                 .csrf(csrf -> csrf.disable())
@@ -150,6 +157,8 @@ public class SecurityConfig {
                 // The same confinement as the API chain. Metrics and thread dumps are exactly the
                 // sort of thing a not-yet-rotated bootstrap credential should not reach.
                 .addFilterAfter(passwordChangeRequiredFilter, BearerTokenAuthenticationFilter.class)
+                // And the same revocation: a disabled account must not keep reaching metrics either.
+                .addFilterAfter(localTokenRevocationFilter, PasswordChangeRequiredFilter.class)
                 .csrf(csrf -> csrf.disable());
         return http.build();
     }
@@ -179,6 +188,11 @@ public class SecurityConfig {
     @Bean
     FilterRegistrationBean<Filter> passwordChangeRequiredFilterRegistration() {
         return unregistered(passwordChangeRequiredFilter);
+    }
+
+    @Bean
+    FilterRegistrationBean<Filter> localTokenRevocationFilterRegistration() {
+        return unregistered(localTokenRevocationFilter);
     }
 
     private static FilterRegistrationBean<Filter> unregistered(Filter filter) {
