@@ -70,29 +70,3 @@ frontend/                Angular admin console
 ```
 
 Java 25 · Spring Boot 4 · PostgreSQL 17 · Go 1.26 · Angular 21 · optionally any OIDC provider.
-
----
-
-## Status
-
-Phases 1–14 are complete; the roadmap is finished. Two decisions remain open and are worth making
-deliberately — whether a site may target more than one NGINX host, and what `forceHttps=false`
-should mean for port 80. Both are written up in
-[docs/roadmap.md](docs/roadmap.md#open-decisions).
-
-| Phase | Scope | State |
-|---|---|---|
-| 1 | Architecture, schema, permission model, agent protocol | **Complete** |
-| 2 | Spring Boot skeleton, Go agent, PostgreSQL, Liquibase, Compose, Keycloak, proxy site CRUD | **Complete** |
-| 3 | Domain groups, domain-level permissions, authorization service, Testcontainers | **Complete** |
-| 4 | Configuration rendering, agent deployment workflow, deployment history | **Complete** |
-| 5 | Expiration scheduler, Quartz clustering, lifecycle jobs | **Complete** |
-| 6 | Certificate abstraction, ACME, renewal, expiry monitoring | **Complete** |
-| 7 | Angular admin console | **Complete** |
-| 8 | Audit API and console page, metrics, health, rate limiting, production Docker | **Complete** |
-| 9 | Deployment verification, drift detection, upstream probes, HTTPS catch-all, CI | **Complete** |
-| 10 | Notifications: expiry warnings, renewal failures, unreachable hosts, abandoned work | **Complete** |
-| 11 | Grant reach preview, namespace-authority tests, audit retention | **Complete** |
-| 12 | DNS-01 and wildcard certificates, Vault-backed key wrapping, agent certificate rotation | **Complete** |
-| 13 | Generated API client, Kubernetes manifests, tagged releases with multi-arch agent binaries | **Complete** |
-| 14 | Local accounts with optional OIDC, bootstrap administrator, console sign-in | **Complete** |
