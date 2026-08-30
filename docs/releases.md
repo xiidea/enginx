@@ -14,6 +14,8 @@ The workflow builds and attaches:
 | `enginx-agent-linux-amd64` | x86-64 servers |
 | `enginx-agent-linux-arm64` | ARM servers, Graviton, Ampere |
 | `enginx-agent-linux-armv7` | 32-bit ARM |
+| `enginx-agent-darwin-arm64` | Apple silicon |
+| `enginx-agent-darwin-amd64` | Intel Macs |
 | `proxy-management-<version>.jar` | — |
 | `SHA256SUMS.txt` | verifies all of the above |
 
@@ -46,6 +48,14 @@ this agent also contains the string "1.2.3", so grepping proves nothing.
 ```bash
 enginx-agent -version        # enginx-agent 1.2.0 (a1b2c3d) linux/amd64
 ```
+
+The macOS binaries are built on a macOS runner rather than cross-compiled, for the same reason:
+the Linux job proves a binary by running it under emulation, and emulation cannot execute a Mach-O
+executable at all. Cross-compiling them would mean shipping the only two binaries nobody ever ran.
+arm64 runs natively on the runner and amd64 runs under Rosetta.
+
+macOS is for running the agent on a developer's machine. A production NGINX host is Linux, and the
+container images are Linux only.
 
 A tag matching `v*-*` — `v1.2.0-rc1` — is published as a pre-release, so it does not become the
 latest. `workflow_dispatch` builds and verifies everything without publishing, which is how the

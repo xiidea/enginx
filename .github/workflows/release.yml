@@ -126,6 +126,82 @@ jobs:
           path: enginx-agent/dist/
           retention-days: 7
 
+  agent-macos:
+    name: Agent binaries (macOS)
+    # A macOS runner rather than cross-compiling on Linux, and for one reason: the Linux job
+    # verifies every binary by running it, and QEMU cannot execute a Mach-O executable at all.
+    # Cross-compiling here would mean shipping the only two binaries nobody ever ran — which is
+    # exactly the standard the Linux job exists to hold.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: enginx-agent/go.mod
+          cache-dependency-path: enginx-agent/go.sum
+
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        working-directory: enginx-agent
+        run: go test ./...
+
+      - name: Build
+        working-directory: enginx-agent
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          PKG=github.com/xiidea/enginx/enginx-agent/internal/version
+          LDFLAGS="-s -w -X ${PKG}.Version=${VERSION} -X ${PKG}.Commit=${GITHUB_SHA::7}"
+
+          for GOARCH in amd64 arm64; do
+            name="enginx-agent-darwin-${GOARCH}"
+            echo "→ $name"
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" \
+              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" ./cmd/agent
+          done
+          ls -l dist
+
+      # The same reasoning as the Linux job, and the reason this runs on macOS at all: grepping a
+      # binary for its version proves nothing, because an unstamped build contains the string too.
+      # arm64 runs natively; amd64 runs under Rosetta, which the runner provides.
+      - name: Verify the version was stamped
+        working-directory: enginx-agent
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for binary in enginx-agent-darwin-arm64 enginx-agent-darwin-amd64; do
+            reported="$(./dist/$binary -version)"
+            echo "$binary -> $reported"
+            case "$reported" in
+              "enginx-agent ${VERSION} "*) ;;
+              *) echo "::error::$binary reports '$reported', expected version ${VERSION}"; exit 1;;
+            esac
+          done
+
+      - name: Checksums
+        working-directory: enginx-agent/dist
+        run: shasum -a 256 ./* > SHA256SUMS.darwin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-binaries-darwin
+          path: enginx-agent/dist/
+          retention-days: 7
+
   management:
     name: Management server jar
     runs-on: ubuntu-latest
@@ -331,7 +407,7 @@ jobs:
     # which is what makes the release path safe to rehearse.
     if: github.event_name == 'push'
     # The release notes name the images, so they must exist by the time anyone reads them.
-    needs: [agent, management, images]
+    needs: [agent, agent-macos, management, images]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -346,6 +422,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: agent-binaries-darwin
+          path: artifacts/agent-binaries-darwin
+
+      - uses: actions/download-artifact@v4
+        with:
           name: management-jar
           path: artifacts/management-jar
 
@@ -354,11 +435,13 @@ jobs:
           set -euo pipefail
           mkdir -p release
           cp artifacts/agent-binaries/* release/
+          cp artifacts/agent-binaries-darwin/* release/
           cp artifacts/management-jar/* release/
-          # Two SHA256SUMS files would overwrite each other; merge them into one the release can
-          # be verified against with a single command.
-          cat release/SHA256SUMS release/SHA256SUMS.jar > release/SHA256SUMS.txt
-          rm -f release/SHA256SUMS release/SHA256SUMS.jar
+          # Three SHA256SUMS files would overwrite each other; merge them into one the whole
+          # release can be verified against with a single command.
+          cat release/SHA256SUMS release/SHA256SUMS.darwin release/SHA256SUMS.jar \
+            > release/SHA256SUMS.txt
+          rm -f release/SHA256SUMS release/SHA256SUMS.darwin release/SHA256SUMS.jar
           ls -l release
 
       - name: Create the release
