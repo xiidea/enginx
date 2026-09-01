@@ -33,7 +33,8 @@ export class SignIn {
     this.error.set(null);
     try {
       await this.auth.loginLocal(this.username().trim(), this.password());
-      // Nothing to navigate to: the shell replaces this screen as soon as the session exists.
+      // loginLocal performs the redirect: it resumes a remembered deep link or lands on the
+      // dashboard, so there is nothing to navigate to from here.
     } catch (failure) {
       this.error.set(describe(failure));
       this.password.set('');

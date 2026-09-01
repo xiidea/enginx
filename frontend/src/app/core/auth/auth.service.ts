@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -28,6 +29,13 @@ export class AuthService {
   private readonly oidc = inject(OidcSecurityService);
   private readonly local = inject(LocalSession);
   private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+
+  /**
+   * Where a turned-away visitor was headed, set by the route guard. A local sign-in resumes here
+   * so a deep link survives the round trip through the sign-in screen; null means the dashboard.
+   */
+  intendedUrl: string | null = null;
 
   readonly authenticated = signal(false);
   readonly username = signal<string | null>(null);
@@ -114,6 +122,20 @@ export class AuthService {
   async loginLocal(username: string, password: string): Promise<void> {
     await this.local.login(username, password);
     this.adopt(this.local.token()!, 'local');
+
+    // The router's initial navigation was cancelled by the guard while there was no session, so
+    // the shell would otherwise swap to an empty outlet. Navigate now that one exists — resuming
+    // a remembered deep link, or the dashboard by default.
+    //
+    // Except when the account must first replace its password: it is confined to the
+    // password-change screen, and PasswordChange re-calls this after the change, when the cleared
+    // flag lets this same navigation through.
+    if (this.mustChangePassword()) {
+      return;
+    }
+    const target = this.intendedUrl ?? '/dashboard';
+    this.intendedUrl = null;
+    await this.router.navigateByUrl(target);
   }
 
   logout(): void {
