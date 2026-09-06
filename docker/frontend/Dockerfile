@@ -4,7 +4,11 @@
 # nginx configuration that serves it.
 
 # ---- build ----------------------------------------------------------------
-FROM node:20-alpine AS build
+# Pinned to the build platform, never the target. The output is static HTML/CSS/JS, byte-identical
+# on every architecture, so building it once natively and copying it into each per-arch runtime
+# image is correct — and it avoids running the Angular/npm build under QEMU emulation for arm64,
+# which is pathologically slow and can hang or OOM a multi-arch release.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS build
 WORKDIR /app
 
 # Manifests first, so a dependency install is cached independently of source changes.
