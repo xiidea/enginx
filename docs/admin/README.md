@@ -14,6 +14,7 @@ development stack, or [production.md](production.md) for a real one.
 | [observability.md](observability.md) | Audit trail, metrics, health, notifications, rate limiting |
 | [console.md](console.md) | The web interface |
 | [production.md](production.md) | Production deployment, Kubernetes, monitoring, runbooks |
+| [self-managed-setup.md](self-managed-setup.md) | Management + console against your own Keycloak and database; agent as a bare binary; push and pull, step by step |
 | [security.md](security.md) | The security properties the platform holds, and why |
 
 Two things outside this guide are often wanted alongside it: the
