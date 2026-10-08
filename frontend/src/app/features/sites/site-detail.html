@@ -135,7 +135,7 @@
             }
             @for (location of site.locations; track location.pathPattern) {
               <div class="mono small">
-                <span class="muted">{{ location.matchType ?? 'PREFIX' }}</span> {{ location.pathPattern }}
+                <span class="muted">{{ location.matchType }}</span> {{ location.pathPattern }}
               </div>
             }
           </div>

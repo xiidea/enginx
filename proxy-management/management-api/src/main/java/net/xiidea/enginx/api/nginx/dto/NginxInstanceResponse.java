@@ -19,6 +19,7 @@ public record NginxInstanceResponse(
         String name,
         String hostname,
         String connectivityMode,
+        String pushTransport,
         String agentBaseUrl,
         String agentCertFingerprint,
         String environment,

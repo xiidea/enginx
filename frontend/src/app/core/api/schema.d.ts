@@ -1506,6 +1506,7 @@ export interface components {
             agentCertFingerprint?: string;
             agentVersion?: string;
             connectivityMode: string;
+            pushTransport?: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
             /** Format: date-time */
             createdAt: string;
             environment: string;
@@ -1695,11 +1696,13 @@ export interface components {
             version: number;
         };
         RegisterNginxInstanceRequest: {
+            agentAuthToken?: string;
             agentBaseUrl: string;
-            agentCertFingerprint: string;
+            agentCertFingerprint?: string;
             environment?: string;
             hostname: string;
             name: string;
+            pushTransport?: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
         };
         RenewRequest: {
             /** Format: date-time */

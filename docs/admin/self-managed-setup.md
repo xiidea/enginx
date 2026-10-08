@@ -540,6 +540,26 @@ curl -sS -X POST https://nginx.example.com/api/v1/nginx-instances \
 The platform pins that fingerprint: a replacement certificate — even one signed by the same CA — is
 not trusted until someone re-registers the host. Within a heartbeat the instance turns **ONLINE**.
 
+### Alternative: Push mode over HTTP or gRPC with shared token
+
+If the agent is reached through an ingress controller or layer-7 proxy that terminates TLS, or if
+you prefer token authentication over mTLS, set `AGENT_PUSH_PROTOCOL=http` (or `grpc`) and
+`AGENT_SECRET_TOKEN=enginx-sec-…` in `/etc/enginx/agent.env`. Then register with `pushTransport`:
+
+```bash
+curl -sS -X POST https://nginx.example.com/api/v1/nginx-instances \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "name": "nginx-node-01",
+        "hostname": "nginx-01.internal.example.com",
+        "agentBaseUrl": "https://nginx-01.internal.example.com:8080",
+        "pushTransport": "HTTP_TOKEN",
+        "agentAuthToken": "enginx-sec-your-secret-token",
+        "environment": "PRODUCTION"
+      }'
+```
+
 ---
 
 ## 8. Agents — pull mode (token)

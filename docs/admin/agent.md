@@ -16,15 +16,16 @@ network the host sits on, not a preference, and an estate can hold both.
 | | **Dial mode** | **Pull mode** |
 |---|---|---|
 | Who connects | the platform connects to the host | the host connects to the platform |
-| Inbound port | 8443, reachable from the management plane | none |
-| Host identity | a certificate, fingerprint pinned at registration | a token, issued at enrolment |
-| Registration | an operator enters a URL and a fingerprint | the host enrols itself |
+| Inbound port | 8443 (or configured port), reachable from the management plane | none |
+| Host identity | certificate fingerprint (mTLS) or pre-shared bearer token (HTTP / gRPC) | a token, issued at enrolment |
+| Registration | operator enters URL + fingerprint (mTLS) or secret token (HTTP/gRPC) | the host enrols itself |
 | Works behind NAT | no | yes |
 | HTTP-01 certificates | yes | not yet |
 
-**Dial mode proves more.** The platform pins the agent's certificate fingerprint, so a certificate
-signed by the same CA still cannot impersonate that host. A bearer token is a weaker claim, and
-issuing agent certificates is what will replace it.
+**Dial mode proves more.** With mutual TLS (`mtls`, the default), the platform pins the agent's
+certificate fingerprint, so a certificate signed by the same CA still cannot impersonate that host.
+When running behind layer-7 ingress proxies, reverse proxies, or internal networks where custom PKI
+is impractical, dial mode can also run over HTTP or gRPC using a pre-shared bearer token (`AGENT_PUSH_PROTOCOL=http` or `grpc`).
 
 **Pull mode asks for less.** A host in another cloud, behind NAT, or on a network nobody routes to
 can satisfy no listener contract, but it can always make an outbound call.
@@ -89,6 +90,24 @@ the failure would arrive at deployment time, on somebody else's schedule.
 **Restrict 8443 at the firewall to the management plane's address.** Certificate pinning is the
 authentication; there is no reason for the port to be reachable from anywhere else at all.
 
+### Dial mode with pre-shared token (HTTP / gRPC)
+
+When the agent sits behind an edge load balancer, API gateway, ingress proxy, or layer-7 tunnel
+that terminates TLS, or when configuring mTLS PKI is not desired, configure the agent with a
+pre-shared secret token:
+
+```bash
+AGENT_PUSH_PROTOCOL=http      # or grpc
+AGENT_SECRET_TOKEN=enginx-sec-secret123
+AGENT_LISTEN_ADDR=:8080
+enginx-agent
+```
+
+When registering the instance in the console or API, choose the corresponding transport
+(`HTTP_TOKEN` or `GRPC_TOKEN`), provide the reachable `agentBaseUrl`, and enter the pre-shared
+`agentAuthToken`. The management plane then authenticates outbound requests using
+`Authorization: Bearer <agentAuthToken>`.
+
 ## Pull mode
 
 The host enrols itself and then asks for work. Nothing connects to it.
@@ -136,11 +155,13 @@ command-injection surface to protect.
 
 | Variable | Default | |
 |---|---|---|
+| `AGENT_PUSH_PROTOCOL` | `mtls` | Push listener protocol: `mtls` (default), `http` (REST + token), or `grpc` (gRPC + token) |
+| `AGENT_SECRET_TOKEN` | — | Pre-shared secret token. Required when `AGENT_PUSH_PROTOCOL` is `http` or `grpc` |
 | `AGENT_LISTEN_ADDR` | `:8443` | Bind to the management network, not `0.0.0.0`, where you can |
-| `AGENT_HEALTH_ADDR` | `127.0.0.1:9099` | Unauthenticated liveness. Loopback only — it must never become a way to read host detail without a client certificate |
-| `AGENT_TLS_CERT` / `AGENT_TLS_KEY` | `/etc/enginx/pki/agent.{crt,key}` | This host's identity |
-| `AGENT_CLIENT_CA` | `/etc/enginx/pki/ca.crt` | The CA that signs the management client certificate |
-| `AGENT_CLIENT_CN` | `enginx-management` | Pinned in addition to CA verification. Trusting the CA alone would let any certificate it ever signed drive this host |
+| `AGENT_HEALTH_ADDR` | `127.0.0.1:9099` | Unauthenticated liveness. Loopback only — it must never become a way to read host detail without authentication |
+| `AGENT_TLS_CERT` / `AGENT_TLS_KEY` | `/etc/enginx/pki/agent.{crt,key}` | This host's identity (`mtls` protocol only) |
+| `AGENT_CLIENT_CA` | `/etc/enginx/pki/ca.crt` | The CA that signs the management client certificate (`mtls` protocol only) |
+| `AGENT_CLIENT_CN` | `enginx-management` | Pinned in addition to CA verification (`mtls` protocol only) |
 
 **Pull mode only**
 

@@ -19,6 +19,8 @@ public class NginxInstanceMapper {
                 entity.getAgentBaseUrl() == null ? null : URI.create(entity.getAgentBaseUrl()),
                 entity.getAgentCertFingerprint(),
                 entity.getConnectivityMode(),
+                entity.getPushTransport(),
+                entity.getAgentAuthToken(),
                 entity.getEnvironment(),
                 entity.getStatus(),
                 entity.getNginxVersion(),
@@ -35,6 +37,8 @@ public class NginxInstanceMapper {
         entity.setAgentBaseUrl(instance.agentBaseUrl() == null ? null : instance.agentBaseUrl().toString());
         entity.setAgentCertFingerprint(instance.agentCertFingerprint());
         entity.setConnectivityMode(instance.connectivityMode());
+        entity.setPushTransport(instance.pushTransport());
+        entity.setAgentAuthToken(instance.agentAuthToken());
         entity.setEnvironment(instance.environment());
         entity.setStatus(instance.status());
         entity.setNginxVersion(instance.nginxVersion());

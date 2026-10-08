@@ -76,8 +76,19 @@ public class NginxInstanceService {
     @Transactional
     public NginxInstance register(String name, String hostname, String agentBaseUrl,
                                   String agentCertFingerprint, String environment) {
-        NginxInstance instance = NginxInstance.register(
-                UUID.randomUUID(), name, hostname, agentBaseUrl, agentCertFingerprint, environment, clock.instant());
+        return registerPush(name, hostname, agentBaseUrl, net.xiidea.enginx.domain.nginx.PushTransport.MTLS,
+                agentCertFingerprint, null, environment);
+    }
+
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public NginxInstance registerPush(String name, String hostname, String agentBaseUrl,
+                                      net.xiidea.enginx.domain.nginx.PushTransport pushTransport,
+                                      String agentCertFingerprint, String agentAuthToken,
+                                      String environment) {
+        NginxInstance instance = NginxInstance.registerPush(
+                UUID.randomUUID(), name, hostname, agentBaseUrl, pushTransport,
+                agentCertFingerprint, agentAuthToken, environment, clock.instant());
 
         if (instances.existsByName(instance.name())) {
             throw new ConflictException("An NGINX instance named '" + instance.name() + "' already exists");
@@ -88,6 +99,7 @@ public class NginxInstanceService {
                 Map.of("name", saved.name(),
                         "hostname", saved.hostname(),
                         "agentBaseUrl", saved.agentBaseUrl().toString(),
+                        "pushTransport", saved.pushTransport().name(),
                         "environment", saved.environment()));
         return saved;
     }

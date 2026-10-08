@@ -40,7 +40,7 @@ func NewServer(cfg config.Config, controller *nginx.Controller, bundles *bundle.
 	}
 }
 
-// Handler builds the mTLS-protected routes.
+// Handler builds the authenticated routes.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /agent/v1/status", s.handleStatus)
@@ -55,6 +55,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /agent/v1/acme-challenges/{token}", s.handlePutAcmeChallenge)
 	mux.HandleFunc("DELETE /agent/v1/acme-challenges/{token}", s.handleDeleteAcmeChallenge)
 
+	if s.cfg.AgentPushProtocol == "http" || s.cfg.AgentPushProtocol == "grpc" {
+		return logRequests(requireBearerToken(s.cfg.AgentSecretToken, mux))
+	}
 	return logRequests(requireClientCN(s.cfg.ClientCN, mux))
 }
 
@@ -211,7 +214,7 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Run starts both listeners and blocks until the context is cancelled.
+// Run starts both mTLS listeners and blocks until the context is cancelled.
 func (s *Server) Run(ctx context.Context) error {
 	tlsConfig, err := s.TLSConfig()
 	if err != nil {
@@ -257,19 +260,53 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
+// RunTokenHTTP starts the HTTP listener with Bearer Token auth (without requiring mTLS certificates).
+func (s *Server) RunTokenHTTP(ctx context.Context) error {
+	apiServer := &http.Server{
+		Addr:              s.cfg.ListenAddr,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       90 * time.Second,
+	}
+	healthServer := &http.Server{
+		Addr:              s.cfg.HealthAddr,
+		Handler:           s.HealthHandler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	errs := make(chan error, 2)
+	go func() {
+		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errs <- fmt.Errorf("HTTP listener: %w", err)
+		}
+	}()
+	go func() {
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errs <- fmt.Errorf("health listener: %w", err)
+		}
+	}()
+
+	select {
+	case err := <-errs:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = apiServer.Shutdown(shutdownCtx)
+		_ = healthServer.Shutdown(shutdownCtx)
+		return nil
+	}
+}
+
 // StageBundle stores a bundle without changing what is served.
-//
-// Exported so a pull-mode runner performs exactly the operation the HTTP handler performs. Two
-// copies of staging and atomic activation is precisely the drift this platform exists to prevent,
-// and it would be invisible until the two connectivity models behaved differently on one host.
 func (s *Server) StageBundle(b bundle.Bundle) error {
 	return s.bundles.Stage(b)
 }
 
 // ActivateBundle validates the staged bundle, swaps it in and reloads.
 func (s *Server) ActivateBundle(ctx context.Context, bundleID string, reload bool) (bundle.Result, error) {
-	// Every rendered bundle points its HTTPS catch-all at this pair, and a host whose releases
-	// directory was wiped would otherwise fail validation citing a certificate nobody configured.
 	if err := defaulttls.Ensure(s.cfg.ReleasesDir); err != nil {
 		return bundle.Result{}, err
 	}

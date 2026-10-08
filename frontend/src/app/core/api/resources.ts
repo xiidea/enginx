@@ -182,7 +182,9 @@ export class InstancesApi {
     name: string;
     hostname: string;
     agentBaseUrl: string;
-    agentCertFingerprint: string;
+    pushTransport?: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
+    agentCertFingerprint?: string;
+    agentAuthToken?: string;
     environment?: string;
   }): Observable<NginxInstance> {
     return this.api.post('/nginx-instances', body);

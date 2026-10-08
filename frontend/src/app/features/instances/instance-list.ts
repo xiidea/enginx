@@ -57,6 +57,9 @@ export class InstanceList implements OnInit {
   readonly hostname = signal('');
   readonly agentBaseUrl = signal('https://');
   readonly fingerprint = signal('');
+  readonly pushTransport = signal<'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN'>('MTLS');
+  readonly agentAuthToken = signal('');
+  readonly showAuthToken = signal(false);
   readonly environment = signal('PRODUCTION');
 
   ngOnInit(): void {
@@ -194,22 +197,75 @@ export class InstanceList implements OnInit {
     });
   }
 
+  setPushTransport(transport: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN'): void {
+    const prev = this.pushTransport();
+    this.pushTransport.set(transport);
+    if (transport === 'MTLS') {
+      if (this.agentBaseUrl() === 'http://') {
+        this.agentBaseUrl.set('https://');
+      }
+    } else {
+      if (this.agentBaseUrl() === 'https://') {
+        this.agentBaseUrl.set('http://');
+      }
+    }
+  }
+
+  urlPlaceholder(): string {
+    switch (this.pushTransport()) {
+      case 'MTLS':
+        return 'https://nginx-01.internal:8443';
+      case 'HTTP_TOKEN':
+        return 'http://nginx-01.internal:8080';
+      case 'GRPC_TOKEN':
+        return 'http://nginx-01.internal:50051';
+    }
+  }
+
+  resetForm(): void {
+    this.name.set('');
+    this.hostname.set('');
+    this.agentBaseUrl.set('https://');
+    this.fingerprint.set('');
+    this.agentAuthToken.set('');
+    this.showAuthToken.set(false);
+    this.pushTransport.set('MTLS');
+    this.environment.set('PRODUCTION');
+  }
+
   register(): void {
     this.registering.set(true);
+    const transport = this.pushTransport();
+    const payload: {
+      name: string;
+      hostname: string;
+      agentBaseUrl: string;
+      pushTransport: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
+      agentCertFingerprint?: string;
+      agentAuthToken?: string;
+      environment: string;
+    } = {
+      name: this.name().trim(),
+      hostname: this.hostname().trim(),
+      agentBaseUrl: this.agentBaseUrl().trim(),
+      pushTransport: transport,
+      environment: this.environment(),
+    };
+
+    if (transport === 'MTLS') {
+      payload.agentCertFingerprint = this.fingerprint().replace(/[\s:]/g, '').toUpperCase();
+    } else {
+      payload.agentAuthToken = this.agentAuthToken().trim();
+    }
+
     this.api
-      .register({
-        name: this.name().trim(),
-        hostname: this.hostname().trim(),
-        agentBaseUrl: this.agentBaseUrl().trim(),
-        // Normalised here as a convenience; the server validates the shape regardless.
-        agentCertFingerprint: this.fingerprint().replace(/[\s:]/g, '').toUpperCase(),
-        environment: this.environment(),
-      })
+      .register(payload)
       .subscribe({
         next: (instance) => {
           this.registering.set(false);
           this.showForm.set(false);
           this.notifications.success('Instance registered', instance.name);
+          this.resetForm();
           this.reload();
         },
         error: (problem) => {

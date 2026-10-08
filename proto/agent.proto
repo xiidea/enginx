@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package net.xiidea.enginx.agent.v1;
+
+option java_multiple_files = true;
+option java_package = "net.xiidea.enginx.agent.v1";
+option go_package = "github.com/xiidea/enginx/enginx-agent/internal/grpc/agentv1;agentv1";
+
+service NginxAgentService {
+  rpc StageBundle (StageBundleRequest) returns (StageBundleResponse);
+  rpc ActivateBundle (ActivateBundleRequest) returns (ActivateBundleResponse);
+  rpc GetStatus (GetStatusRequest) returns (AgentStatusResponse);
+  rpc VerifySites (VerifySitesRequest) returns (VerifySitesResponse);
+  rpc CheckUpstreams (CheckUpstreamsRequest) returns (CheckUpstreamsResponse);
+  rpc DiscardBundle (DiscardBundleRequest) returns (DiscardBundleResponse);
+  rpc PublishAcmeChallenge (PublishAcmeChallengeRequest) returns (PublishAcmeChallengeResponse);
+  rpc RemoveAcmeChallenge (RemoveAcmeChallengeRequest) returns (RemoveAcmeChallengeResponse);
+}
+
+message BundleFile {
+  string path = 1;
+  string content = 2;
+  string sha256 = 3;
+  bool sensitive = 4;
+  string mode = 5;
+}
+
+message StageBundleRequest {
+  string bundle_id = 1;
+  int64 sequence = 2;
+  string content_hash = 3;
+  repeated BundleFile files = 4;
+  string idempotency_key = 5;
+}
+
+message StageBundleResponse {
+  bool ok = 1;
+}
+
+message ActivateBundleRequest {
+  string bundle_id = 1;
+  bool reload = 2;
+  string idempotency_key = 3;
+}
+
+message ActivateBundleResponse {
+  string bundle_id = 1;
+  string previous_bundle_id = 2;
+  string test_output = 3;
+  string nginx_version = 4;
+  bool noop = 5;
+  bool rolled_back = 6;
+}
+
+message GetStatusRequest {}
+
+message CertificateStatus {
+  string path = 1;
+  string subject = 2;
+  string not_after = 3;
+  int32 days_remaining = 4;
+  string status = 5;
+}
+
+message AgentStatusResponse {
+  string agent_version = 1;
+  string nginx_version = 2;
+  bool nginx_running = 3;
+  int64 nginx_master_pid = 4;
+  string active_bundle_id = 5;
+  bool config_test_ok = 6;
+  string config_test_output = 7;
+  repeated CertificateStatus certificates = 8;
+  int64 uptime_seconds = 9;
+}
+
+message VerifySitesRequest {
+  repeated string server_names = 1;
+}
+
+message SiteVerificationResult {
+  string server_name = 1;
+  bool responded = 2;
+  int32 status_code = 3;
+  string error = 4;
+}
+
+message VerifySitesResponse {
+  repeated SiteVerificationResult results = 1;
+}
+
+message UpstreamTarget {
+  string host = 1;
+  int32 port = 2;
+}
+
+message CheckUpstreamsRequest {
+  repeated UpstreamTarget targets = 1;
+}
+
+message UpstreamReachabilityResult {
+  string host = 1;
+  int32 port = 2;
+  bool reachable = 3;
+  string error = 4;
+}
+
+message CheckUpstreamsResponse {
+  repeated UpstreamReachabilityResult results = 1;
+}
+
+message DiscardBundleRequest {
+  string bundle_id = 1;
+}
+
+message DiscardBundleResponse {
+  bool ok = 1;
+}
+
+message PublishAcmeChallengeRequest {
+  string token = 1;
+  string authorization = 2;
+}
+
+message PublishAcmeChallengeResponse {
+  bool ok = 1;
+}
+
+message RemoveAcmeChallengeRequest {
+  string token = 1;
+}
+
+message RemoveAcmeChallengeResponse {
+  bool ok = 1;
+}

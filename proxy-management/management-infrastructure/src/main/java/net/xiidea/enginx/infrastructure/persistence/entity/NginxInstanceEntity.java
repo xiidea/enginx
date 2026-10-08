@@ -2,6 +2,7 @@ package net.xiidea.enginx.infrastructure.persistence.entity;
 
 import net.xiidea.enginx.domain.nginx.ConnectivityMode;
 import net.xiidea.enginx.domain.nginx.InstanceStatus;
+import net.xiidea.enginx.domain.nginx.PushTransport;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,6 +39,13 @@ public class NginxInstanceEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "connectivity_mode", nullable = false, length = 8)
     private ConnectivityMode connectivityMode = ConnectivityMode.PUSH;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "push_transport", nullable = false, length = 16)
+    private PushTransport pushTransport = PushTransport.MTLS;
+
+    @Column(name = "agent_auth_token", length = 512)
+    private String agentAuthToken;
 
     @Column(name = "environment", nullable = false, length = 32)
     private String environment;
@@ -110,6 +118,22 @@ public class NginxInstanceEntity {
 
     public void setConnectivityMode(ConnectivityMode connectivityMode) {
         this.connectivityMode = connectivityMode;
+    }
+
+    public PushTransport getPushTransport() {
+        return pushTransport;
+    }
+
+    public void setPushTransport(PushTransport pushTransport) {
+        this.pushTransport = pushTransport;
+    }
+
+    public String getAgentAuthToken() {
+        return agentAuthToken;
+    }
+
+    public void setAgentAuthToken(String agentAuthToken) {
+        this.agentAuthToken = agentAuthToken;
     }
 
     public void setAgentCertFingerprint(String agentCertFingerprint) {

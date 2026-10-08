@@ -15,10 +15,10 @@ tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
   padding: 0 0.35rem;
 }
 
-/* The connectivity choice. Presented as two cards rather than a select, because picking wrongly
-   produces a host that can never be reached and the trade deserves more than one line each. */
-.modes { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-.modes label {
+/* The connectivity and transport protocol choices. Presented as cards rather than a select,
+   because picking wrongly produces a host that can never be reached. */
+.modes, .transports { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.modes label, .transports label {
   flex: 1 1 18rem;
   display: flex;
   align-items: flex-start;
@@ -30,11 +30,23 @@ tbody tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
   cursor: pointer;
   font-weight: 400;
 }
-.modes label.chosen { border-color: var(--accent); background: var(--accent-wash); }
+.transports label {
+  flex: 1 1 14rem;
+}
+.modes label.chosen, .transports label.chosen { border-color: var(--accent); background: var(--accent-wash); }
 /* The text takes the rest of the card; min-width:0 lets it wrap normally instead of forcing the
    card wider. Only the direct child is the text column — the inner description span nests inside. */
-.modes label > span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
-.modes input { margin-top: 0.2rem; flex: 0 0 auto; }
+.modes label > span, .transports label > span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.modes input, .transports input { margin-top: 0.2rem; flex: 0 0 auto; }
+
+.input-with-button {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.input-with-button input {
+  flex: 1;
+}
 
 .pull-note {
   padding: 0.85rem;

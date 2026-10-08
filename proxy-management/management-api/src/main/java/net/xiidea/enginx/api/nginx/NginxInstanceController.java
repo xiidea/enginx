@@ -68,11 +68,27 @@ public class NginxInstanceController {
             description = "Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.")
     public ResponseEntity<NginxInstanceResponse> register(@Valid @RequestBody RegisterNginxInstanceRequest request,
                                                           UriComponentsBuilder uriBuilder) {
-        NginxInstance instance = service.register(request.name(), request.hostname(), request.agentBaseUrl(),
-                request.agentCertFingerprint(), request.environment());
+        net.xiidea.enginx.domain.nginx.PushTransport transport = parsePushTransport(request);
+        NginxInstance instance = service.registerPush(request.name(), request.hostname(), request.agentBaseUrl(),
+                transport, request.agentCertFingerprint(), request.agentAuthToken(), request.environment());
 
         URI location = uriBuilder.path("/api/v1/nginx-instances/{id}").buildAndExpand(instance.id()).toUri();
         return ResponseEntity.created(location).body(toResponse(instance));
+    }
+
+    private static net.xiidea.enginx.domain.nginx.PushTransport parsePushTransport(RegisterNginxInstanceRequest request) {
+        if (request.pushTransport() != null && !request.pushTransport().isBlank()) {
+            try {
+                return net.xiidea.enginx.domain.nginx.PushTransport.valueOf(request.pushTransport().trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new net.xiidea.enginx.domain.shared.ValidationException("pushTransport",
+                        "Invalid push transport: " + request.pushTransport() + ". Supported values are MTLS, HTTP_TOKEN, GRPC_TOKEN");
+            }
+        }
+        if (request.agentAuthToken() != null && !request.agentAuthToken().isBlank()) {
+            return net.xiidea.enginx.domain.nginx.PushTransport.HTTP_TOKEN;
+        }
+        return net.xiidea.enginx.domain.nginx.PushTransport.MTLS;
     }
 
     /**
@@ -116,6 +132,7 @@ public class NginxInstanceController {
                 instance.name(),
                 instance.hostname(),
                 instance.connectivityMode().name(),
+                instance.pushTransport() == null ? null : instance.pushTransport().name(),
                 // Null for a pull host: it is never dialled, so there is no URL and nothing to pin.
                 instance.agentBaseUrl() == null ? null : instance.agentBaseUrl().toString(),
                 instance.agentCertFingerprint(),

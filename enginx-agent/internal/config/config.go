@@ -27,6 +27,11 @@ type Config struct {
 	// certificate it ever signed drive this host.
 	ClientCN string
 
+	// AgentPushProtocol specifies the listener protocol for push mode: mtls (default), http, or grpc.
+	AgentPushProtocol string
+	// AgentSecretToken is the pre-shared secret token expected when AgentPushProtocol is http or grpc.
+	AgentSecretToken string
+
 	ReleasesDir string
 	NginxBinary string
 	NginxConf   string
@@ -65,17 +70,19 @@ func (c Config) PullMode() bool {
 
 func Load() (Config, error) {
 	cfg := Config{
-		ListenAddr:     env("AGENT_LISTEN_ADDR", ":8443"),
-		HealthAddr:     env("AGENT_HEALTH_ADDR", "127.0.0.1:9099"),
-		TLSCertFile:    env("AGENT_TLS_CERT", "/etc/enginx/pki/agent.crt"),
-		TLSKeyFile:     env("AGENT_TLS_KEY", "/etc/enginx/pki/agent.key"),
-		ClientCAFile:   env("AGENT_CLIENT_CA", "/etc/enginx/pki/ca.crt"),
-		ClientCN:       env("AGENT_CLIENT_CN", "enginx-management"),
-		ReleasesDir:    env("AGENT_RELEASES_DIR", "/etc/nginx/enginx"),
-		NginxBinary:    env("AGENT_NGINX_BINARY", "/usr/sbin/nginx"),
-		NginxConf:      env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
-		CommandTimeout: 30 * time.Second,
-		AgentVersion:   env("AGENT_VERSION", version.Version),
+		ListenAddr:        env("AGENT_LISTEN_ADDR", ":8443"),
+		HealthAddr:        env("AGENT_HEALTH_ADDR", "127.0.0.1:9099"),
+		TLSCertFile:       env("AGENT_TLS_CERT", "/etc/enginx/pki/agent.crt"),
+		TLSKeyFile:        env("AGENT_TLS_KEY", "/etc/enginx/pki/agent.key"),
+		ClientCAFile:      env("AGENT_CLIENT_CA", "/etc/enginx/pki/ca.crt"),
+		ClientCN:          env("AGENT_CLIENT_CN", "enginx-management"),
+		AgentPushProtocol: strings.ToLower(strings.TrimSpace(env("AGENT_PUSH_PROTOCOL", "mtls"))),
+		AgentSecretToken:  strings.TrimSpace(env("AGENT_SECRET_TOKEN", "")),
+		ReleasesDir:       env("AGENT_RELEASES_DIR", "/etc/nginx/enginx"),
+		NginxBinary:       env("AGENT_NGINX_BINARY", "/usr/sbin/nginx"),
+		NginxConf:         env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
+		CommandTimeout:    30 * time.Second,
+		AgentVersion:      env("AGENT_VERSION", version.Version),
 
 		ServerURL:         strings.TrimRight(env("ENGINX_SERVER_URL", ""), "/"),
 		RegistrationToken: env("ENGINX_REGISTRATION_TOKEN", ""),
@@ -95,20 +102,24 @@ func Load() (Config, error) {
 			cfg.InstanceName = strings.ToLower(host)
 		}
 	} else {
-		// Push mode needs its listener identity up front. Pull mode does not open a listener at
-		// all, so requiring these would make a certificate a precondition for a model that has
-		// no use for one.
-		for name, path := range map[string]string{
-			"AGENT_TLS_CERT":  cfg.TLSCertFile,
-			"AGENT_TLS_KEY":   cfg.TLSKeyFile,
-			"AGENT_CLIENT_CA": cfg.ClientCAFile,
-		} {
-			if _, err := os.Stat(path); err != nil {
-				return Config{}, fmt.Errorf("%s: %s is not readable: %w", name, path, err)
+		if cfg.AgentPushProtocol == "http" || cfg.AgentPushProtocol == "grpc" {
+			if cfg.AgentSecretToken == "" {
+				return Config{}, fmt.Errorf("AGENT_SECRET_TOKEN is required when AGENT_PUSH_PROTOCOL is %s", cfg.AgentPushProtocol)
 			}
-		}
-		if strings.TrimSpace(cfg.ClientCN) == "" {
-			return Config{}, fmt.Errorf("AGENT_CLIENT_CN must name the expected management certificate CN")
+		} else {
+			// Push mode mTLS needs its listener identity up front.
+			for name, path := range map[string]string{
+				"AGENT_TLS_CERT":  cfg.TLSCertFile,
+				"AGENT_TLS_KEY":   cfg.TLSKeyFile,
+				"AGENT_CLIENT_CA": cfg.ClientCAFile,
+			} {
+				if _, err := os.Stat(path); err != nil {
+					return Config{}, fmt.Errorf("%s: %s is not readable: %w", name, path, err)
+				}
+			}
+			if strings.TrimSpace(cfg.ClientCN) == "" {
+				return Config{}, fmt.Errorf("AGENT_CLIENT_CN must name the expected management certificate CN")
+			}
 		}
 	}
 	if _, err := os.Stat(cfg.NginxBinary); err != nil {

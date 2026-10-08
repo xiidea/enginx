@@ -33,6 +33,8 @@ public final class NginxInstance {
     private URI agentBaseUrl;
     private String agentCertFingerprint;
     private final ConnectivityMode connectivityMode;
+    private PushTransport pushTransport;
+    private String agentAuthToken;
     private String environment;
     private InstanceStatus status;
     private String nginxVersion;
@@ -43,7 +45,8 @@ public final class NginxInstance {
     private final long version;
 
     private NginxInstance(UUID id, String name, String hostname, URI agentBaseUrl, String agentCertFingerprint,
-                          ConnectivityMode connectivityMode, String environment, InstanceStatus status,
+                          ConnectivityMode connectivityMode, PushTransport pushTransport, String agentAuthToken,
+                          String environment, InstanceStatus status,
                           String nginxVersion, String agentVersion,
                           Instant lastSeenAt, Instant createdAt, Instant updatedAt, long version) {
         this.id = id;
@@ -52,6 +55,8 @@ public final class NginxInstance {
         this.agentBaseUrl = agentBaseUrl;
         this.agentCertFingerprint = agentCertFingerprint;
         this.connectivityMode = connectivityMode == null ? ConnectivityMode.PUSH : connectivityMode;
+        this.pushTransport = pushTransport == null ? PushTransport.MTLS : pushTransport;
+        this.agentAuthToken = agentAuthToken;
         this.environment = environment;
         this.status = status;
         this.nginxVersion = nginxVersion;
@@ -62,15 +67,29 @@ public final class NginxInstance {
         this.version = version;
     }
 
-    /** A host the platform will dial. Needs a URL to dial and a certificate to pin. */
+    /** A host the platform will dial over mTLS. Needs a URL to dial and a certificate to pin. */
     public static NginxInstance register(UUID id, String name, String hostname, String agentBaseUrl,
                                          String agentCertFingerprint, String environment, Instant now) {
+        return registerPush(id, name, hostname, agentBaseUrl, PushTransport.MTLS, agentCertFingerprint, null, environment, now);
+    }
+
+    /** A host the platform will dial over the specified transport. */
+    public static NginxInstance registerPush(UUID id, String name, String hostname, String agentBaseUrl,
+                                             PushTransport pushTransport, String agentCertFingerprint,
+                                             String agentAuthToken, String environment, Instant now) {
+        PushTransport transport = pushTransport == null ? PushTransport.MTLS : pushTransport;
+        URI url = validAgentUrl(agentBaseUrl, transport);
+        String fingerprint = transport == PushTransport.MTLS ? validFingerprint(agentCertFingerprint) : null;
+        String token = transport.isToken() ? validAuthToken(agentAuthToken) : null;
+
         return new NginxInstance(id,
                 validName(name),
                 validHostname(hostname),
-                validAgentUrl(agentBaseUrl),
-                validFingerprint(agentCertFingerprint),
+                url,
+                fingerprint,
                 ConnectivityMode.PUSH,
+                transport,
+                token,
                 normalisedEnvironment(environment),
                 InstanceStatus.UNKNOWN, null, null, null, now, now, 0L);
     }
@@ -90,6 +109,8 @@ public final class NginxInstance {
                 null,
                 null,
                 ConnectivityMode.PULL,
+                PushTransport.MTLS,
+                null,
                 normalisedEnvironment(environment),
                 InstanceStatus.UNKNOWN, null, null, null, now, now, 0L);
     }
@@ -102,11 +123,23 @@ public final class NginxInstance {
 
     public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
                                           String agentCertFingerprint, ConnectivityMode connectivityMode,
+                                          PushTransport pushTransport, String agentAuthToken,
                                           String environment, InstanceStatus status,
                                           String nginxVersion, String agentVersion, Instant lastSeenAt,
                                           Instant createdAt, Instant updatedAt, long version) {
         return new NginxInstance(id, name, hostname, agentBaseUrl, agentCertFingerprint, connectivityMode,
+                pushTransport == null ? PushTransport.MTLS : pushTransport, agentAuthToken,
                 environment, status, nginxVersion, agentVersion, lastSeenAt, createdAt, updatedAt, version);
+    }
+
+    public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
+                                          String agentCertFingerprint, ConnectivityMode connectivityMode,
+                                          String environment, InstanceStatus status,
+                                          String nginxVersion, String agentVersion, Instant lastSeenAt,
+                                          Instant createdAt, Instant updatedAt, long version) {
+        return rehydrate(id, name, hostname, agentBaseUrl, agentCertFingerprint, connectivityMode,
+                PushTransport.MTLS, null, environment, status, nginxVersion, agentVersion,
+                lastSeenAt, createdAt, updatedAt, version);
     }
 
     private static String validName(String name) {
@@ -125,6 +158,10 @@ public final class NginxInstance {
     }
 
     private static URI validAgentUrl(String agentBaseUrl) {
+        return validAgentUrl(agentBaseUrl, PushTransport.MTLS);
+    }
+
+    private static URI validAgentUrl(String agentBaseUrl, PushTransport transport) {
         if (agentBaseUrl == null || agentBaseUrl.isBlank()) {
             throw new ValidationException("agentBaseUrl", "Agent base URL must not be blank");
         }
@@ -134,13 +171,23 @@ public final class NginxInstance {
         } catch (IllegalArgumentException e) {
             throw new ValidationException("agentBaseUrl", "Agent base URL is not a valid URI");
         }
-        if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new ValidationException("agentBaseUrl", "The agent must be reached over HTTPS with mTLS");
+        if (transport == PushTransport.MTLS && !"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new ValidationException("agentBaseUrl", "The mTLS agent must be reached over HTTPS with mTLS");
+        }
+        if (transport.isToken() && !"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()) && !"grpc".equalsIgnoreCase(uri.getScheme())) {
+            throw new ValidationException("agentBaseUrl", "Agent base URL scheme must be http, https, or grpc");
         }
         if (uri.getHost() == null) {
             throw new ValidationException("agentBaseUrl", "Agent base URL must include a host");
         }
         return uri;
+    }
+
+    private static String validAuthToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new ValidationException("agentAuthToken", "Agent auth token is required for HTTP/gRPC push mode");
+        }
+        return token.trim();
     }
 
     private static String validFingerprint(String fingerprint) {
@@ -215,6 +262,14 @@ public final class NginxInstance {
 
     public ConnectivityMode connectivityMode() {
         return connectivityMode;
+    }
+
+    public PushTransport pushTransport() {
+        return pushTransport;
+    }
+
+    public String agentAuthToken() {
+        return agentAuthToken;
     }
 
     public String environment() {
