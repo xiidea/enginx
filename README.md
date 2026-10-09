@@ -1,5 +1,10 @@
 # Easy NGINX Admin
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
+  <img alt="Architecture: operators use the console, signing in through Keycloak (realm or client roles) or local accounts. The stateless management server — domain-scoped permissions, renderer, deployments, scheduler, certificates and secrets, on PostgreSQL with optional Vault and an ACME CA — dials push hosts over mTLS or a token, while pull hosts call in by long-poll. Every change on every host goes through render, upload, validate with nginx -t, atomic activate, reload, and verify." src="docs/images/architecture-light.png">
+</picture>
+
 An enterprise control plane for NGINX reverse proxies: expirable proxy sites, domain-scoped
 permissions, validated configuration deployment and automated certificate lifecycle, across many
 NGINX hosts, without ever opening an SSH session.
