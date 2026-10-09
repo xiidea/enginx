@@ -317,7 +317,7 @@ name: enginx
 
 services:
   proxy-management:
-    image: ghcr.io/xiidea/enginx-management:latest
+    image: ghcr.io/xiidea/enginx-management:0.1.0
     restart: unless-stopped
     environment:
       # --- external database (§2) ---
@@ -368,7 +368,7 @@ services:
     networks: [enginx]
 
   console:
-    image: ghcr.io/xiidea/enginx-console:latest
+    image: ghcr.io/xiidea/enginx-console:0.1.0
     restart: unless-stopped
     environment:
       API_BASE: https://nginx.example.com/api/v1/
@@ -466,7 +466,7 @@ The management plane dials each host on `:8443` over mutual TLS. Do this per NGI
 **Install the binary** (same for both modes):
 
 ```bash
-VERSION=0.0.7
+VERSION=0.1.0
 curl -LO "https://github.com/xiidea/enginx/releases/download/v${VERSION}/enginx-agent-linux-amd64"
 curl -LO "https://github.com/xiidea/enginx/releases/download/v${VERSION}/SHA256SUMS.txt"
 sha256sum --ignore-missing -c SHA256SUMS.txt          # verify before trusting it

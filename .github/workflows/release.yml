@@ -136,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: enginx-agent/go.mod
           cache-dependency-path: enginx-agent/go.sum
@@ -472,9 +472,23 @@ jobs:
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease";; esac
 
-          # Generated notes plus the images, because a release that lists only binaries reads as
-          # though there are none — and the images are what most people actually deploy.
-          cat > notes.md <<EOF
+          # The changelog's section for this version first. --generate-notes lists merged pull
+          # requests only, so anything pushed without one would otherwise go unannounced -- and the
+          # breaking changes and upgrade steps are exactly what must not. An rc uses the section of
+          # the version it is a candidate for. A final release without a section is refused.
+          base="${VERSION#v}"; base="${base%%-*}"
+          awk -v heading="## ${base}" '
+            index($0, heading) == 1 && (length($0) == length(heading) || substr($0, length(heading) + 1, 1) ~ /[ \t]/) { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ] && [ -z "$prerelease" ]; then
+            echo "::error::CHANGELOG.md has no '## ${base}' section"; exit 1
+          fi
+
+          # Then the images, because a release that lists only binaries reads as though there are
+          # none — and the images are what most people actually deploy.
+          cat >> notes.md <<EOF
           ### Container images
 
           \`\`\`

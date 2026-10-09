@@ -7,6 +7,7 @@ import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
 import { StatusPill } from '../../shared/status-pill';
 import { DateTimePipe } from '../../shared/formatting';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-instance-list',
@@ -157,16 +158,22 @@ export class InstanceList implements OnInit {
     });
   }
 
-  /** The command an operator runs on the new host, with the token already in it. */
+  /**
+   * The command an operator runs on the new host, with the token already in it.
+   *
+   * The API base is the one this console talks to, and the image is the release this console is,
+   * so a host enrolled from it runs the same version as the platform it joins.
+   */
   runCommand(): string {
+    const tag = environment.version === 'dev' ? 'latest' : environment.version;
     return [
       'docker run -d --name enginx-agent \\',
-      `  -e ENGINX_SERVER_URL=${window.location.origin.replace(':4200', ':8080')}/api/v1 \\`,
+      `  -e ENGINX_SERVER_URL=${environment.apiBase} \\`,
       `  -e ENGINX_REGISTRATION_TOKEN=${this.mintedToken()} \\`,
       '  -e ENGINX_INSTANCE_NAME=nginx-edge-01 \\',
       '  -v /var/lib/enginx:/var/lib/enginx \\',
       '  -p 80:80 -p 443:443 \\',
-      '  xiidea/enginx-agent:latest',
+      `  ghcr.io/xiidea/enginx-agent:${tag}`,
     ].join('\n');
   }
 

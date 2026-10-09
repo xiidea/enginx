@@ -40,13 +40,13 @@ Releases publish static binaries for Linux (amd64, arm64, armv7) and macOS (arm6
 is for running an agent on a developer's machine; a production host is Linux.
 
 ```bash
-VERSION=0.0.4
+VERSION=0.1.0
 curl -LO "https://github.com/xiidea/enginx/releases/download/v${VERSION}/enginx-agent-linux-amd64"
 curl -LO "https://github.com/xiidea/enginx/releases/download/v${VERSION}/SHA256SUMS.txt"
 sha256sum --ignore-missing -c SHA256SUMS.txt
 
 install -m 0755 enginx-agent-linux-amd64 /usr/local/bin/enginx-agent
-enginx-agent -version        # enginx-agent 0.0.4 (a1b2c3d) linux/amd64
+enginx-agent -version        # enginx-agent 0.1.0 (a1b2c3d) linux/amd64
 ```
 
 Verify the checksum before installing. It is the only thing standing between a download and a
@@ -55,7 +55,7 @@ binary that will be given every site's private key.
 The container image is the other way to run it, and carries NGINX with it:
 
 ```
-ghcr.io/xiidea/enginx-agent:0.0.4
+ghcr.io/xiidea/enginx-agent:0.1.0
 ```
 
 ## Dial mode
