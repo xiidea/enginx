@@ -1,13 +1,18 @@
 package api
 
 import (
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 )
 
-// requireClientCN enforces the certificate pin for mTLS.
+// requireClientCN enforces the certificate pin.
+//
+// TLS has already verified that the peer holds a certificate signed by our CA. That proves the
+// caller is *someone* the CA trusts, not that it is the management server, so the common name
+// is checked as well.
 func requireClientCN(expected string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
@@ -25,21 +30,20 @@ func requireClientCN(expected string, next http.Handler) http.Handler {
 	})
 }
 
-// requireBearerToken enforces shared token authentication for HTTP/gRPC push mode.
+// requireBearerToken enforces the pre-shared token, for an agent the management server cannot
+// reach with a client certificate.
+//
+// Compared in constant time: this token is the only authentication on the listener, and a
+// comparison that returns at the first differing byte lets a caller recover it by timing.
 func requireBearerToken(expected string, next http.Handler) http.Handler {
+	want := []byte(expected)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		token := ""
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		} else if strings.HasPrefix(authHeader, "bearer ") {
-			token = strings.TrimPrefix(authHeader, "bearer ")
-		}
-
-		if token == "" || token != expected {
-			slog.Warn("rejected push agent request: invalid or missing bearer token")
-			writeProblem(w, r, http.StatusUnauthorized, "unauthorized",
-				"Unauthorized", "A valid agent secret token is required.")
+		scheme, token, found := strings.Cut(r.Header.Get("Authorization"), " ")
+		if !found || !strings.EqualFold(scheme, "Bearer") || token == "" ||
+			subtle.ConstantTimeCompare([]byte(token), want) != 1 {
+			slog.Warn("rejected request without a valid agent token", "remote", r.RemoteAddr)
+			writeProblem(w, r, http.StatusUnauthorized, "agent-token-required",
+				"Agent token required", "A valid agent token is required.")
 			return
 		}
 		next.ServeHTTP(w, r)

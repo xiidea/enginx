@@ -79,17 +79,28 @@ func main() {
 	defer stop()
 
 	server := api.NewServer(cfg, controller, bundle.NewStore(cfg.ReleasesDir))
+	// Two writers in pull mode: the runner and the health listener. Buffered for both, so the
+	// loser of the race does not block forever on a send nobody will receive.
 	serverErr := make(chan error, 2)
 
 	if cfg.PullMode() {
+		// No listener anything can reach: pull mode needs no inbound connectivity, so opening a
+		// port would widen this host's surface for nothing. The loopback health listener is the
+		// exception, and is not reachable from off the host — without it there would be nothing
+		// on this host to probe, and a container could only be called healthy by not asking.
 		go func() { serverErr <- runner.New(cfg, server).Run(ctx) }()
 		go func() { serverErr <- server.RunHealth(ctx) }()
 		slog.Info("agent running in pull mode",
 			"server", cfg.ServerURL, "instance", cfg.InstanceName, "health", cfg.HealthAddr)
-	} else if cfg.AgentPushProtocol == "http" || cfg.AgentPushProtocol == "grpc" {
-		go func() { serverErr <- server.RunTokenHTTP(ctx) }()
+	} else if cfg.TokenMode() {
+		go func() { serverErr <- server.Run(ctx) }()
 		slog.Info("agent listening with token authentication",
-			"protocol", cfg.AgentPushProtocol, "addr", cfg.ListenAddr, "health", cfg.HealthAddr)
+			"addr", cfg.ListenAddr, "tls", cfg.TokenTLS, "health", cfg.HealthAddr)
+		if !cfg.TokenTLS {
+			slog.Warn("the token listener is plain HTTP: the token and every bundle, including " +
+				"private keys, cross the network in clear unless a TLS proxy fronts this port. " +
+				"Set AGENT_TLS_CERT and AGENT_TLS_KEY to serve HTTPS")
+		}
 	} else {
 		go func() { serverErr <- server.Run(ctx) }()
 		slog.Info("agent listening", "mtls", cfg.ListenAddr, "health", cfg.HealthAddr,
@@ -104,6 +115,8 @@ func main() {
 			os.Exit(1)
 		}
 	case <-controller.Exited():
+		// NGINX dying is different from never having started: something that was serving traffic
+		// has stopped, and the container should be replaced rather than left half-alive.
 		slog.Error("nginx exited; shutting down the agent")
 		os.Exit(1)
 	case <-ctx.Done():

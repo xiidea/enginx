@@ -55,7 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /agent/v1/acme-challenges/{token}", s.handlePutAcmeChallenge)
 	mux.HandleFunc("DELETE /agent/v1/acme-challenges/{token}", s.handleDeleteAcmeChallenge)
 
-	if s.cfg.AgentPushProtocol == "http" || s.cfg.AgentPushProtocol == "grpc" {
+	if s.cfg.TokenMode() {
 		return logRequests(requireBearerToken(s.cfg.AgentSecretToken, mux))
 	}
 	return logRequests(requireClientCN(s.cfg.ClientCN, mux))
@@ -214,9 +214,20 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Run starts both mTLS listeners and blocks until the context is cancelled.
+// Run starts the API and health listeners and blocks until the context is cancelled.
+//
+// The API listener is mutual TLS by default. In token mode it asks for no client certificate,
+// and serves HTTPS only when a server keypair was configured; Handler chooses the matching
+// authentication either way.
 func (s *Server) Run(ctx context.Context) error {
-	tlsConfig, err := s.TLSConfig()
+	var tlsConfig *tls.Config
+	var err error
+	switch {
+	case !s.cfg.TokenMode():
+		tlsConfig, err = s.TLSConfig()
+	case s.cfg.TokenTLS:
+		tlsConfig, err = s.tokenTLSConfig()
+	}
 	if err != nil {
 		return err
 	}
@@ -238,8 +249,14 @@ func (s *Server) Run(ctx context.Context) error {
 
 	errs := make(chan error, 2)
 	go func() {
-		if err := apiServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			errs <- fmt.Errorf("mTLS listener: %w", err)
+		var err error
+		if tlsConfig != nil {
+			err = apiServer.ListenAndServeTLS("", "")
+		} else {
+			err = apiServer.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
+			errs <- fmt.Errorf("API listener: %w", err)
 		}
 	}()
 	go func() {
@@ -260,53 +277,32 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// RunTokenHTTP starts the HTTP listener with Bearer Token auth (without requiring mTLS certificates).
-func (s *Server) RunTokenHTTP(ctx context.Context) error {
-	apiServer := &http.Server{
-		Addr:              s.cfg.ListenAddr,
-		Handler:           s.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		WriteTimeout:      120 * time.Second,
-		IdleTimeout:       90 * time.Second,
+// tokenTLSConfig serves HTTPS for token mode. Server identity only: the bearer token is what
+// authenticates the caller, so no client certificate is requested.
+func (s *Server) tokenTLSConfig() (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(s.cfg.TLSCertFile, s.cfg.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("loading agent keypair: %w", err)
 	}
-	healthServer := &http.Server{
-		Addr:              s.cfg.HealthAddr,
-		Handler:           s.HealthHandler(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-
-	errs := make(chan error, 2)
-	go func() {
-		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errs <- fmt.Errorf("HTTP listener: %w", err)
-		}
-	}()
-	go func() {
-		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errs <- fmt.Errorf("health listener: %w", err)
-		}
-	}()
-
-	select {
-	case err := <-errs:
-		return err
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = apiServer.Shutdown(shutdownCtx)
-		_ = healthServer.Shutdown(shutdownCtx)
-		return nil
-	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS12,
+	}, nil
 }
 
 // StageBundle stores a bundle without changing what is served.
+//
+// Exported so a pull-mode runner performs exactly the operation the HTTP handler performs. Two
+// copies of staging and atomic activation is precisely the drift this platform exists to prevent,
+// and it would be invisible until the two connectivity models behaved differently on one host.
 func (s *Server) StageBundle(b bundle.Bundle) error {
 	return s.bundles.Stage(b)
 }
 
 // ActivateBundle validates the staged bundle, swaps it in and reloads.
 func (s *Server) ActivateBundle(ctx context.Context, bundleID string, reload bool) (bundle.Result, error) {
+	// Every rendered bundle points its HTTPS catch-all at this pair, and a host whose releases
+	// directory was wiped would otherwise fail validation citing a certificate nobody configured.
 	if err := defaulttls.Ensure(s.cfg.ReleasesDir); err != nil {
 		return bundle.Result{}, err
 	}

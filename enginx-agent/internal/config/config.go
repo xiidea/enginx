@@ -7,11 +7,27 @@ package config
 
 import (
 	"fmt"
-	"github.com/xiidea/enginx/enginx-agent/internal/version"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/xiidea/enginx/enginx-agent/internal/version"
 )
+
+// Push protocols. The listener a dialled agent opens, and so how the management server proves
+// who it is.
+const (
+	// ProtocolMTLS requires a client certificate signed by the configured CA, with a pinned CN.
+	ProtocolMTLS = "mtls"
+	// ProtocolHTTP requires a pre-shared bearer token. For hosts behind a proxy that terminates
+	// TLS and so cannot pass a client certificate through.
+	ProtocolHTTP = "http"
+)
+
+// MinSecretTokenLength is the shortest AGENT_SECRET_TOKEN accepted. The token is the only thing
+// standing between the network and a process that writes NGINX configuration and private keys,
+// so a guessable one is refused at startup rather than discovered later.
+const MinSecretTokenLength = 32
 
 type Config struct {
 	// ListenAddr is the mTLS API listener. Bind it to the management network only.
@@ -27,10 +43,14 @@ type Config struct {
 	// certificate it ever signed drive this host.
 	ClientCN string
 
-	// AgentPushProtocol specifies the listener protocol for push mode: mtls (default), http, or grpc.
+	// AgentPushProtocol is the push-mode listener: ProtocolMTLS (default) or ProtocolHTTP.
 	AgentPushProtocol string
-	// AgentSecretToken is the pre-shared secret token expected when AgentPushProtocol is http or grpc.
+	// AgentSecretToken is the pre-shared bearer token expected under ProtocolHTTP.
 	AgentSecretToken string
+	// TokenTLS serves the token listener over HTTPS with TLSCertFile/TLSKeyFile. Set when both
+	// are given explicitly under ProtocolHTTP. No client certificate is asked for: the token is
+	// the authentication, and TLS here only keeps it, and the bundles, off the wire in clear.
+	TokenTLS bool
 
 	ReleasesDir string
 	NginxBinary string
@@ -63,6 +83,12 @@ type Config struct {
 	PollWait time.Duration
 }
 
+// TokenMode reports whether a dialled agent authenticates the management server by bearer token
+// rather than by client certificate.
+func (c Config) TokenMode() bool {
+	return !c.PullMode() && c.AgentPushProtocol == ProtocolHTTP
+}
+
 // PullMode reports whether this agent calls the platform rather than being called.
 func (c Config) PullMode() bool {
 	return strings.TrimSpace(c.ServerURL) != ""
@@ -76,7 +102,7 @@ func Load() (Config, error) {
 		TLSKeyFile:        env("AGENT_TLS_KEY", "/etc/enginx/pki/agent.key"),
 		ClientCAFile:      env("AGENT_CLIENT_CA", "/etc/enginx/pki/ca.crt"),
 		ClientCN:          env("AGENT_CLIENT_CN", "enginx-management"),
-		AgentPushProtocol: strings.ToLower(strings.TrimSpace(env("AGENT_PUSH_PROTOCOL", "mtls"))),
+		AgentPushProtocol: strings.ToLower(strings.TrimSpace(env("AGENT_PUSH_PROTOCOL", ProtocolMTLS))),
 		AgentSecretToken:  strings.TrimSpace(env("AGENT_SECRET_TOKEN", "")),
 		ReleasesDir:       env("AGENT_RELEASES_DIR", "/etc/nginx/enginx"),
 		NginxBinary:       env("AGENT_NGINX_BINARY", "/usr/sbin/nginx"),
@@ -102,12 +128,36 @@ func Load() (Config, error) {
 			cfg.InstanceName = strings.ToLower(host)
 		}
 	} else {
-		if cfg.AgentPushProtocol == "http" || cfg.AgentPushProtocol == "grpc" {
-			if cfg.AgentSecretToken == "" {
-				return Config{}, fmt.Errorf("AGENT_SECRET_TOKEN is required when AGENT_PUSH_PROTOCOL is %s", cfg.AgentPushProtocol)
+		if cfg.AgentPushProtocol != ProtocolMTLS && cfg.AgentPushProtocol != ProtocolHTTP {
+			return Config{}, fmt.Errorf("AGENT_PUSH_PROTOCOL must be %s or %s, not %q",
+				ProtocolMTLS, ProtocolHTTP, cfg.AgentPushProtocol)
+		}
+
+		if cfg.AgentPushProtocol == ProtocolHTTP {
+			if len(cfg.AgentSecretToken) < MinSecretTokenLength {
+				return Config{}, fmt.Errorf("AGENT_SECRET_TOKEN must be at least %d characters when "+
+					"AGENT_PUSH_PROTOCOL is http; generate one with: openssl rand -hex 32", MinSecretTokenLength)
+			}
+			certSet := strings.TrimSpace(os.Getenv("AGENT_TLS_CERT")) != ""
+			keySet := strings.TrimSpace(os.Getenv("AGENT_TLS_KEY")) != ""
+			if certSet != keySet {
+				return Config{}, fmt.Errorf("AGENT_TLS_CERT and AGENT_TLS_KEY must be set together")
+			}
+			if certSet {
+				for name, path := range map[string]string{
+					"AGENT_TLS_CERT": cfg.TLSCertFile,
+					"AGENT_TLS_KEY":  cfg.TLSKeyFile,
+				} {
+					if _, err := os.Stat(path); err != nil {
+						return Config{}, fmt.Errorf("%s: %s is not readable: %w", name, path, err)
+					}
+				}
+				cfg.TokenTLS = true
 			}
 		} else {
-			// Push mode mTLS needs its listener identity up front.
+			// Push mode needs its listener identity up front. Pull mode does not open a listener
+			// at all, so requiring these would make a certificate a precondition for a model that
+			// has no use for one.
 			for name, path := range map[string]string{
 				"AGENT_TLS_CERT":  cfg.TLSCertFile,
 				"AGENT_TLS_KEY":   cfg.TLSKeyFile,
