@@ -23,6 +23,10 @@ From this release on, the schema only moves forward through migrations.
   own default server (`PUT /api/v1/nginx-instances/{id}/default-server`). HTTP/2 is rendered in the
   form the host's version understands, so stock NGINX on current Debian and Ubuntu LTS loads it.
   1.22 (Debian 12) and 1.27 are tested; 1.18 and later is expected to work.
+- **Custom directives without an editor.** Every rendered server block includes host-owned files
+  under `/etc/nginx/enginx/custom/` — `http/`, `server/`, `sites/<domain>/`, `redirect/` and
+  `default/` — NGINX Proxy Manager's custom-files mechanism. Writing one takes root on the host, not
+  a grant in the console, and every deployment's validation loads them.
 - **VERIFY proves the site is served.** Each site answers `/.well-known/enginx/site` with its own id,
   and only that answer verifies it. A default page answering 200 used to pass for a site that was not
   being served at all.

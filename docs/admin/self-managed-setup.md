@@ -510,6 +510,10 @@ or keep it, and register the host with **This host keeps its own default server*
 console (`"defaultServerManaged": false` over the API; changeable later with
 `PUT /api/v1/nginx-instances/{id}/default-server`). Unmatched names are then the host's to answer.
 
+**4. (Optional) Directives the platform does not model.** Put them in
+`/etc/nginx/enginx/custom/` — for every site, one site, or the whole `http` block — and the
+rendered configuration includes them. See [Custom directives](agent.md#custom-directives).
+
 **Install the binary** (same for both modes):
 
 ```bash

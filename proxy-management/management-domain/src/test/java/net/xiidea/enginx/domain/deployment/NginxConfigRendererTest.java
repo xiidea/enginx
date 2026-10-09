@@ -303,4 +303,42 @@ class NginxConfigRendererTest {
             }
         }
     }
+
+    @Nested
+    @DisplayName("host include hooks")
+    class IncludeHooks {
+
+        private static final String CUSTOM = "/etc/nginx/enginx/custom/";
+
+        @Test
+        void everyServingBlockIncludesTheSharedAndTheSiteHook() {
+            String rendered = renderer.renderSitePreview(spec("both.example.com").ssl(false, false).site(SITE_ID),
+                    TEST_CERTIFICATE, MODERN);
+
+            // Port 80 and port 443 both serve the site, so both carry the hooks, last.
+            assertThat(rendered.split("include " + CUSTOM + "server/\\*\\.conf;", -1)).hasSize(3);
+            assertThat(rendered.split("include " + CUSTOM + "sites/both.example.com/\\*\\.conf;", -1)).hasSize(3);
+            assertThat(rendered.strip()).endsWith("include " + CUSTOM + "sites/both.example.com/*.conf;\n}");
+        }
+
+        @Test
+        void theRedirectBlockHasItsOwnHook() {
+            String rendered = renderer.renderSitePreview(spec("r.example.com").ssl(true, false).site(SITE_ID),
+                    TEST_CERTIFICATE, MODERN);
+            assertThat(rendered).contains("include " + CUSTOM + "redirect/*.conf;");
+        }
+
+        @Test
+        void theBaseCarriesTheHttpHookAlwaysAndTheDefaultHookWithTheCatchAll() {
+            List<ProxySite> sites = List.of(spec("x.example.com").site(SITE_ID));
+            String managed = fileContent(renderer.render(BUNDLE, INSTANCE, MODERN, 1, sites, NO_CERTIFICATES, "ada", NOW),
+                    "conf.d/00-enginx-base.conf");
+            String hostOwned = fileContent(renderer.render(BUNDLE, INSTANCE, new RenderTarget("1.27.5", false), 1,
+                    sites, NO_CERTIFICATES, "ada", NOW), "conf.d/00-enginx-base.conf");
+
+            assertThat(managed).contains("include " + CUSTOM + "http/*.conf;");
+            assertThat(managed.split("include " + CUSTOM + "default/\\*\\.conf;", -1)).hasSize(3);
+            assertThat(hostOwned).contains("include " + CUSTOM + "http/*.conf;").doesNotContain("default/");
+        }
+    }
 }

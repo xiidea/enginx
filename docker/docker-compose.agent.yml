@@ -48,6 +48,9 @@ services:
       # survives a container replacement and the host comes back serving what it was serving.
       - nginx-releases:/etc/nginx/enginx
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Directives the platform does not model, written by whoever administers this host. Every
+      # rendered server block includes them; see "Custom directives" in docs/admin/agent.md.
+      # - ./nginx-custom:/etc/nginx/enginx/custom:ro
       # This host's agent certificate and the CA that signs the management client. Mounted
       # read-only: the agent has no reason to rewrite its own identity.
       - ${AGENT_PKI_DIR:-./pki/out}:/etc/enginx/pki:ro

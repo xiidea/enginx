@@ -265,4 +265,11 @@ and refusing it is the reason this one can claim configuration injection is prev
 `ProxySiteSpec` value object is the only input to the renderer specifically so that there is one
 boundary to defend rather than many.
 
+What exists instead, since v0.1.0, is the escape hatch NGINX Proxy Manager calls custom files:
+every rendered server block includes `/etc/nginx/enginx/custom/` hooks by wildcard, for the whole
+host, every site, or one site ([agent guide](admin/agent.md#custom-directives)). Writing one takes
+root on the host, not a grant in this platform, so the boundary above still holds for everything
+reachable through the API. The next step, if needed, is more structured options for the common
+reasons people reach for raw directives — access lists, basic auth, rate limits — not an editor.
+
 **Auto-remediation of drift.** Named here so it is a decision rather than an omission — see 9.3.

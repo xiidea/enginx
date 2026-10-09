@@ -806,6 +806,11 @@ Unauthenticated liveness for container orchestration. Returns no host detail.
 │   ├── 01J8.../          # bundle: conf.d/, certs/
 │   └── 01J9.../
 ├── current -> releases/01J9...   # atomically renamed symlink
+├── acme-challenge/               # HTTP-01 responses, outside any release
+├── default-tls/                  # the catch-all's certificate, valid for no name
+├── custom/                       # the host administrator's own directives; never touched by the agent
+│   ├── http/*.conf  server/*.conf  redirect/*.conf  default/*.conf
+│   └── sites/<domain>/*.conf
 └── agent/{agent.crt, agent.key, ca.crt}
 ```
 `/etc/nginx/nginx.conf` contains one line the platform never rewrites: `include /etc/nginx/enginx/current/conf.d/*.conf;`. Retention keeps the last 10 releases so rollback targets exist on disk.

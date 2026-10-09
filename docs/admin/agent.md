@@ -265,6 +265,51 @@ own id, served by NGINX itself. After a reload the agent asks for it under each 
 to five seconds while old workers hand over, and a site counts as served only when its own id comes
 back. A distribution's default page answering 200 is reported as answered by something else.
 
+## Custom directives
+
+For the directive the platform does not model — a rate limit, a header on every site, an
+`allow`/`deny` list, a log format — the host's administrator writes it in a file the rendered
+configuration includes. It is NGINX Proxy Manager's custom-files mechanism, and deliberately not an
+editor in the console: a directive here can do anything NGINX can, so writing one takes root on the
+host rather than a grant in this platform.
+
+| File | Included |
+|---|---|
+| `/etc/nginx/enginx/custom/http/*.conf` | in the `http` block, before every server: zones, maps, log formats |
+| `/etc/nginx/enginx/custom/server/*.conf` | at the end of every site's server block, ports 80 and 443 |
+| `/etc/nginx/enginx/custom/sites/<domain>/*.conf` | at the end of that one site's server blocks |
+| `/etc/nginx/enginx/custom/redirect/*.conf` | at the end of every HTTP → HTTPS redirect block |
+| `/etc/nginx/enginx/custom/default/*.conf` | at the end of the platform's catch-all servers, when it renders them |
+
+For example, a header on every site and a rate limit on one:
+
+```bash
+mkdir -p /etc/nginx/enginx/custom/http /etc/nginx/enginx/custom/server \
+         /etc/nginx/enginx/custom/sites/app.example.com
+echo 'limit_req_zone $binary_remote_addr zone=app_rl:10m rate=20r/s;' \
+  > /etc/nginx/enginx/custom/http/ratelimit.conf
+echo 'add_header X-Robots-Tag "noindex" always;' > /etc/nginx/enginx/custom/server/headers.conf
+echo 'limit_req zone=app_rl burst=40;' > /etc/nginx/enginx/custom/sites/app.example.com/limits.conf
+nginx -t && nginx -s reload
+```
+
+What to know:
+
+- **Nothing to configure.** The includes are wildcards, which NGINX accepts when nothing matches,
+  even when the directory does not exist. A host without custom files is unaffected.
+- **Apply edits with `nginx -t && nginx -s reload`** on the host (`docker exec <agent container> sh
+  -c 'nginx -t && nginx -s reload'` for the image; `systemctl reload nginx` when the host's service
+  runs NGINX). The platform does not see these files, so it neither deploys them nor notices them
+  change — keep them in configuration management.
+- **Every deployment validates them.** Its `nginx -t` loads the custom files too, so a broken one
+  fails the deployment at VALIDATE naming the file and line, and nothing changes on the host. Fix the
+  file, then deploy again.
+- **They come last in each server block**, after the platform's locations. A `location` repeating a
+  path the platform already renders fails validation rather than silently winning.
+- **The agent never touches the directory.** It lives beside `acme-challenge/` and `default-tls/`,
+  outside the release tree. For the container image, bind-mount it into the releases volume — the
+  agent compose file has the line commented out.
+
 ## Switching a host between modes
 
 There is no in-place switch. A host is registered one way or the other, and the two carry different
