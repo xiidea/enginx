@@ -74,16 +74,8 @@
             <input id="transport-http" type="radio" name="pushTransport" [checked]="pushTransport() === 'HTTP_TOKEN'"
               (change)="setPushTransport('HTTP_TOKEN')" />
             <span>
-              <strong>HTTP (Bearer Token)</strong>
-              <span class="muted small">REST API over HTTP or HTTPS. Authenticated with pre-shared Bearer secret token.</span>
-            </span>
-          </label>
-          <label for="transport-grpc" [class.chosen]="pushTransport() === 'GRPC_TOKEN'">
-            <input id="transport-grpc" type="radio" name="pushTransport" [checked]="pushTransport() === 'GRPC_TOKEN'"
-              (change)="setPushTransport('GRPC_TOKEN')" />
-            <span>
-              <strong>gRPC (Bearer Token)</strong>
-              <span class="muted small">gRPC service over HTTP/2. Authenticated with pre-shared Bearer secret token.</span>
+              <strong>Token</strong>
+              <span class="muted small">A pre-shared token instead of a client certificate. For a host behind a proxy that terminates TLS.</span>
             </span>
           </label>
         </div>
@@ -92,11 +84,14 @@
         <label for="iurl">Agent base URL</label>
         <input id="iurl" class="mono" [ngModel]="agentBaseUrl()" (ngModelChange)="agentBaseUrl.set($event)" [placeholder]="urlPlaceholder()" />
         @if (pushTransport() === 'MTLS') {
-          <p class="hint">HTTPS only. Pinned with agent client certificate.</p>
-        } @else if (pushTransport() === 'HTTP_TOKEN') {
-          <p class="hint">HTTP or HTTPS base URL of the agent REST API (e.g. http://host:8080 or https://host:8443).</p>
+          <p class="hint">HTTPS only. The agent requires a client certificate, so this is never reachable without one.</p>
+        } @else if (insecureTokenUrl()) {
+          <p class="hint insecure" role="alert">
+            Plain HTTP: the token and every bundle, private keys included, cross the network readable.
+            Use HTTPS, or only a proxy on the same machine that terminates TLS.
+          </p>
         } @else {
-          <p class="hint">gRPC service endpoint URL (e.g. http://host:50051 or https://host:50051).</p>
+          <p class="hint">HTTPS, served by the agent itself or by a proxy in front of it.</p>
         }
       </div>
       @if (pushTransport() === 'MTLS') {
@@ -110,17 +105,18 @@
         </div>
       } @else {
         <div>
-          <label for="itoken">Shared auth token</label>
+          <label for="itoken">Agent token</label>
           <div class="input-with-button">
             <input id="itoken" class="mono" [type]="showAuthToken() ? 'text' : 'password'"
               [ngModel]="agentAuthToken()" (ngModelChange)="agentAuthToken.set($event)"
-              placeholder="Enter pre-shared token" />
+              placeholder="At least 32 characters" autocomplete="off" />
             <button class="btn btn-sm" type="button" (click)="showAuthToken.set(!showAuthToken())">
               {{ showAuthToken() ? 'Hide' : 'Show' }}
             </button>
           </div>
           <p class="hint">
-            The secret token configured on the agent (<code>ENGINX_AUTH_TOKEN</code>). Presented as a Bearer token in requests.
+            The value of <code>AGENT_SECRET_TOKEN</code> on the host. Generate one with
+            <code>openssl rand -hex 32</code>. Stored encrypted, and never shown again.
           </p>
         </div>
       }
@@ -263,11 +259,9 @@
                 @if (instance.connectivityMode === 'PULL') {
                   <span class="mode pull" title="This host connects to the platform">calls in</span>
                 } @else if (instance.pushTransport === 'HTTP_TOKEN') {
-                  <span class="mode push" title="HTTP REST dial with bearer token">HTTP Token</span>
-                } @else if (instance.pushTransport === 'GRPC_TOKEN') {
-                  <span class="mode push" title="gRPC dial with bearer token">gRPC Token</span>
+                  <span class="mode push" title="The platform connects to this host with a token">dialled · token</span>
                 } @else {
-                  <span class="mode push" title="Mutual TLS connection">mTLS</span>
+                  <span class="mode push" title="The platform connects to this host with a client certificate">dialled · mTLS</span>
                 }
               </td>
               <td class="mono small">
@@ -275,7 +269,7 @@
                   <span class="muted">no address needed</span>
                 } @else {
                   {{ instance.agentBaseUrl }}
-                  @if (instance.pushTransport === 'HTTP_TOKEN' || instance.pushTransport === 'GRPC_TOKEN') {
+                  @if (instance.pushTransport === 'HTTP_TOKEN') {
                     <div class="muted">token auth</div>
                   } @else {
                     <div class="muted">{{ instance.agentCertFingerprint?.slice(0, 16) }}…</div>

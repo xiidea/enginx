@@ -6,6 +6,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -33,5 +34,27 @@ public class OpenApiConfig {
                         .scheme("bearer")
                         .bearerFormat("JWT")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER));
+    }
+
+    /**
+     * Names every operation after its controller and method, unless one is given explicitly.
+     *
+     * <p>springdoc's own ids are the bare method name, de-duplicated with a counter in whatever
+     * order it happens to scan controllers — so {@code list_6} became {@code get} on an unrelated
+     * regeneration, and the generated console types churned for a change that touched neither.
+     */
+    @Bean
+    OperationCustomizer stableOperationIds() {
+        return (operation, handler) -> {
+            io.swagger.v3.oas.annotations.Operation declared =
+                    handler.getMethodAnnotation(io.swagger.v3.oas.annotations.Operation.class);
+            if (declared != null && !declared.operationId().isEmpty()) {
+                return operation;
+            }
+            String controller = handler.getBeanType().getSimpleName().replaceFirst("Controller$", "");
+            operation.setOperationId(Character.toLowerCase(controller.charAt(0)) + controller.substring(1)
+                    + "_" + handler.getMethod().getName());
+            return operation;
+        };
     }
 }

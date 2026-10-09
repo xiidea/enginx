@@ -45,6 +45,8 @@ export type CertificateStatus = 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'REVOKED
 export type PermissionLevel = 'READ' | 'OPERATE' | 'MANAGE' | 'ADMIN';
 export type ScopeType = 'GLOBAL' | 'DOMAIN_GROUP' | 'DOMAIN_PATTERN' | 'SITE';
 export type SubjectType = 'USER' | 'GROUP';
+/** How the platform dials a push host. A pull host has none. */
+export type PushTransport = 'MTLS' | 'HTTP_TOKEN';
 
 export interface Page<T> {
   content: T[];

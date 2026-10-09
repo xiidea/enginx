@@ -4,29 +4,51 @@
  */
 
 export interface paths {
-    "/api/v1/proxy-sites/{id}": {
+    "/api/v1/agent-registration-tokens": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Fetch one proxy site */
-        get: operations["get"];
         /**
-         * Replace a proxy site
-         * @description Send the version last read as If-Match to have concurrent edits rejected.
+         * List registration tokens
+         * @description Never returns a token, only what is known about it. The secret exists in clear exactly once, in the response that created it.
          */
-        put: operations["update"];
-        post?: never;
-        /** Delete a proxy site */
-        delete: operations["delete"];
+        get: operations["agentRegistrationToken_list"];
+        put?: never;
+        /**
+         * Mint a registration token
+         * @description The response carries the token in clear. It is not stored and cannot be shown again; a lost token is replaced rather than recovered.
+         */
+        post: operations["agentRegistrationToken_create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/proxy-sites/{id}/notifications": {
+    "/api/v1/agent-registration-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a registration token
+         * @description Stops it enrolling anything further. Hosts already enrolled with it keep working: they hold agent tokens of their own, issued separately.
+         */
+        delete: operations["agentRegistrationToken_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/bundles/{bundleId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -34,15 +56,629 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Who is told about this site
-         * @description A site nobody has configured returns the defaults: expiry warnings on, and only the platform's operator addresses receive them.
+         * Fetch a bundle this host has been told to apply
+         * @description Refused unless the bundle belongs to the calling host.
          */
-        get: operations["notifications"];
+        get: operations["agentJob_bundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         /**
-         * Choose who is told about this site
-         * @description Replaces the settings wholesale, because the console sends back the list it displayed — two people editing at once cannot then produce a union neither of them chose. Requires OPERATE: this is operational, and does not change what anybody is served. Never triggers a deployment.
+         * Report this host's state
+         * @description Replaces the status call the platform makes to a push-mode host. The reported values are interpreted identically, so ONLINE and DEGRADED mean the same thing whichever end of the connection asked.
          */
-        put: operations["configureNotifications"];
+        post: operations["agent_heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/jobs/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Collect the next job for this host
+         * @description Holds the request open for up to waitSeconds until work appears. 204 means there was nothing to do, which is the ordinary case.
+         */
+        get: operations["agentJob_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/jobs/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report how a job went
+         * @description Advances the deployment the job belongs to. A host may only report on its own jobs.
+         */
+        post: operations["agentJob_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrol this host
+         * @description Presents a registration token and receives a long-lived agent token. The agent token is returned once and is never retrievable again — the platform stores only its digest.
+         */
+        post: operations["agent_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the audit trail
+         * @description Requires global ADMIN: the trail spans every domain in the estate. Narrow the time range where possible — it lets PostgreSQL skip whole monthly partitions.
+         */
+        get: operations["audit_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-logs/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The actions that can appear in the trail, for building a filter */
+        get: operations["audit_actions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a username and password for an access token
+         * @description Available only when local authentication is enabled. Rate limited as a sensitive operation, and every rejection returns the same message whether the account is missing, disabled or the password is wrong.
+         */
+        post: operations["auth_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which authentication methods this deployment offers
+         * @description Unauthenticated: a login screen has to render before anyone has a token. Returns only what a login page needs — never whether an account exists.
+         */
+        get: operations["auth_methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List certificates
+         * @description Metadata only. Private key material is never returned by any endpoint.
+         */
+        get: operations["certificate_list"];
+        put?: never;
+        /**
+         * Request a certificate over ACME
+         * @description Validates with HTTP-01 against the managed NGINX hosts. Wildcards need DNS-01 and are refused. Requires MANAGE over the namespace of every domain requested, because a certificate is authority to terminate TLS for that name.
+         */
+        post: operations["certificate_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/rewrap-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-encrypt stored private keys under the current key-encryption key
+         * @description For a key rotation or a change of key provider. Every secret records the key that wrapped it, so keep the previous key or provider configured until this reports nothing left to do — then it can be removed. Resumable: a secret that cannot be read is counted and skipped, not retried forever.
+         */
+        post: operations["certificate_rewrapSecrets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload certificate material
+         * @description The domains and dates are read from the certificate, not from the request. Uploaded certificates are never renewed automatically; the platform has no relationship with whoever issued them.
+         */
+        post: operations["certificate_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one certificate */
+        get: operations["certificate_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a certificate
+         * @description Refused while any proxy site still references it.
+         */
+        delete: operations["certificate_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew now
+         * @description Renewal normally happens on its own inside the renewal window. This forces it, and counts against the authority's rate limits like any other request.
+         */
+        post: operations["certificate_renew"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/renewal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Configure automatic renewal */
+        put: operations["certificate_configureRenewal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a certificate
+         * @description Asks the issuing authority to revoke it where that is supported, and marks it unusable here either way. Revoked material is never deployed.
+         */
+        post: operations["certificate_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-bundles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect a configuration bundle
+         * @description Private key material is excluded from the file list at every permission level.
+         */
+        get: operations["deployment_bundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deployments */
+        get: operations["deployment_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/deployments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one deployment with its phase history */
+        get: operations["deployment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/deployments/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-activate the configuration this deployment replaced
+         * @description Queues a new deployment of the previous bundle. Rollback is never automatic: the only automatic revert is the agent restoring the previous release when a reload fails, which is a refusal to leave the host broken.
+         */
+        post: operations["deployment_rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domain-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List domain groups visible to you
+         * @description With siteId, only the groups that site is filed under — which is what a site's own page needs, and cannot otherwise be answered without asking every group in turn.
+         */
+        get: operations["domainGroup_list"];
+        put?: never;
+        /**
+         * Create a domain group
+         * @description A top-level group requires global MANAGE; a subgroup requires MANAGE on its parent.
+         */
+        post: operations["domainGroup_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domain-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one domain group */
+        get: operations["domainGroup_get"];
+        /**
+         * Rename a domain group
+         * @description The path is identity and cannot be changed: moving a group would silently change which sites every grant beneath it reaches.
+         */
+        put: operations["domainGroup_update"];
+        post?: never;
+        /**
+         * Delete an empty domain group
+         * @description Refused while the group has subgroups or members, because deleting it would silently revoke every grant made over it.
+         */
+        delete: operations["domainGroup_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domain-groups/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the sites in a group
+         * @description Returns each site's domain, not only its id: a caller given bare ids has to resolve every one of them to show a list, and is the party least able to do that in a single query.
+         */
+        get: operations["domainGroup_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domain-groups/{id}/members/{siteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a site to a group
+         * @description Requires MANAGE on both the group and the site. Requiring only the group would let someone add a site they have no rights to and inherit control of it.
+         */
+        post: operations["domainGroup_addMember"];
+        /** Remove a site from a group */
+        delete: operations["domainGroup_removeMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Keycloak groups seen in tokens */
+        get: operations["identity_groups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List local accounts */
+        get: operations["localUser_list"];
+        put?: never;
+        /**
+         * Create a local account
+         * @description Requires global admin: a local account carries global roles, so anyone able to create one could otherwise grant themselves SUPER_ADMIN.
+         */
+        post: operations["localUser_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One local account */
+        get: operations["localUser_get"];
+        /** Update a local account's profile, roles and groups */
+        put: operations["localUser_update"];
+        post?: never;
+        /**
+         * Delete a local account
+         * @description Refused for the last enabled administrator.
+         */
+        delete: operations["localUser_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a local account
+         * @description Refused for the last enabled administrator, which would lock everyone out.
+         */
+        post: operations["localUser_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a local account */
+        post: operations["localUser_enable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a password
+         * @description Changing your own requires the current password. An administrator resetting someone else's does not, and must not — a reset exists precisely for the case where the old password is unavailable.
+         */
+        put: operations["localUser_changePassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/nginx-instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List managed NGINX instances */
+        get: operations["nginxInstance_list"];
+        put?: never;
+        /**
+         * Register an NGINX instance
+         * @description Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.
+         */
+        post: operations["nginxInstance_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/nginx-instances/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one NGINX instance */
+        get: operations["nginxInstance_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -62,7 +698,7 @@ export interface paths {
          * Trust a new agent certificate for this host
          * @description The fingerprint is pinned in addition to CA verification, so replacing an agent's certificate makes the host unreachable until this is called. Swap the certificate on the host first, then call this: the window between the two is a loss of control, never of traffic — the host keeps serving throughout.
          */
-        put: operations["rotateAgentCertificate"];
+        put: operations["nginxInstance_rotateAgentCertificate"];
         post?: never;
         delete?: never;
         options?: never;
@@ -70,29 +706,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/local-users/{id}": {
+    "/api/v1/nginx-instances/{id}/agent-jobs": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** One local account */
-        get: operations["get_1"];
-        /** Update a local account's profile, roles and groups */
-        put: operations["update_1"];
-        post?: never;
         /**
-         * Delete a local account
-         * @description Refused for the last enabled administrator.
+         * Recent work queued for this host
+         * @description Empty for a host the platform dials, which is told what to do rather than collecting it.
          */
-        delete: operations["delete_1"];
+        get: operations["nginxInstance_agentJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/local-users/{id}/password": {
+    "/api/v1/nginx-instances/{id}/agent-token": {
         parameters: {
             query?: never;
             header?: never;
@@ -101,10 +735,10 @@ export interface paths {
         };
         get?: never;
         /**
-         * Change a password
-         * @description Changing your own requires the current password. An administrator resetting someone else's does not, and must not — a reset exists precisely for the case where the old password is unavailable.
+         * Trust a new agent token for this host
+         * @description For a host dialled with HTTP_TOKEN. Set the new AGENT_SECRET_TOKEN on the host first, then call this: calls fail in between, traffic does not.
          */
-        put: operations["changePassword"];
+        put: operations["nginxInstance_rotateAgentToken"];
         post?: never;
         delete?: never;
         options?: never;
@@ -112,32 +746,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/domain-groups/{id}": {
+    "/api/v1/nginx-instances/{id}/bundles": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Fetch one domain group */
-        get: operations["get_2"];
-        /**
-         * Rename a domain group
-         * @description The path is identity and cannot be changed: moving a group would silently change which sites every grant beneath it reaches.
-         */
-        put: operations["update_2"];
+        /** Recent configuration bundles for an instance, newest first */
+        get: operations["deployment_bundles"];
+        put?: never;
         post?: never;
-        /**
-         * Delete an empty domain group
-         * @description Refused while the group has subgroups or members, because deleting it would silently revoke every grant made over it.
-         */
-        delete: operations["delete_2"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/certificates/{id}/renewal": {
+    "/api/v1/nginx-instances/{id}/deploy": {
         parameters: {
             query?: never;
             header?: never;
@@ -145,8 +771,321 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Configure automatic renewal */
-        put: operations["configureRenewal"];
+        put?: never;
+        /** Deploy an entire NGINX instance */
+        post: operations["deployment_deployInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List permission grants
+         * @description Filter by scope with groupId or siteId. Listing every grant requires global ADMIN.
+         */
+        get: operations["permission_list"];
+        put?: never;
+        /**
+         * Grant a permission
+         * @description Requires ADMIN on the target scope, and you may never grant more than you hold.
+         */
+        post: operations["permission_grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your effective permission on a site */
+        get: operations["permission_effective"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show what a grant would reach, without creating it
+         * @description Authorised exactly like creating the grant. Answers the question a wildcard pattern hides: '*.example.com' at MANAGE is one line of configuration and authority over every subdomain, including ones created later. The list is what the scope reaches today; coversFutureDomains says whether it will keep admitting new ones.
+         */
+        post: operations["permission_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a permission grant */
+        delete: operations["permission_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List proxy sites
+         * @description Filtering, sorting and pagination are applied in the query, never over an already-fetched page. Sort as sort=domain,asc; repeat the parameter for multiple sorts.
+         */
+        get: operations["proxySite_list"];
+        put?: never;
+        /** Create a proxy site */
+        post: operations["proxySite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one proxy site */
+        get: operations["proxySite_get"];
+        /**
+         * Replace a proxy site
+         * @description Send the version last read as If-Match to have concurrent edits rejected.
+         */
+        put: operations["proxySite_update"];
+        post?: never;
+        /** Delete a proxy site */
+        delete: operations["proxySite_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone a proxy site
+         * @description The copy is created disabled so a half-edited duplicate cannot take traffic.
+         */
+        post: operations["proxySite_clone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deploy the NGINX instance this site belongs to
+         * @description Returns 202: the bundle is rendered from current state and applied by the dispatcher, so the response arrives before the host has been changed. Poll the deployment for the outcome.
+         */
+        post: operations["deployment_deploySite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a proxy site */
+        post: operations["proxySite_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a proxy site */
+        post: operations["proxySite_enable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/expiration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove the expiry so the site never expires */
+        delete: operations["proxySite_removeExpiry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who is told about this site
+         * @description A site nobody has configured returns the defaults: expiry warnings on, and only the platform's operator addresses receive them.
+         */
+        get: operations["proxySite_notifications"];
+        /**
+         * Choose who is told about this site
+         * @description Replaces the settings wholesale, because the console sends back the list it displayed — two people editing at once cannot then produce a union neither of them chose. Requires OPERATE: this is operational, and does not change what anybody is served. Never triggers a deployment.
+         */
+        put: operations["proxySite_configureNotifications"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show the configuration this site would produce
+         * @description Renders without deploying, and reports which files would change on the host.
+         */
+        get: operations["deployment_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extend or set the expiry */
+        post: operations["proxySite_renew"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy-sites/{id}/upstream-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ask the host whether this site's upstreams accept a connection
+         * @description Advisory. NGINX Open Source resolves upstream names once when the configuration loads, so a reachable upstream now may still fail later; this catches a typo or a service that is not running. The probe runs on the NGINX host, which is where the answer means something and where NGINX will connect from — the management server never dials a user-supplied address.
+         */
+        get: operations["deployment_checkUpstreams"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search users who have signed in
+         * @description A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token. Paged and searchable because this gains a row for every person who ever signs in and loses one only when the platform deletes an account it owns.
+         */
+        get: operations["identity_users"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -167,872 +1106,7 @@ export interface paths {
          * Remove every stale subject
          * @description Stale means a local subject whose account no longer exists or, with dormantForDays, one not seen for that long. Entries a permission grant still names are skipped unless includeGranted is set: removing one leaves the grant showing a reference nobody can identify, which is worse than an untidy picker. Grants are never revoked here.
          */
-        post: operations["cleanup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List proxy sites
-         * @description Filtering, sorting and pagination are applied in the query, never over an already-fetched page. Sort as sort=domain,asc; repeat the parameter for multiple sorts.
-         */
-        get: operations["list"];
-        put?: never;
-        /** Create a proxy site */
-        post: operations["create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/renew": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Extend or set the expiry */
-        post: operations["renew"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enable a proxy site */
-        post: operations["enable"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Disable a proxy site */
-        post: operations["disable"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/deploy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Deploy the NGINX instance this site belongs to
-         * @description Returns 202: the bundle is rendered from current state and applied by the dispatcher, so the response arrives before the host has been changed. Poll the deployment for the outcome.
-         */
-        post: operations["deploySite"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/clone": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clone a proxy site
-         * @description The copy is created disabled so a half-edited duplicate cannot take traffic.
-         */
-        post: operations["clone"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/permissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List permission grants
-         * @description Filter by scope with groupId or siteId. Listing every grant requires global ADMIN.
-         */
-        get: operations["list_1"];
-        put?: never;
-        /**
-         * Grant a permission
-         * @description Requires ADMIN on the target scope, and you may never grant more than you hold.
-         */
-        post: operations["grant"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/permissions/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Show what a grant would reach, without creating it
-         * @description Authorised exactly like creating the grant. Answers the question a wildcard pattern hides: '*.example.com' at MANAGE is one line of configuration and authority over every subdomain, including ones created later. The list is what the scope reaches today; coversFutureDomains says whether it will keep admitting new ones.
-         */
-        post: operations["preview"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/nginx-instances": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List managed NGINX instances */
-        get: operations["list_2"];
-        put?: never;
-        /**
-         * Register an NGINX instance
-         * @description Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.
-         */
-        post: operations["register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/nginx-instances/{id}/deploy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Deploy an entire NGINX instance */
-        post: operations["deployInstance"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/local-users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List local accounts */
-        get: operations["list_3"];
-        put?: never;
-        /**
-         * Create a local account
-         * @description Requires global admin: a local account carries global roles, so anyone able to create one could otherwise grant themselves SUPER_ADMIN.
-         */
-        post: operations["create_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/local-users/{id}/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enable a local account */
-        post: operations["enable_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/local-users/{id}/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Disable a local account
-         * @description Refused for the last enabled administrator, which would lock everyone out.
-         */
-        post: operations["disable_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/domain-groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List domain groups visible to you
-         * @description With siteId, only the groups that site is filed under — which is what a site's own page needs, and cannot otherwise be answered without asking every group in turn.
-         */
-        get: operations["list_4"];
-        put?: never;
-        /**
-         * Create a domain group
-         * @description A top-level group requires global MANAGE; a subgroup requires MANAGE on its parent.
-         */
-        post: operations["create_2"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/domain-groups/{id}/members/{siteId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add a site to a group
-         * @description Requires MANAGE on both the group and the site. Requiring only the group would let someone add a site they have no rights to and inherit control of it.
-         */
-        post: operations["addMember"];
-        /** Remove a site from a group */
-        delete: operations["removeMember"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/deployments/{id}/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Re-activate the configuration this deployment replaced
-         * @description Queues a new deployment of the previous bundle. Rollback is never automatic: the only automatic revert is the agent restoring the previous release when a reload fails, which is a refusal to leave the host broken.
-         */
-        post: operations["rollback"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List certificates
-         * @description Metadata only. Private key material is never returned by any endpoint.
-         */
-        get: operations["list_5"];
-        put?: never;
-        /**
-         * Request a certificate over ACME
-         * @description Validates with HTTP-01 against the managed NGINX hosts. Wildcards need DNS-01 and are refused. Requires MANAGE over the namespace of every domain requested, because a certificate is authority to terminate TLS for that name.
-         */
-        post: operations["request"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates/{id}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Revoke a certificate
-         * @description Asks the issuing authority to revoke it where that is supported, and marks it unusable here either way. Revoked material is never deployed.
-         */
-        post: operations["revoke"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates/{id}/renew": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Renew now
-         * @description Renewal normally happens on its own inside the renewal window. This forces it, and counts against the authority's rate limits like any other request.
-         */
-        post: operations["renew_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload certificate material
-         * @description The domains and dates are read from the certificate, not from the request. Uploaded certificates are never renewed automatically; the platform has no relationship with whoever issued them.
-         */
-        post: operations["upload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates/rewrap-secrets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Re-encrypt stored private keys under the current key-encryption key
-         * @description For a key rotation or a change of key provider. Every secret records the key that wrapped it, so keep the previous key or provider configured until this reports nothing left to do — then it can be removed. Resumable: a secret that cannot be read is counted and skipped, not retried forever.
-         */
-        post: operations["rewrapSecrets"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Exchange a username and password for an access token
-         * @description Available only when local authentication is enabled. Rate limited as a sensitive operation, and every rejection returns the same message whether the account is missing, disabled or the password is wrong.
-         */
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enrol this host
-         * @description Presents a registration token and receives a long-lived agent token. The agent token is returned once and is never retrievable again — the platform stores only its digest.
-         */
-        post: operations["register_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/jobs/{id}/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Report how a job went
-         * @description Advances the deployment the job belongs to. A host may only report on its own jobs.
-         */
-        post: operations["report"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Report this host's state
-         * @description Replaces the status call the platform makes to a push-mode host. The reported values are interpreted identically, so ONLINE and DEGRADED mean the same thing whichever end of the connection asked.
-         */
-        post: operations["heartbeat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agent-registration-tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List registration tokens
-         * @description Never returns a token, only what is known about it. The secret exists in clear exactly once, in the response that created it.
-         */
-        get: operations["list_6"];
-        put?: never;
-        /**
-         * Mint a registration token
-         * @description The response carries the token in clear. It is not stored and cannot be shown again; a lost token is replaced rather than recovered.
-         */
-        post: operations["create_3"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search users who have signed in
-         * @description A convenience index for grant authoring. Authorization never reads it: roles and group membership always come from the caller's token. Paged and searchable because this gains a row for every person who ever signs in and loses one only when the platform deletes an account it owns.
-         */
-        get: operations["users"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/upstream-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ask the host whether this site's upstreams accept a connection
-         * @description Advisory. NGINX Open Source resolves upstream names once when the configuration loads, so a reachable upstream now may still fail later; this catches a typo or a service that is not running. The probe runs on the NGINX host, which is where the answer means something and where NGINX will connect from — the management server never dials a user-supplied address.
-         */
-        get: operations["checkUpstreams"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Show the configuration this site would produce
-         * @description Renders without deploying, and reports which files would change on the host.
-         */
-        get: operations["preview_1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/permissions/effective": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Your effective permission on a site */
-        get: operations["effective"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/nginx-instances/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch one NGINX instance */
-        get: operations["get_3"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/nginx-instances/{id}/bundles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Recent configuration bundles for an instance, newest first */
-        get: operations["bundles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/nginx-instances/{id}/agent-jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Recent work queued for this host
-         * @description Empty for a host the platform dials, which is told what to do rather than collecting it.
-         */
-        get: operations["agentJobs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Keycloak groups seen in tokens */
-        get: operations["groups"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/domain-groups/{id}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the sites in a group
-         * @description Returns each site's domain, not only its id: a caller given bare ids has to resolve every one of them to show a list, and is the party least able to do that in a single query.
-         */
-        get: operations["members"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/deployments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List deployments */
-        get: operations["list_7"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/deployments/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch one deployment with its phase history */
-        get: operations["get_4"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-bundles/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Inspect a configuration bundle
-         * @description Private key material is excluded from the file list at every permission level.
-         */
-        get: operations["bundle"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/certificates/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch one certificate */
-        get: operations["get_5"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete a certificate
-         * @description Refused while any proxy site still references it.
-         */
-        delete: operations["delete_3"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Which authentication methods this deployment offers
-         * @description Unauthenticated: a login screen has to render before anyone has a token. Returns only what a login page needs — never whether an account exists.
-         */
-        get: operations["methods"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search the audit trail
-         * @description Requires global ADMIN: the trail spans every domain in the estate. Narrow the time range where possible — it lets PostgreSQL skip whole monthly partitions.
-         */
-        get: operations["search"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-logs/actions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The actions that can appear in the trail, for building a filter */
-        get: operations["actions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/jobs/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Collect the next job for this host
-         * @description Holds the request open for up to waitSeconds until work appears. 204 means there was nothing to do, which is the ordinary case.
-         */
-        get: operations["request_1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/bundles/{bundleId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Fetch a bundle this host has been told to apply
-         * @description Refused unless the bundle belongs to the calling host.
-         */
-        get: operations["bundle_1"];
-        put?: never;
-        post?: never;
+        post: operations["identity_cleanup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1053,61 +1127,7 @@ export interface paths {
          * Remove one subject from the directory
          * @description Removes a name the console can offer when authoring a grant. It does not revoke access and does not delete an account: a subject removed by mistake reappears the next time its owner signs in. Requires global admin, because the directory is shared.
          */
-        delete: operations["forget"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy-sites/{id}/expiration": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove the expiry so the site never expires */
-        delete: operations["removeExpiry"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/permissions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Revoke a permission grant */
-        delete: operations["revoke_1"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agent-registration-tokens/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Revoke a registration token
-         * @description Stops it enrolling anything further. Hosts already enrolled with it keep working: they hold agent tokens of their own, issued separately.
-         */
-        delete: operations["revoke_2"];
+        delete: operations["identity_forget"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1117,172 +1137,182 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ProblemDetail: {
-            /** Format: uri */
-            type?: string;
-            title?: string;
-            /** Format: int32 */
-            status?: number;
-            detail?: string;
-            /** Format: uri */
-            instance?: string;
-            properties?: {
-                [key: string]: unknown;
-            };
+        AgentBundleFileResponse: {
+            content: string;
+            mode?: string;
+            path: string;
+            sensitive?: boolean;
+            sha256: string;
         };
-        /** @description A header rule. */
-        HeaderDto: {
-            direction: string;
-            name: string;
-            value: string;
-        };
-        /** @description A location rule. */
-        LocationDto: {
-            pathPattern: string;
-            matchType: string;
-        };
-        ProxySiteRequest: {
-            name: string;
-            domain: string;
+        AgentBundleResponse: {
             /** Format: uuid */
-            nginxInstanceId: string;
-            /** Format: date-time */
-            activeFrom?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-            enabled?: boolean;
-            sslEnabled?: boolean;
-            forceHttps?: boolean;
-            hstsEnabled?: boolean;
-            websocketEnabled?: boolean;
-            /** Format: uuid */
-            sslCertificateId?: string;
-            loadBalancingMethod?: string;
-            /** Format: int32 */
-            connectTimeoutSeconds?: number;
-            /** Format: int32 */
-            readTimeoutSeconds?: number;
-            /** Format: int32 */
-            sendTimeoutSeconds?: number;
+            bundleId: string;
+            contentHash: string;
+            files: components["schemas"]["AgentBundleFileResponse"][];
             /** Format: int64 */
-            maxBodySizeBytes?: number;
-            upstreams: components["schemas"]["UpstreamDto"][];
-            headers?: components["schemas"]["HeaderDto"][];
-            locations?: components["schemas"]["LocationDto"][];
+            sequence: number;
         };
-        /** @description One upstream target. */
-        UpstreamDto: {
-            scheme: string;
-            host: string;
-            /** Format: int32 */
-            port: number;
-            /** Format: int32 */
-            weight?: number;
-            /** Format: int32 */
-            maxFails?: number;
-            /** Format: int32 */
-            failTimeoutSeconds?: number;
-            backup?: boolean;
+        AgentHeartbeatRequest: {
+            activeBundleId?: string;
+            agentVersion?: string;
+            configTestOk: boolean;
+            configTestOutput?: string;
+            nginxRunning: boolean;
+            nginxVersion?: string;
         };
-        /** @description One proxy site in full. */
-        ProxySiteResponse: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            domain: string;
-            /** Format: uuid */
-            nginxInstanceId: string;
-            status: string;
-            enabled: boolean;
-            /** Format: date-time */
-            activeFrom?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-            /** Format: int64 */
-            secondsUntilExpiry?: number;
-            sslEnabled: boolean;
-            forceHttps: boolean;
-            hstsEnabled: boolean;
-            websocketEnabled: boolean;
-            /** Format: uuid */
-            sslCertificateId?: string;
-            loadBalancingMethod: string;
+        /** @description One unit of work for a host that collects it. */
+        AgentJobResponse: {
             /** Format: int32 */
-            connectTimeoutSeconds: number;
-            /** Format: int32 */
-            readTimeoutSeconds: number;
-            /** Format: int32 */
-            sendTimeoutSeconds: number;
-            /** Format: int64 */
-            maxBodySizeBytes: number;
-            upstreams: components["schemas"]["UpstreamDto"][];
-            headers: components["schemas"]["HeaderDto"][];
-            locations: components["schemas"]["LocationDto"][];
-            createdBy: string;
+            attempts: number;
+            /** Format: uuid */
+            bundleId?: string;
             /** Format: date-time */
             createdAt: string;
-            updatedBy: string;
+            /** Format: uuid */
+            deploymentId?: string;
+            error?: string;
+            /** Format: uuid */
+            id: string;
             /** Format: date-time */
-            updatedAt: string;
-            /** Format: int64 */
-            version: number;
-        };
-        SiteNotificationSettingsRequest: {
-            expiryEnabled?: boolean;
-            subscribers?: string[];
-        };
-        SiteNotificationSettingsResponse: {
-            expiryEnabled: boolean;
-            subscribers: string[];
-            updatedBy?: string;
+            leaseExpiresAt?: string;
+            status: string;
+            type: string;
             /** Format: date-time */
             updatedAt?: string;
         };
-        RotateAgentCertificateRequest: {
-            agentCertFingerprint: string;
-        };
-        /** @description A managed NGINX host. */
-        NginxInstanceResponse: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            hostname: string;
-            connectivityMode: string;
-            pushTransport?: string;
-            agentBaseUrl?: string;
-            agentCertFingerprint?: string;
-            environment: string;
-            status: string;
+        AgentJobResultRequest: {
+            error?: string;
             nginxVersion?: string;
-            agentVersion?: string;
-            /** Format: date-time */
-            lastSeenAt?: string;
+            noop?: boolean;
+            previousBundleId?: string;
+            rolledBack?: boolean;
+            succeeded: boolean;
+            testOutput?: string;
+            validationFailed?: boolean;
+        };
+        AgentRegisterRequest: {
+            environment?: string;
+            hostname: string;
+            name: string;
+            registrationToken: string;
+        };
+        AgentRegisterResponse: {
+            agentToken: string;
+            /** Format: uuid */
+            instanceId: string;
+            name: string;
+        };
+        AgentRegistrationTokenCreatedResponse: {
+            registrationToken: components["schemas"]["AgentRegistrationTokenResponse"];
+            token: string;
+        };
+        AgentRegistrationTokenResponse: {
             /** Format: date-time */
             createdAt: string;
-            /** Format: int64 */
-            version: number;
-        };
-        UpdateLocalUserRequest: {
-            email?: string;
-            displayName?: string;
-            roles?: string[];
-            groupPaths?: string[];
-        };
-        LocalUserResponse: {
+            createdBy: string;
+            description?: string;
+            /** Format: date-time */
+            expiresAt?: string;
             /** Format: uuid */
             id: string;
-            username: string;
-            email?: string;
-            displayName?: string;
-            enabled: boolean;
-            mustChangePassword: boolean;
-            roles: string[];
-            groupPaths: string[];
+            /** Format: int32 */
+            maxUses?: number;
             /** Format: date-time */
-            lastLoginAt?: string;
-            createdBy: string;
+            revokedAt?: string;
+            usable: boolean;
+            /** Format: int32 */
+            uses: number;
+        };
+        AuditResponse: {
+            action: string;
+            actor?: string;
+            actorSubject?: string;
+            afterState?: {
+                [key: string]: unknown;
+            };
+            beforeState?: {
+                [key: string]: unknown;
+            };
+            errorMessage?: string;
+            /** Format: uuid */
+            id: string;
+            ipAddress?: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: uuid */
+            resourceId?: string;
+            resourceType?: string;
+            result: string;
+        };
+        AuthMethodsResponse: {
+            localEnabled: boolean;
+            oidcClientId?: string;
+            oidcEnabled: boolean;
+            oidcIssuer?: string;
+        };
+        BundleFileResponse: {
+            content?: string;
+            path?: string;
+            sha256?: string;
+            /** Format: int32 */
+            sizeBytes?: number;
+        };
+        BundleResponse: {
+            contentHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
+            files?: components["schemas"]["BundleFileResponse"][];
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            nginxInstanceId?: string;
+            /** Format: int64 */
+            sequence?: number;
+            /** Format: int32 */
+            siteCount?: number;
+            status?: string;
+        };
+        BundleSummaryResponse: {
+            contentHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int64 */
+            sequence?: number;
+            /** Format: int32 */
+            siteCount?: number;
+            status?: string;
+        };
+        /** @description One certificate, without any key material. */
+        CertificateResponse: {
+            autoRenew: boolean;
             /** Format: date-time */
             createdAt: string;
+            createdBy: string;
+            /** Format: int64 */
+            daysRemaining?: number;
+            domains: string[];
+            /** Format: date-time */
+            expiresAt?: string;
+            fingerprintSha256?: string;
+            /** Format: uuid */
+            id: string;
+            inUse: boolean;
+            issuer?: string;
+            lastError?: string;
+            name: string;
+            /** Format: date-time */
+            notBefore?: string;
+            provider: string;
+            /** Format: int32 */
+            renewBeforeDays: number;
+            /** Format: date-time */
+            revokedAt?: string;
+            serialNumber?: string;
+            status: string;
+            subject?: string;
             /** Format: int64 */
             version: number;
         };
@@ -1290,66 +1320,79 @@ export interface components {
             currentPassword?: string;
             newPassword: string;
         };
-        /** @description Changes to a domain group. */
-        UpdateDomainGroupRequest: {
+        CloneRequest: {
+            domain: string;
             name: string;
-            description?: string;
         };
-        /** @description One domain group. */
-        DomainGroupResponse: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            parentId?: string;
-            name: string;
-            path: string;
-            /** Format: int32 */
-            depth: number;
-            description?: string;
-            /** Format: int64 */
-            memberCount: number;
-            yourLevel?: string;
-            createdBy: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: int64 */
-            version: number;
+        /** @description The configuration a site would produce, and what would change on the host. */
+        ConfigurationPreviewResponse: {
+            changed: boolean;
+            changedPaths: string[];
+            currentContentHash?: string;
+            proposedContentHash: string;
+            siteConfiguration: string;
         };
         ConfigureRenewalRequest: {
             autoRenew?: boolean;
             /** Format: int32 */
             renewBeforeDays?: number;
         };
-        /** @description One certificate, without any key material. */
-        CertificateResponse: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            provider: string;
-            domains: string[];
-            status: string;
-            subject?: string;
-            issuer?: string;
-            serialNumber?: string;
-            fingerprintSha256?: string;
-            /** Format: date-time */
-            notBefore?: string;
+        CreateAgentRegistrationTokenRequest: {
+            description?: string;
             /** Format: date-time */
             expiresAt?: string;
-            /** Format: int64 */
-            daysRemaining?: number;
-            autoRenew: boolean;
             /** Format: int32 */
-            renewBeforeDays: number;
-            inUse: boolean;
-            lastError?: string;
+            maxUses?: number;
+        };
+        /** @description A new domain group. */
+        CreateDomainGroupRequest: {
+            description?: string;
+            name: string;
+            /** Format: uuid */
+            parentId?: string;
+            slug: string;
+        };
+        CreateLocalUserRequest: {
+            displayName?: string;
+            email?: string;
+            groupPaths?: string[];
+            mustChangePassword?: boolean;
+            password: string;
+            roles?: string[];
+            username: string;
+        };
+        /** @description One deployment phase. */
+        DeploymentEventResponse: {
             /** Format: date-time */
-            revokedAt?: string;
-            createdBy: string;
+            at: string;
+            detail?: string;
+            phase: string;
+            result: string;
+        };
+        /** @description One deployment and its phase history. */
+        DeploymentResponse: {
+            /** Format: int32 */
+            attempt: number;
+            /** Format: uuid */
+            configBundleId?: string;
             /** Format: date-time */
             createdAt: string;
-            /** Format: int64 */
-            version: number;
+            createdBy: string;
+            errorMessage?: string;
+            events: components["schemas"]["DeploymentEventResponse"][];
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            nginxInstanceId: string;
+            nginxTestOutput?: string;
+            /** Format: uuid */
+            previousBundleId?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            status: string;
+            trigger: string;
         };
         DirectoryCleanupRequest: {
             /** Format: int32 */
@@ -1359,228 +1402,167 @@ export interface components {
         DirectoryCleanupResponse: {
             /** Format: int32 */
             removed: number;
+            removedSubjects: string[];
             /** Format: int32 */
             skippedBecauseGranted: number;
-            removedSubjects: string[];
-        };
-        RenewRequest: {
-            /** Format: date-time */
-            expiresAt: string;
-        };
-        /** @description One deployment phase. */
-        DeploymentEventResponse: {
-            phase: string;
-            result: string;
-            detail?: string;
-            /** Format: date-time */
-            at: string;
-        };
-        /** @description One deployment and its phase history. */
-        DeploymentResponse: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            nginxInstanceId: string;
-            /** Format: uuid */
-            configBundleId?: string;
-            /** Format: uuid */
-            previousBundleId?: string;
-            trigger: string;
-            status: string;
-            /** Format: int32 */
-            attempt: number;
-            nginxTestOutput?: string;
-            errorMessage?: string;
-            /** Format: date-time */
-            startedAt?: string;
-            /** Format: date-time */
-            finishedAt?: string;
-            createdBy: string;
-            /** Format: date-time */
-            createdAt: string;
-            events: components["schemas"]["DeploymentEventResponse"][];
-        };
-        CloneRequest: {
-            name: string;
-            domain: string;
-        };
-        GrantRequest: {
-            subjectType: string;
-            subjectRef: string;
-            scopeType: string;
-            /** Format: uuid */
-            scopeGroupId?: string;
-            /** Format: uuid */
-            scopeSiteId?: string;
-            domainPattern?: string;
-            level: string;
-            /** Format: date-time */
-            expiresAt?: string;
-        };
-        /** @description One permission grant. */
-        PermissionGrantResponse: {
-            /** Format: uuid */
-            id: string;
-            subjectType: string;
-            subjectRef: string;
-            scopeType: string;
-            /** Format: uuid */
-            scopeGroupId?: string;
-            /** Format: uuid */
-            scopeSiteId?: string;
-            domainPattern?: string;
-            level: string;
-            grantedBy: string;
-            /** Format: date-time */
-            grantedAt: string;
-            /** Format: date-time */
-            expiresAt?: string;
-            expired: boolean;
-        };
-        /** @description What a grant would reach, before it is created. */
-        GrantPreviewResponse: {
-            matched: components["schemas"]["MatchedSiteResponse"][];
-            /** Format: int64 */
-            totalMatched: number;
-            truncated: boolean;
-            /** Format: int64 */
-            newlyVisibleToSubject: number;
-            coversFutureDomains: boolean;
-        };
-        /** @description A site a grant would reach. */
-        MatchedSiteResponse: {
-            /** Format: uuid */
-            id: string;
-            domain: string;
-            name: string;
-            alreadyReachable: boolean;
-        };
-        RegisterNginxInstanceRequest: {
-            name: string;
-            hostname: string;
-            agentBaseUrl: string;
-            pushTransport?: string;
-            agentCertFingerprint?: string;
-            agentAuthToken?: string;
-            environment?: string;
-        };
-        CreateLocalUserRequest: {
-            username: string;
-            password: string;
-            email?: string;
-            displayName?: string;
-            roles?: string[];
-            groupPaths?: string[];
-            mustChangePassword?: boolean;
-        };
-        /** @description A new domain group. */
-        CreateDomainGroupRequest: {
-            name: string;
-            slug: string;
-            description?: string;
-            /** Format: uuid */
-            parentId?: string;
-        };
-        RequestAcmeRequest: {
-            name: string;
-            domains: string[];
-            autoRenew?: boolean;
-            /** Format: int32 */
-            renewBeforeDays?: number;
-        };
-        UploadRequest: {
-            name: string;
-            fullChainPem: string;
-            privateKeyPem: string;
-        };
-        RewrapResponse: {
-            /** Format: int32 */
-            examined?: number;
-            /** Format: int32 */
-            rewrapped?: number;
-            /** Format: int32 */
-            failed?: number;
-        };
-        LoginRequest: {
-            username: string;
-            password: string;
-        };
-        TokenResponse: {
-            accessToken: string;
-            tokenType: string;
-            /** Format: int64 */
-            expiresInSeconds: number;
-            /** Format: date-time */
-            expiresAt?: string;
-        };
-        AgentRegisterRequest: {
-            registrationToken: string;
-            name: string;
-            hostname: string;
-            environment?: string;
-        };
-        AgentRegisterResponse: {
-            /** Format: uuid */
-            instanceId: string;
-            name: string;
-            agentToken: string;
-        };
-        AgentJobResultRequest: {
-            succeeded: boolean;
-            validationFailed?: boolean;
-            testOutput?: string;
-            nginxVersion?: string;
-            previousBundleId?: string;
-            noop?: boolean;
-            rolledBack?: boolean;
-            error?: string;
-        };
-        AgentHeartbeatRequest: {
-            agentVersion?: string;
-            nginxVersion?: string;
-            nginxRunning: boolean;
-            activeBundleId?: string;
-            configTestOk: boolean;
-            configTestOutput?: string;
-        };
-        CreateAgentRegistrationTokenRequest: {
-            description?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-            /** Format: int32 */
-            maxUses?: number;
-        };
-        AgentRegistrationTokenCreatedResponse: {
-            registrationToken: components["schemas"]["AgentRegistrationTokenResponse"];
-            token: string;
-        };
-        AgentRegistrationTokenResponse: {
-            /** Format: uuid */
-            id: string;
-            description?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-            /** Format: int32 */
-            maxUses?: number;
-            /** Format: int32 */
-            uses: number;
-            /** Format: date-time */
-            revokedAt?: string;
-            createdBy: string;
-            /** Format: date-time */
-            createdAt: string;
-            usable: boolean;
         };
         /** @description Someone who has signed in. */
         DirectoryEntryResponse: {
-            subjectType: string;
-            subjectRef: string;
             displayName: string;
-            username?: string;
-            present: boolean;
+            hasGrants: boolean;
             /** Format: date-time */
             lastLoginAt?: string;
-            hasGrants: boolean;
+            present: boolean;
+            subjectRef: string;
+            subjectType: string;
+            username?: string;
+        };
+        /** @description One domain group. */
+        DomainGroupResponse: {
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: string;
+            /** Format: int32 */
+            depth: number;
+            description?: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            memberCount: number;
+            name: string;
+            /** Format: uuid */
+            parentId?: string;
+            path: string;
+            /** Format: int64 */
+            version: number;
+            yourLevel?: string;
+        };
+        /** @description What the caller may do to a site. */
+        EffectivePermissionResponse: {
+            canAdmin: boolean;
+            canManage: boolean;
+            canOperate: boolean;
+            canRead: boolean;
+            domain: string;
+            level?: string;
+            /** Format: uuid */
+            proxySiteId: string;
+        };
+        /** @description What a grant would reach, before it is created. */
+        GrantPreviewResponse: {
+            coversFutureDomains: boolean;
+            matched: components["schemas"]["MatchedSiteResponse"][];
+            /** Format: int64 */
+            newlyVisibleToSubject: number;
+            /** Format: int64 */
+            totalMatched: number;
+            truncated: boolean;
+        };
+        GrantRequest: {
+            domainPattern?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            level: string;
+            /** Format: uuid */
+            scopeGroupId?: string;
+            /** Format: uuid */
+            scopeSiteId?: string;
+            scopeType: string;
+            subjectRef: string;
+            subjectType: string;
+        };
+        /** @description A site filed under a domain group. */
+        GroupMemberResponse: {
+            domain: string;
+            /** Format: uuid */
+            id: string;
+            name?: string;
+            status: string;
+        };
+        /** @description A header rule. */
+        HeaderDto: {
+            direction: string;
+            name: string;
+            value: string;
+        };
+        LocalUserResponse: {
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: string;
+            displayName?: string;
+            email?: string;
+            enabled: boolean;
+            groupPaths: string[];
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            mustChangePassword: boolean;
+            roles: string[];
+            username: string;
+            /** Format: int64 */
+            version: number;
+        };
+        /** @description A location rule. */
+        LocationDto: {
+            matchType: string;
+            pathPattern: string;
+        };
+        LoginRequest: {
+            password: string;
+            username: string;
+        };
+        /** @description A site a grant would reach. */
+        MatchedSiteResponse: {
+            alreadyReachable: boolean;
+            domain: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /** @description A managed NGINX host. */
+        NginxInstanceResponse: {
+            agentBaseUrl?: string;
+            agentCertFingerprint?: string;
+            agentVersion?: string;
+            connectivityMode: string;
+            /** Format: date-time */
+            createdAt: string;
+            environment: string;
+            hostname: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            name: string;
+            nginxVersion?: string;
+            /** @enum {string} */
+            pushTransport?: "MTLS" | "HTTP_TOKEN";
+            status: string;
+            /** Format: int64 */
+            version: number;
+        };
+        PageResponseAuditResponse: {
+            content?: components["schemas"]["AuditResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PageResponseDeploymentResponse: {
+            content?: components["schemas"]["DeploymentResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
         PageResponseDirectoryEntryResponse: {
             content?: components["schemas"]["DirectoryEntryResponse"][];
@@ -1604,189 +1586,235 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        /** @description A proxy site, for listings. */
-        ProxySiteSummaryResponse: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            domain: string;
-            /** Format: uuid */
-            nginxInstanceId: string;
-            status: string;
-            enabled: boolean;
-            sslEnabled: boolean;
-            /** Format: date-time */
-            activeFrom?: string;
+        /** @description One permission grant. */
+        PermissionGrantResponse: {
+            domainPattern?: string;
+            expired: boolean;
             /** Format: date-time */
             expiresAt?: string;
+            /** Format: date-time */
+            grantedAt: string;
+            grantedBy: string;
+            /** Format: uuid */
+            id: string;
+            level: string;
+            /** Format: uuid */
+            scopeGroupId?: string;
+            /** Format: uuid */
+            scopeSiteId?: string;
+            scopeType: string;
+            subjectRef: string;
+            subjectType: string;
+        };
+        ProblemDetail: {
+            detail?: string;
+            /** Format: uri */
+            instance?: string;
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** Format: int32 */
+            status?: number;
+            title?: string;
+            /** Format: uri */
+            type?: string;
+        };
+        ProxySiteRequest: {
+            /** Format: date-time */
+            activeFrom?: string;
+            /** Format: int32 */
+            connectTimeoutSeconds?: number;
+            domain: string;
+            enabled?: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            forceHttps?: boolean;
+            headers?: components["schemas"]["HeaderDto"][];
+            hstsEnabled?: boolean;
+            loadBalancingMethod?: string;
+            locations?: components["schemas"]["LocationDto"][];
+            /** Format: int64 */
+            maxBodySizeBytes?: number;
+            name: string;
+            /** Format: uuid */
+            nginxInstanceId: string;
+            /** Format: int32 */
+            readTimeoutSeconds?: number;
+            /** Format: int32 */
+            sendTimeoutSeconds?: number;
+            /** Format: uuid */
+            sslCertificateId?: string;
+            sslEnabled?: boolean;
+            upstreams: components["schemas"]["UpstreamDto"][];
+            websocketEnabled?: boolean;
+        };
+        /** @description One proxy site in full. */
+        ProxySiteResponse: {
+            /** Format: date-time */
+            activeFrom?: string;
+            /** Format: int32 */
+            connectTimeoutSeconds: number;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: string;
+            domain: string;
+            enabled: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            forceHttps: boolean;
+            headers: components["schemas"]["HeaderDto"][];
+            hstsEnabled: boolean;
+            /** Format: uuid */
+            id: string;
+            loadBalancingMethod: string;
+            locations: components["schemas"]["LocationDto"][];
+            /** Format: int64 */
+            maxBodySizeBytes: number;
+            name: string;
+            /** Format: uuid */
+            nginxInstanceId: string;
+            /** Format: int32 */
+            readTimeoutSeconds: number;
             /** Format: int64 */
             secondsUntilExpiry?: number;
             /** Format: int32 */
-            upstreamCount: number;
-            primaryUpstream?: string;
+            sendTimeoutSeconds: number;
+            /** Format: uuid */
+            sslCertificateId?: string;
+            sslEnabled: boolean;
+            status: string;
             /** Format: date-time */
             updatedAt: string;
+            updatedBy: string;
+            upstreams: components["schemas"]["UpstreamDto"][];
+            /** Format: int64 */
+            version: number;
+            websocketEnabled: boolean;
+        };
+        /** @description A proxy site, for listings. */
+        ProxySiteSummaryResponse: {
+            /** Format: date-time */
+            activeFrom?: string;
+            domain: string;
+            enabled: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            nginxInstanceId: string;
+            primaryUpstream?: string;
+            /** Format: int64 */
+            secondsUntilExpiry?: number;
+            sslEnabled: boolean;
+            status: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int32 */
+            upstreamCount: number;
             /** Format: int64 */
             version: number;
         };
-        UpstreamCheckResponse: {
-            target: string;
-            reachable: boolean;
-            error?: string;
+        RegisterNginxInstanceRequest: {
+            agentAuthToken?: string;
+            agentBaseUrl: string;
+            agentCertFingerprint?: string;
+            environment?: string;
+            hostname: string;
+            name: string;
+            /**
+             * @default MTLS
+             * @enum {string}
+             */
+            pushTransport: "MTLS" | "HTTP_TOKEN";
         };
-        /** @description The configuration a site would produce, and what would change on the host. */
-        ConfigurationPreviewResponse: {
-            siteConfiguration: string;
-            currentContentHash?: string;
-            proposedContentHash: string;
-            changed: boolean;
-            changedPaths: string[];
+        RenewRequest: {
+            /** Format: date-time */
+            expiresAt: string;
         };
-        /** @description What the caller may do to a site. */
-        EffectivePermissionResponse: {
-            /** Format: uuid */
-            proxySiteId: string;
-            domain: string;
-            level?: string;
-            canRead: boolean;
-            canOperate: boolean;
-            canManage: boolean;
-            canAdmin: boolean;
-        };
-        BundleSummaryResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: int64 */
-            sequence?: number;
-            contentHash?: string;
-            status?: string;
+        RequestAcmeRequest: {
+            autoRenew?: boolean;
+            domains: string[];
+            name: string;
             /** Format: int32 */
-            siteCount?: number;
-            /** Format: date-time */
-            createdAt?: string;
+            renewBeforeDays?: number;
         };
-        /** @description One unit of work for a host that collects it. */
-        AgentJobResponse: {
-            /** Format: uuid */
-            id: string;
-            type: string;
-            status: string;
+        RewrapResponse: {
             /** Format: int32 */
-            attempts: number;
-            /** Format: uuid */
-            deploymentId?: string;
-            /** Format: uuid */
-            bundleId?: string;
-            /** Format: date-time */
-            leaseExpiresAt?: string;
-            error?: string;
-            /** Format: date-time */
-            createdAt: string;
+            examined?: number;
+            /** Format: int32 */
+            failed?: number;
+            /** Format: int32 */
+            rewrapped?: number;
+        };
+        RotateAgentCertificateRequest: {
+            agentCertFingerprint: string;
+        };
+        RotateAgentTokenRequest: {
+            agentAuthToken: string;
+        };
+        SiteNotificationSettingsRequest: {
+            expiryEnabled?: boolean;
+            subscribers?: string[];
+        };
+        SiteNotificationSettingsResponse: {
+            expiryEnabled: boolean;
+            subscribers: string[];
             /** Format: date-time */
             updatedAt?: string;
+            updatedBy?: string;
         };
         /** @description A grantable subject. */
         SubjectResponse: {
-            subjectType: string;
-            subjectRef: string;
             displayName: string;
-            username?: string;
             present: boolean;
+            subjectRef: string;
+            subjectType: string;
+            username?: string;
         };
-        /** @description A site filed under a domain group. */
-        GroupMemberResponse: {
-            /** Format: uuid */
-            id: string;
-            domain: string;
-            name?: string;
-            status: string;
-        };
-        PageResponseDeploymentResponse: {
-            content?: components["schemas"]["DeploymentResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
-        };
-        BundleFileResponse: {
-            path?: string;
-            sha256?: string;
-            /** Format: int32 */
-            sizeBytes?: number;
-            content?: string;
-        };
-        BundleResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            nginxInstanceId?: string;
-            /** Format: int64 */
-            sequence?: number;
-            contentHash?: string;
-            status?: string;
-            /** Format: int32 */
-            siteCount?: number;
-            files?: components["schemas"]["BundleFileResponse"][];
-            createdBy?: string;
+        TokenResponse: {
+            accessToken: string;
             /** Format: date-time */
-            createdAt?: string;
-        };
-        AuthMethodsResponse: {
-            localEnabled: boolean;
-            oidcEnabled: boolean;
-            oidcIssuer?: string;
-            oidcClientId?: string;
-        };
-        AuditResponse: {
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            occurredAt: string;
-            actor?: string;
-            actorSubject?: string;
-            action: string;
-            resourceType?: string;
-            /** Format: uuid */
-            resourceId?: string;
-            beforeState?: {
-                [key: string]: unknown;
-            };
-            afterState?: {
-                [key: string]: unknown;
-            };
-            ipAddress?: string;
-            result: string;
-            errorMessage?: string;
-        };
-        PageResponseAuditResponse: {
-            content?: components["schemas"]["AuditResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
+            expiresAt?: string;
             /** Format: int64 */
-            totalElements?: number;
+            expiresInSeconds: number;
+            tokenType: string;
+        };
+        /** @description Changes to a domain group. */
+        UpdateDomainGroupRequest: {
+            description?: string;
+            name: string;
+        };
+        UpdateLocalUserRequest: {
+            displayName?: string;
+            email?: string;
+            groupPaths?: string[];
+            roles?: string[];
+        };
+        UploadRequest: {
+            fullChainPem: string;
+            name: string;
+            privateKeyPem: string;
+        };
+        UpstreamCheckResponse: {
+            error?: string;
+            reachable: boolean;
+            target: string;
+        };
+        /** @description One upstream target. */
+        UpstreamDto: {
+            backup?: boolean;
             /** Format: int32 */
-            totalPages?: number;
-        };
-        AgentBundleFileResponse: {
-            path: string;
-            content: string;
-            sha256: string;
-            sensitive?: boolean;
-            mode?: string;
-        };
-        AgentBundleResponse: {
-            /** Format: uuid */
-            bundleId: string;
-            /** Format: int64 */
-            sequence: number;
-            contentHash: string;
-            files: components["schemas"]["AgentBundleFileResponse"][];
+            failTimeoutSeconds?: number;
+            host: string;
+            /** Format: int32 */
+            maxFails?: number;
+            /** Format: int32 */
+            port: number;
+            scheme: string;
+            /** Format: int32 */
+            weight?: number;
         };
     };
     responses: never;
@@ -1797,7 +1825,69 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get: {
+    agentRegistrationToken_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentRegistrationTokenResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    agentRegistrationToken_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRegistrationTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentRegistrationTokenCreatedResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    agentRegistrationToken_revoke: {
         parameters: {
             query?: never;
             header?: never;
@@ -1813,9 +1903,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -1828,22 +1916,18 @@ export interface operations {
             };
         };
     };
-    update: {
+    agentJob_bundle: {
         parameters: {
             query?: never;
             header?: {
-                "If-Match"?: string;
+                Authorization?: string;
             };
             path: {
-                id: string;
+                bundleId: string;
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProxySiteRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -1851,7 +1935,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
+                    "*/*": components["schemas"]["AgentBundleResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -1865,406 +1949,18 @@ export interface operations {
             };
         };
     };
-    delete: {
+    agent_heartbeat: {
         parameters: {
             query?: never;
             header?: {
-                "If-Match"?: string;
+                Authorization?: string;
             };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    notifications: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    configureNotifications: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SiteNotificationSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    rotateAgentCertificate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RotateAgentCertificateRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["NginxInstanceResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    get_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    update_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateLocalUserRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    delete_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    changePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    get_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DomainGroupResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    update_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateDomainGroupRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DomainGroupResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    delete_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    configureRenewal: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigureRenewalRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    cleanup: {
-        parameters: {
-            query?: never;
-            header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["DirectoryCleanupRequest"];
+                "application/json": components["schemas"]["AgentHeartbeatRequest"];
             };
         };
         responses: {
@@ -2273,9 +1969,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "*/*": components["schemas"]["DirectoryCleanupResponse"];
-                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -2288,248 +1982,14 @@ export interface operations {
             };
         };
     };
-    list: {
+    agentJob_request: {
         parameters: {
             query?: {
-                search?: string;
-                status?: string[];
-                nginxInstanceId?: string;
-                sslEnabled?: boolean;
-                expiringBefore?: string;
-                page?: number;
-                size?: number;
+                waitSeconds?: number;
             };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PageResponseProxySiteSummaryResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProxySiteRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    renew: {
-        parameters: {
-            query?: never;
             header?: {
-                "If-Match"?: string;
+                Authorization?: string;
             };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RenewRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    enable: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    disable: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    deploySite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DeploymentResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    clone: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloneRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ProxySiteResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_1: {
-        parameters: {
-            query?: {
-                groupId?: string;
-                siteId?: string;
-            };
-            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2541,7 +2001,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PermissionGrantResponse"][];
+                    "*/*": components["schemas"]["AgentJobResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -2555,697 +2015,7 @@ export interface operations {
             };
         };
     };
-    grant: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrantRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PermissionGrantResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    preview: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrantRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["GrantPreviewResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["NginxInstanceResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterNginxInstanceRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["NginxInstanceResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    deployInstance: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DeploymentResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_3: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    create_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateLocalUserRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    enable_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    disable_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LocalUserResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_4: {
-        parameters: {
-            query?: {
-                siteId?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DomainGroupResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    create_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateDomainGroupRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DomainGroupResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    addMember: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                siteId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    removeMember: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                siteId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    rollback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DeploymentResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_5: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    request: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestAcmeRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    revoke: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    renew_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    upload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UploadRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    rewrapSecrets: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RewrapResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    register_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentRegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AgentRegisterResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    report: {
+    agentJob_report: {
         parameters: {
             query?: never;
             header?: {
@@ -3280,69 +2050,7 @@ export interface operations {
             };
         };
     };
-    heartbeat: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentHeartbeatRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_6: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AgentRegistrationTokenResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    create_3: {
+    agent_register: {
         parameters: {
             query?: never;
             header?: never;
@@ -3351,7 +2059,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateAgentRegistrationTokenRequest"];
+                "application/json": components["schemas"]["AgentRegisterRequest"];
             };
         };
         responses: {
@@ -3361,7 +2069,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AgentRegistrationTokenCreatedResponse"];
+                    "*/*": components["schemas"]["AgentRegisterResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -3375,477 +2083,7 @@ export interface operations {
             };
         };
     };
-    users: {
-        parameters: {
-            query?: {
-                search?: string;
-                stale?: boolean;
-                dormantForDays?: number;
-                page?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PageResponseDirectoryEntryResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    checkUpstreams: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["UpstreamCheckResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    preview_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ConfigurationPreviewResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    effective: {
-        parameters: {
-            query: {
-                siteId: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["EffectivePermissionResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    get_3: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["NginxInstanceResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    bundles: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["BundleSummaryResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    agentJobs: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AgentJobResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    groups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SubjectResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    members: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["GroupMemberResponse"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_7: {
-        parameters: {
-            query?: {
-                nginxInstanceId?: string;
-                status?: string[];
-                page?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PageResponseDeploymentResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    get_4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["DeploymentResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    bundle: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["BundleResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    get_5: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["CertificateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    delete_3: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    methods: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["AuthMethodsResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    search: {
+    audit_search: {
         parameters: {
             query?: {
                 actor?: string;
@@ -3884,7 +2122,7 @@ export interface operations {
             };
         };
     };
-    actions: {
+    audit_actions: {
         parameters: {
             query?: never;
             header?: never;
@@ -3913,14 +2151,43 @@ export interface operations {
             };
         };
     };
-    request_1: {
+    auth_login: {
         parameters: {
-            query?: {
-                waitSeconds?: number;
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
             };
-            header?: {
-                Authorization?: string;
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TokenResponse"];
+                };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    auth_methods: {
+        parameters: {
+            query?: never;
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3932,7 +2199,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AgentJobResponse"];
+                    "*/*": components["schemas"]["AuthMethodsResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -3946,14 +2213,136 @@ export interface operations {
             };
         };
     };
-    bundle_1: {
+    certificate_list: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"][];
+                };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestAcmeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_rewrapSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RewrapResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
             path: {
-                bundleId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -3965,7 +2354,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AgentBundleResponse"];
+                    "*/*": components["schemas"]["CertificateResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -3979,12 +2368,12 @@ export interface operations {
             };
         };
     };
-    forget: {
+    certificate_delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                subjectRef: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -4008,7 +2397,1250 @@ export interface operations {
             };
         };
     };
-    removeExpiry: {
+    certificate_renew: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_configureRenewal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigureRenewalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    certificate_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CertificateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_bundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BundleResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_list: {
+        parameters: {
+            query?: {
+                nginxInstanceId?: string;
+                status?: string[];
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseDeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_list: {
+        parameters: {
+            query?: {
+                siteId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DomainGroupResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDomainGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DomainGroupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DomainGroupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDomainGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DomainGroupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupMemberResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_addMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    domainGroup_removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    identity_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocalUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocalUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_enable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LocalUserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    localUser_changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterNginxInstanceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_rotateAgentCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateAgentCertificateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_agentJobs: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AgentJobResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_rotateAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateAgentTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_bundles: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BundleSummaryResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_deployInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    permission_list: {
+        parameters: {
+            query?: {
+                groupId?: string;
+                siteId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PermissionGrantResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    permission_grant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PermissionGrantResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    permission_effective: {
+        parameters: {
+            query: {
+                siteId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EffectivePermissionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    permission_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GrantPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    permission_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                status?: string[];
+                nginxInstanceId?: string;
+                sslEnabled?: boolean;
+                expiringBefore?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseProxySiteSummaryResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxySiteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4039,10 +3671,49 @@ export interface operations {
             };
         };
     };
-    revoke_1: {
+    proxySite_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxySiteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 id: string;
             };
@@ -4068,12 +3739,404 @@ export interface operations {
             };
         };
     };
-    revoke_2: {
+    proxySite_clone: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_deploySite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DeploymentResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_enable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_removeExpiry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_configureNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteNotificationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SiteNotificationSettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ConfigurationPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_renew: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    deployment_checkUpstreams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UpstreamCheckResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    identity_users: {
+        parameters: {
+            query?: {
+                search?: string;
+                stale?: boolean;
+                dormantForDays?: number;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseDirectoryEntryResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    identity_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DirectoryCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DirectoryCleanupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    identity_forget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectRef: string;
             };
             cookie?: never;
         };

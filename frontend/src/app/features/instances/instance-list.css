@@ -116,3 +116,6 @@ table.jobs td { padding: 0.25rem 0.5rem; border-top: 1px solid var(--rule); }
 .job-queued, .job-leased { color: var(--accent); }
 .job-failed { color: var(--danger); }
 .job-succeeded { color: var(--ink-3); }
+
+/* Danger, not warn: this is a host whose private keys would be sent unencrypted. */
+.hint.insecure { color: var(--danger); }

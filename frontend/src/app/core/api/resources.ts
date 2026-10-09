@@ -21,6 +21,7 @@ import {
   PermissionGrant,
   PermissionLevel,
   Preview,
+  PushTransport,
   ScopeType,
   Site,
   SiteNotificationSettings,
@@ -182,7 +183,7 @@ export class InstancesApi {
     name: string;
     hostname: string;
     agentBaseUrl: string;
-    pushTransport?: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
+    pushTransport?: PushTransport;
     agentCertFingerprint?: string;
     agentAuthToken?: string;
     environment?: string;

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgentRegistrationApi, InstancesApi } from '../../core/api/resources';
-import { AgentJob, AgentRegistrationToken, NginxInstance } from '../../core/api/models';
+import { AgentJob, AgentRegistrationToken, NginxInstance, PushTransport } from '../../core/api/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Notifications } from '../../shared/notifications';
 import { EmptyState, PageHeader } from '../../shared/page';
@@ -57,7 +57,7 @@ export class InstanceList implements OnInit {
   readonly hostname = signal('');
   readonly agentBaseUrl = signal('https://');
   readonly fingerprint = signal('');
-  readonly pushTransport = signal<'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN'>('MTLS');
+  readonly pushTransport = signal<PushTransport>('MTLS');
   readonly agentAuthToken = signal('');
   readonly showAuthToken = signal(false);
   readonly environment = signal('PRODUCTION');
@@ -197,29 +197,25 @@ export class InstanceList implements OnInit {
     });
   }
 
-  setPushTransport(transport: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN'): void {
-    const prev = this.pushTransport();
+  setPushTransport(transport: PushTransport): void {
     this.pushTransport.set(transport);
-    if (transport === 'MTLS') {
-      if (this.agentBaseUrl() === 'http://') {
-        this.agentBaseUrl.set('https://');
-      }
-    } else {
-      if (this.agentBaseUrl() === 'https://') {
-        this.agentBaseUrl.set('http://');
-      }
+    // An untouched prefix follows the choice back to HTTPS. A typed URL is left alone.
+    if (transport === 'MTLS' && this.agentBaseUrl() === 'http://') {
+      this.agentBaseUrl.set('https://');
     }
   }
 
   urlPlaceholder(): string {
-    switch (this.pushTransport()) {
-      case 'MTLS':
-        return 'https://nginx-01.internal:8443';
-      case 'HTTP_TOKEN':
-        return 'http://nginx-01.internal:8080';
-      case 'GRPC_TOKEN':
-        return 'http://nginx-01.internal:50051';
-    }
+    return this.pushTransport() === 'MTLS' ? 'https://nginx-01.internal:8443' : 'https://nginx-01.internal:8080';
+  }
+
+  /**
+   * A token host reached over plain HTTP. Allowed, because a proxy on the same machine may be what
+   * terminates TLS — but said plainly, since otherwise the token and every bundle, private keys
+   * included, cross the network readable.
+   */
+  insecureTokenUrl(): boolean {
+    return this.pushTransport() === 'HTTP_TOKEN' && /^http:\/\//i.test(this.agentBaseUrl().trim());
   }
 
   resetForm(): void {
@@ -240,7 +236,7 @@ export class InstanceList implements OnInit {
       name: string;
       hostname: string;
       agentBaseUrl: string;
-      pushTransport: 'MTLS' | 'HTTP_TOKEN' | 'GRPC_TOKEN';
+      pushTransport: PushTransport;
       agentCertFingerprint?: string;
       agentAuthToken?: string;
       environment: string;
