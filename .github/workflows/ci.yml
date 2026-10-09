@@ -35,9 +35,10 @@ jobs:
       - name: Released changelogs are unchanged
         run: |
           set -euo pipefail
-          # 0.0.x tags were development snapshots whose schema was deliberately rebuilt; the
-          # freeze starts at 0.1.0 (docs/releases.md, "Versioning and compatibility").
-          released=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v0.0.*' 2>/dev/null || true)
+          # 0.0.x tags were development snapshots whose schema was deliberately rebuilt, and a
+          # release candidate is a rehearsal whose database nobody keeps: neither freezes anything.
+          # The freeze starts at the final 0.1.0 (docs/releases.md, "Versioning and compatibility").
+          released=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v0.0.*' --exclude 'v*-*' 2>/dev/null || true)
           if [ -z "$released" ]; then
             echo "No release tag from 0.1.0 on yet; nothing is frozen."
             exit 0

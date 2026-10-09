@@ -36,8 +36,11 @@ git tag v1.2.0 && git push origin v1.2.0
 `db/changelog/changes/` is part of a release once tagged and is never edited or deleted: Liquibase
 records a checksum per changeset, and a changed one makes every database upgraded from that
 release refuse to start. A schema change after a release is a new numbered file. CI enforces this
-against the latest release tag. The `0.0.x` tags were development snapshots, rebuilt twice from a
-squashed baseline; they are excluded, and there is no upgrade path from them.
+against the latest final release tag. Release candidates (`v1.2.0-rc.1`) do not freeze anything:
+a schema mistake found while smoke-testing a candidate is fixed in place before the final tag, and
+a candidate's database is recreated rather than upgraded. The `0.0.x` tags were development
+snapshots, rebuilt twice from a squashed baseline; they are excluded too, and there is no upgrade
+path from them.
 
 ## What a release contains
 
