@@ -1,7 +1,7 @@
 # Roadmap
 
-**Phases 9 through 14 are complete.** The roadmap is finished; what remains is the two open
-decisions below.
+**Phases 9 through 14 are complete.** The roadmap is finished. Its two open decisions were closed
+for v0.1.0 — see below.
 
 Phases 1–8 are complete. What follows is everything named as outstanding in
 [`../docs/architecture.md`](architecture.md) §11, plus the Phase 1 open questions that were
@@ -14,7 +14,18 @@ you can trust what the platform already reports.
 
 ---
 
-## Open decisions
+## Decisions closed for v0.1.0
+
+- **Multi-host sites: deferred.** v0.1.0 ships one host per site. When an HA pair is wanted, the
+  REST change it needs is accepted as a breaking change in a later minor release, which the
+  pre-1.0 policy in [`releases.md`](releases.md) permits and the changelog will announce.
+- **`forceHttps=false` serves both ports.** The recommended reading below was adopted while no
+  deployment had live traffic to change: off renders a plain-HTTP server beside the TLS one,
+  on renders the redirect. The field keeps its name, which now says what it does.
+
+The analysis that led to each is kept below.
+
+## Open decisions (closed — see above)
 
 Two questions were deliberately left to the project owner rather than answered by whoever happened
 to be writing code. Neither blocked any phase — but the first grows more expensive with every
@@ -100,12 +111,12 @@ error instead of another site's certificate and content.
 against the *database's* belief, so redeploying a drifted host was silently a no-op — drift was
 detectable but not repairable. The shortcut is now skipped while an instance is DEGRADED.
 
-### Found by Phase 9, still undecided
+### Found by Phase 9, decided for v0.1.0
 
 `VERIFY` discovered on its first live run that a site with `sslEnabled` and `forceHttps=false`
-renders only a 443 block, so port 80 is answered by the catch-all with a 404. Written up under
-[Open decisions](#what-should-forcehttpsfalse-mean-for-port-80) above. Not changed as part of
-Phase 9: it alters live traffic for every SSL site, which is a decision rather than a fix.
+renders only a 443 block, so port 80 is answered by the catch-all with a 404. Not changed as part
+of Phase 9, because it altered live traffic for every SSL site. Decided before v0.1.0, when there
+was none: such a site now serves both ports.
 
 ## Phase 10 — Notifications — **complete**
 

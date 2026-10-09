@@ -278,7 +278,7 @@
               <div><span class="key">Status</span><app-status-pill [status]="certificate.status" /></div>
               <div><span class="key">Expires</span><span>{{ certificate.expiresAt | datetime }}</span></div>
               <div><span class="key">Renewal</span><span>{{ certificate.autoRenew ? 'automatic' : 'manual' }}</span></div>
-              <div><span class="key">Redirect</span><span>{{ site.forceHttps ? 'HTTP → HTTPS' : 'none' }}</span></div>
+              <div><span class="key">Redirect</span><span>{{ site.forceHttps ? 'HTTP → HTTPS' : 'none · serves HTTP and HTTPS' }}</span></div>
               <div><span class="key">HSTS</span><span>{{ site.hstsEnabled ? 'enabled' : 'disabled' }}</span></div>
             </div>
           } @else {

@@ -179,6 +179,7 @@
           <input id="force" type="checkbox" [ngModel]="forceHttps()" (ngModelChange)="forceHttps.set($event)" />
           <label for="force">Redirect HTTP to HTTPS</label>
         </div>
+        <p class="hint">Off: the site answers on both HTTP and HTTPS.</p>
         <div class="check">
           <input id="hsts" type="checkbox" [ngModel]="hstsEnabled()" (ngModelChange)="hstsEnabled.set($event)" />
           <label for="hsts">Send HSTS</label>

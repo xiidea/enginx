@@ -60,6 +60,14 @@ class NginxConfigRendererTest {
         }
 
         @Test
+        void httpsWithoutRedirectServesBothPorts() {
+            // Turning the redirect off means HTTP is served too, not that port 80 falls through to
+            // the catch-all. The plain server keeps the HTTP-01 location so renewals still work.
+            ProxySite site = spec("both.example.com").ssl(false, false).site(SITE_ID);
+            assertMatchesGolden("https-and-http.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE));
+        }
+
+        @Test
         void loadBalancedWithBackupAndHealthChecks() {
             ProxySite site = spec("lb.example.com")
                     .loadBalancing(LoadBalancingMethod.LEAST_CONN)

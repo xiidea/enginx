@@ -1239,6 +1239,11 @@ Module dependency direction is enforced by the Maven reactor and verified in CI 
 
 **R8 — Toolchain drift between CI and developer machines.** The build targets Java 25 and declares it as a Gradle toolchain rather than compiling with whatever JDK happens to be on the `PATH`, so a machine without JDK 25 fails with an actionable message instead of silently producing different bytecode. On a CI image that lacks it, add the foojay toolchain resolver so Gradle provisions it rather than pinning the version in two places.
 
+**R9 — One host per site.** `proxy_sites.nginx_instance_id` is a single column, so an HA pair
+cannot be expressed. Deferred at v0.1.0 by decision, not oversight: when it is needed, the REST
+change (`nginxInstanceId` becoming a list) is taken as a breaking change in a later minor release.
+The engine is already per-instance; see [`roadmap.md`](roadmap.md) for the cost analysis.
+
 ### Improvements worth adopting
 
 1. **Dry-run endpoint** — `POST /proxy-sites/{id}/preview` returns the rendered config and a diff against the active bundle without deploying. This is the highest-value feature for user trust and costs almost nothing given the renderer is already a pure function.

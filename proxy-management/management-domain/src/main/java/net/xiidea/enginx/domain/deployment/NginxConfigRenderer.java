@@ -216,6 +216,12 @@ public final class NginxConfigRenderer {
             RenderedCertificate material = requireCertificate(site, certificates);
             if (spec.forceHttps()) {
                 appendRedirectServer(out, site);
+            } else {
+                // Without forceHttps the site answers on both ports. Rendering only the TLS server
+                // left port 80 to the catch-all, so the domain returned 404 over HTTP — neither
+                // served nor redirected, which is what no operator turning a redirect off means.
+                appendServer(out, site, false, null);
+                out.append('\n');
             }
             appendServer(out, site, true, material);
         } else {
