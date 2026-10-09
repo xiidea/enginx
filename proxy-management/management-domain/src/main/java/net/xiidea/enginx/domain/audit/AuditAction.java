@@ -20,6 +20,8 @@ public enum AuditAction {
     NGINX_INSTANCE_DRIFTED,
     /** A new agent certificate was pinned for a host. */
     NGINX_INSTANCE_CERT_ROTATED,
+    /** A new agent token was trusted for a host. The token itself is never recorded. */
+    NGINX_INSTANCE_TOKEN_ROTATED,
 
     DOMAIN_GROUP_CREATED,
     DOMAIN_GROUP_UPDATED,

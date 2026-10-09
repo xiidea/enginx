@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * the persistence of the phase history are all the production code paths. Only the wire is faked,
  * which is exactly the part the Go tests cover in isolation.
  */
-@jakarta.annotation.Priority(1)
 public class TestAgent implements NginxAgentPort {
 
     public enum Behaviour {

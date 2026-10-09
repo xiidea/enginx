@@ -44,8 +44,22 @@ public class NginxInstanceEntity {
     @Column(name = "push_transport", nullable = false, length = 16)
     private PushTransport pushTransport = PushTransport.MTLS;
 
-    @Column(name = "agent_auth_token", length = 512)
-    private String agentAuthToken;
+    // The agent token, sealed under the same envelope scheme as private keys. All five set
+    // together or all null; the schema checks the ciphertext, which cannot exist without the rest.
+    @Column(name = "agent_token_ciphertext")
+    private byte[] agentTokenCiphertext;
+
+    @Column(name = "agent_token_wrapped_dek")
+    private byte[] agentTokenWrappedDek;
+
+    @Column(name = "agent_token_kek_id", length = 64)
+    private String agentTokenKekId;
+
+    @Column(name = "agent_token_cipher", length = 32)
+    private String agentTokenCipher;
+
+    @Column(name = "agent_token_iv")
+    private byte[] agentTokenIv;
 
     @Column(name = "environment", nullable = false, length = 32)
     private String environment;
@@ -128,12 +142,33 @@ public class NginxInstanceEntity {
         this.pushTransport = pushTransport;
     }
 
-    public String getAgentAuthToken() {
-        return agentAuthToken;
+    public byte[] getAgentTokenCiphertext() {
+        return agentTokenCiphertext;
     }
 
-    public void setAgentAuthToken(String agentAuthToken) {
-        this.agentAuthToken = agentAuthToken;
+    public byte[] getAgentTokenWrappedDek() {
+        return agentTokenWrappedDek;
+    }
+
+    public String getAgentTokenKekId() {
+        return agentTokenKekId;
+    }
+
+    public String getAgentTokenCipher() {
+        return agentTokenCipher;
+    }
+
+    public byte[] getAgentTokenIv() {
+        return agentTokenIv;
+    }
+
+    /** Sets or clears all five sealed-token columns at once, so they cannot disagree. */
+    public void sealAgentToken(byte[] ciphertext, byte[] wrappedDek, String kekId, String cipher, byte[] iv) {
+        this.agentTokenCiphertext = ciphertext;
+        this.agentTokenWrappedDek = wrappedDek;
+        this.agentTokenKekId = kekId;
+        this.agentTokenCipher = cipher;
+        this.agentTokenIv = iv;
     }
 
     public void setAgentCertFingerprint(String agentCertFingerprint) {

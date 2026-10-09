@@ -7,10 +7,10 @@ import net.xiidea.enginx.domain.deployment.AgentValidationFailedException;
 import net.xiidea.enginx.domain.deployment.BundleFile;
 import net.xiidea.enginx.domain.deployment.ConfigBundle;
 import net.xiidea.enginx.domain.deployment.NginxAgentPort;
-import net.xiidea.enginx.domain.deployment.NginxAgentPort.UpstreamTarget;
 import net.xiidea.enginx.domain.deployment.SiteVerification;
 import net.xiidea.enginx.domain.deployment.UpstreamReachability;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
+import net.xiidea.enginx.domain.nginx.PushTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -21,38 +21,38 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Talks to an agent over mutually authenticated TLS.
+ * Talks to a dialled agent.
  *
- * <p>One {@link HttpClient} is cached per agent certificate fingerprint, because the pin lives in
- * the TLS context. That also gives each instance its own connection pool, so a slow or wedged
- * host cannot starve deployments to the others.
+ * <p>One REST API whichever way the host is reached. How the connection is made and how the
+ * platform proves who is calling are the instance's {@link PushTransport}, and differ only in
+ * {@link AgentConnection}; everything said over it is here, once.
  */
 @Component
 @EnableConfigurationProperties(AgentClientProperties.class)
-public class HttpNginxAgentClient implements NginxAgentTransport {
+public class HttpNginxAgentClient implements NginxAgentPort {
 
     private static final Logger log = LoggerFactory.getLogger(HttpNginxAgentClient.class);
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final AgentClientProperties properties;
-    private final Map<String, HttpClient> clientsByFingerprint = new ConcurrentHashMap<>();
+    private final AgentConnection mtls;
+    private final AgentConnection token;
 
-    public HttpNginxAgentClient(AgentClientProperties properties) {
+    HttpNginxAgentClient(AgentClientProperties properties, MtlsAgentConnection mtls, TokenAgentConnection token) {
         this.properties = properties;
+        this.mtls = mtls;
+        this.token = token;
     }
 
+    @Override
     public void stage(NginxInstance instance, ConfigBundle bundle, String idempotencyKey) {
         ObjectNode payload = JSON.createObjectNode();
         payload.put("bundleId", bundle.id().toString());
@@ -80,6 +80,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         throw failure(instance, response, "staging the bundle");
     }
 
+    @Override
     public AgentActivation activate(NginxInstance instance, ConfigBundle bundle, String idempotencyKey,
                                     boolean reload) {
         ObjectNode payload = JSON.createObjectNode();
@@ -108,6 +109,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
                 body.path("rolledBack").asBoolean(false));
     }
 
+    @Override
     public AgentStatus status(NginxInstance instance) {
         HttpResponse<String> response = send(instance, "GET", "/agent/v1/status", null, null);
         if (response.statusCode() != 200) {
@@ -135,6 +137,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
                 certificates);
     }
 
+    @Override
     public List<SiteVerification> verify(NginxInstance instance, List<String> serverNames) {
         if (serverNames.isEmpty()) {
             return List.of();
@@ -190,6 +193,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         return results;
     }
 
+    @Override
     public void discard(NginxInstance instance, String bundleId) {
         HttpResponse<String> response = send(instance, "DELETE",
                 "/agent/v1/configurations/" + bundleId, null, null);
@@ -198,6 +202,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         }
     }
 
+    @Override
     public void publishAcmeChallenge(NginxInstance instance, String token, String authorization) {
         ObjectNode payload = JSON.createObjectNode();
         payload.put("authorization", authorization);
@@ -209,6 +214,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         }
     }
 
+    @Override
     public void removeAcmeChallenge(NginxInstance instance, String token) {
         HttpResponse<String> response = send(instance, "DELETE", "/agent/v1/acme-challenges/" + token, null, null);
         if (response.statusCode() != 204 && response.statusCode() != 404) {
@@ -220,16 +226,26 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
 
     private HttpResponse<String> send(NginxInstance instance, String method, String path,
                                       String body, String idempotencyKey) {
+        AgentConnection connection = connectionFor(instance);
         URI uri = instance.agentBaseUrl().resolve(path);
 
         HttpRequest.BodyPublisher publisher = body == null
                 ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofString(body);
 
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri)
-                .timeout(properties.requestTimeout())
+        HttpRequest.Builder request;
+        try {
+            request = HttpRequest.newBuilder(uri);
+        } catch (IllegalArgumentException e) {
+            // A URL the client cannot dial. Registration validates the scheme, so this is a row
+            // written some other way, and no number of retries will change it.
+            throw new AgentException("Cannot dial the agent for " + instance.name() + " at "
+                    + instance.agentBaseUrl() + ": " + e.getMessage(), e, false);
+        }
+        request.timeout(properties.requestTimeout())
                 .header("Accept", "application/json")
                 .method(method, publisher);
+        connection.authenticate(request, instance);
 
         if (body != null) {
             request.header("Content-Type", "application/json");
@@ -239,7 +255,7 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         }
 
         try {
-            return clientFor(instance).send(request.build(), HttpResponse.BodyHandlers.ofString());
+            return connection.clientFor(instance).send(request.build(), HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
             // Transport problems are worth retrying: an agent restarting mid-deployment is the
             // common case, and the operation is idempotent.
@@ -251,23 +267,8 @@ public class HttpNginxAgentClient implements NginxAgentTransport {
         }
     }
 
-    private HttpClient clientFor(NginxInstance instance) {
-        return clientsByFingerprint.computeIfAbsent(instance.agentCertFingerprint(), fingerprint -> {
-            if (!properties.isConfigured()) {
-                throw new AgentException(
-                        "Agent mTLS is not configured: set enginx.agent.key-store and trust-store", false);
-            }
-            try {
-                SSLContext sslContext = AgentTlsFactory.create(properties, fingerprint);
-                HttpClient.Builder builder = HttpClient.newBuilder()
-                        .sslContext(sslContext)
-                        .connectTimeout(properties.connectTimeout())
-                        .version(HttpClient.Version.HTTP_1_1);
-                return builder.build();
-            } catch (Exception e) {
-                throw new AgentException("Could not build the agent TLS context: " + e.getMessage(), e, false);
-            }
-        });
+    private AgentConnection connectionFor(NginxInstance instance) {
+        return instance.pushTransport() == PushTransport.HTTP_TOKEN ? token : mtls;
     }
 
     private AgentException failure(NginxInstance instance, HttpResponse<String> response, String action) {

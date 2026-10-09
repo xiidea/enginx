@@ -63,15 +63,16 @@ db/changelog/changes/001-baseline.sql   the platform's own schema
 db/changelog/changes/002-quartz.sql     Quartz's vendor DDL, copied verbatim
 ```
 
-The incremental changelogs that built this up were squashed before the first release — nothing was
-published, so there was no deployed database whose history was worth preserving. The squash was
-verified by applying both the old chain and the new baseline to empty databases and diffing a
-semantic snapshot of each (columns, constraints, indexes, triggers, functions); they are identical.
+The incremental changelogs that built this up were squashed before the first production
+deployment — no deployed database's history was worth preserving. Each squash was verified by
+applying both the old chain and the new baseline to empty databases and diffing a semantic snapshot
+of each (columns, constraints, indexes, triggers, functions); they match, apart from the transition
+columns the squash deliberately dropped.
 
 Hibernate runs with `ddl-auto: validate`, so any drift between a changelog and an entity mapping is
 a startup failure rather than a runtime surprise.
 
-**If you have a database from before the squash, delete it:**
+**If you have a database from before the squash — including one created by v0.0.8 or v0.0.9 — delete it:**
 
 ```bash
 cd docker && docker compose down -v && docker compose up -d

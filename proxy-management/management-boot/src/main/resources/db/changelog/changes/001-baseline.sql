@@ -13,28 +13,137 @@
 
 --changeset enginx:baseline-010-nginx-instances
 --comment Managed NGINX hosts, addressed through their agent. The management server never opens an
---comment SSH session; agent_base_url and the pinned certificate fingerprint are the whole contract.
+--comment SSH session; what it holds about a host is how the two reach each other, and nothing more.
+--comment
+--comment connectivity_mode is which way round. PUSH: the management server dials agent_base_url,
+--comment which needs a port on the host reachable from the management plane. PULL: the agent
+--comment registers itself with a token and long-polls for work, so nothing dials the host at all —
+--comment the model for a host behind NAT or in another network. Both are supported per instance.
+--comment
+--comment push_transport is how a PUSH host is told the caller is the platform. MTLS: a client
+--comment certificate, with the agent's own certificate fingerprint pinned here. HTTP_TOKEN: a
+--comment pre-shared token, for a host behind a proxy that terminates TLS and so cannot pass a
+--comment client certificate through. The token is sealed under the same envelope encryption as
+--comment private keys — the agent_token_* columns — because it is a credential that can push
+--comment configuration, keys included, to the host.
+--comment
+--comment ck_instance_mode_fields is what keeps the fields from being merely optional: each mode and
+--comment transport requires exactly its own fields and refuses the others', so a row can neither
+--comment describe a host nobody can reach nor carry two identities that disagree about which is used.
 CREATE TABLE nginx_instances (
-    id                     uuid         PRIMARY KEY,
-    name                   varchar(64)  NOT NULL,
-    hostname               varchar(253) NOT NULL,
-    agent_base_url         varchar(512) NOT NULL,
-    agent_cert_fingerprint varchar(64)  NOT NULL,
-    environment            varchar(32)  NOT NULL DEFAULT 'PRODUCTION',
-    status                 varchar(16)  NOT NULL DEFAULT 'UNKNOWN',
-    nginx_version          varchar(32),
-    agent_version          varchar(32),
-    last_seen_at           timestamptz,
+    id                      uuid         PRIMARY KEY,
+    name                    varchar(64)  NOT NULL,
+    hostname                varchar(253) NOT NULL,
+    connectivity_mode       varchar(8)   NOT NULL DEFAULT 'PUSH',
+    push_transport          varchar(16)  NOT NULL DEFAULT 'MTLS',
+    agent_base_url          varchar(512),
+    agent_cert_fingerprint  varchar(64),
+    -- All five set together or all null; see ck_instance_agent_token_sealed.
+    agent_token_ciphertext  bytea,
+    agent_token_wrapped_dek bytea,
+    agent_token_kek_id      varchar(64),
+    agent_token_cipher      varchar(32),
+    agent_token_iv          bytea,
+    environment             varchar(32)  NOT NULL DEFAULT 'PRODUCTION',
+    status                  varchar(16)  NOT NULL DEFAULT 'UNKNOWN',
+    nginx_version           varchar(32),
+    agent_version           varchar(32),
+    last_seen_at            timestamptz,
     -- Set once config_bundles exists; see the deferred links changeset at the end of this file.
-    created_at             timestamptz  NOT NULL DEFAULT now(),
-    updated_at             timestamptz  NOT NULL DEFAULT now(),
-    version                bigint       NOT NULL DEFAULT 0,
+    created_at              timestamptz  NOT NULL DEFAULT now(),
+    updated_at              timestamptz  NOT NULL DEFAULT now(),
+    version                 bigint       NOT NULL DEFAULT 0,
     CONSTRAINT uq_nginx_instance_name CHECK (name = lower(name)),
     CONSTRAINT ck_nginx_instance_status CHECK (status IN ('ONLINE','OFFLINE','DEGRADED','UNKNOWN')),
-    CONSTRAINT ck_nginx_instance_fingerprint CHECK (agent_cert_fingerprint ~ '^[A-F0-9]{64}$')
+    CONSTRAINT ck_nginx_instance_fingerprint CHECK (agent_cert_fingerprint ~ '^[A-F0-9]{64}$'),
+    CONSTRAINT ck_instance_connectivity_mode CHECK (connectivity_mode IN ('PUSH', 'PULL')),
+    CONSTRAINT ck_instance_push_transport CHECK (push_transport IN ('MTLS', 'HTTP_TOKEN')),
+    -- A ciphertext without the key that wrapped it is unreadable, and one with only some of its
+    -- parts would fail at the moment of a deployment rather than here.
+    CONSTRAINT ck_instance_agent_token_sealed CHECK (
+        (agent_token_ciphertext IS NULL
+            AND agent_token_wrapped_dek IS NULL
+            AND agent_token_kek_id IS NULL
+            AND agent_token_iv IS NULL)
+        OR (agent_token_ciphertext IS NOT NULL
+            AND agent_token_wrapped_dek IS NOT NULL
+            AND agent_token_kek_id IS NOT NULL
+            AND agent_token_iv IS NOT NULL)),
+    CONSTRAINT ck_instance_mode_fields CHECK (
+        (connectivity_mode = 'PUSH'
+            AND push_transport = 'MTLS'
+            AND agent_base_url IS NOT NULL
+            AND agent_cert_fingerprint IS NOT NULL
+            AND agent_token_ciphertext IS NULL)
+        OR (connectivity_mode = 'PUSH'
+            AND push_transport = 'HTTP_TOKEN'
+            AND agent_base_url IS NOT NULL
+            AND agent_cert_fingerprint IS NULL
+            AND agent_token_ciphertext IS NOT NULL)
+        OR (connectivity_mode = 'PULL'
+            AND agent_base_url IS NULL
+            AND agent_cert_fingerprint IS NULL
+            AND agent_token_ciphertext IS NULL))
 );
 CREATE UNIQUE INDEX uq_nginx_instances_name ON nginx_instances (name);
 --rollback DROP TABLE nginx_instances;
+
+--changeset enginx:baseline-015-agent-registration-tokens
+--comment The credential an operator hands to a new host so it can enrol itself.
+--comment
+--comment Stored as a SHA-256 digest rather than bcrypt, and the difference matters: a bcrypt hash
+--comment carries a random salt, so it cannot be looked up -- finding which token was presented
+--comment would mean comparing against every row. Slow hashing exists to defend low-entropy secrets
+--comment that can be guessed; these are 256 bits from a CSPRNG and cannot. A digest is the right
+--comment tool and is the only one that supports a lookup.
+CREATE TABLE agent_registration_tokens (
+    id          uuid         PRIMARY KEY,
+    -- Hex SHA-256 of the token. The token itself is shown once, at creation, and never stored.
+    token_hash  varchar(64)  NOT NULL,
+    description varchar(256),
+    -- Null means it never expires, which is a deliberate choice an operator has to make.
+    expires_at  timestamptz,
+    -- Null means unlimited. One is the safe default for enrolling a single known host.
+    max_uses    integer,
+    uses        integer      NOT NULL DEFAULT 0,
+    revoked_at  timestamptz,
+    created_by  varchar(128) NOT NULL,
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT ck_agent_reg_token_max_uses CHECK (max_uses IS NULL OR max_uses > 0),
+    CONSTRAINT ck_agent_reg_token_uses CHECK (uses >= 0)
+);
+
+CREATE UNIQUE INDEX ux_agent_registration_tokens_hash ON agent_registration_tokens (token_hash);
+--rollback DROP TABLE agent_registration_tokens;
+
+--changeset enginx:baseline-016-agent-tokens
+--comment The long-lived credential a host uses on every poll, issued once at registration.
+--comment
+--comment One row per instance rather than a column on nginx_instances: a credential has a lifecycle
+--comment of its own -- issued, used, revoked, reissued -- and putting it in the aggregate's table
+--comment would mean every read of an instance carries a secret it does not need.
+--comment
+--comment This token is what stands between an attacker and every site's private key, since a
+--comment configuration bundle contains them (risk R1). It is hashed at rest for the same reason a
+--comment password is, and every use is stamped so a dormant credential is visible.
+CREATE TABLE agent_tokens (
+    id                uuid        PRIMARY KEY,
+    nginx_instance_id uuid        NOT NULL,
+    token_hash        varchar(64) NOT NULL,
+    issued_at         timestamptz NOT NULL DEFAULT now(),
+    last_used_at      timestamptz,
+    revoked_at        timestamptz,
+    CONSTRAINT fk_agent_tokens_instance FOREIGN KEY (nginx_instance_id)
+        REFERENCES nginx_instances (id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX ux_agent_tokens_hash ON agent_tokens (token_hash);
+
+-- One live token per instance. Reissuing revokes the previous one rather than adding a second,
+-- so a stolen credential cannot be kept alive alongside its replacement.
+CREATE UNIQUE INDEX ux_agent_tokens_active_instance ON agent_tokens (nginx_instance_id)
+    WHERE revoked_at IS NULL;
+--rollback DROP TABLE agent_tokens;
 
 --changeset enginx:baseline-020-certificates
 --comment certificate_pem holds the full chain, leaf first, which is the order NGINX requires. A
@@ -257,6 +366,49 @@ CREATE TABLE proxy_site_locations (
 CREATE INDEX idx_locations_site ON proxy_site_locations (proxy_site_id);
 --rollback DROP TABLE proxy_site_locations;
 
+--changeset enginx:baseline-034-proxy-site-notifications
+--comment Who to tell about one site, and whether to tell them at all.
+--comment
+--comment A table of its own rather than columns on proxy_sites, and that is a design decision
+--comment rather than tidiness. proxy_sites holds the desired configuration -- the input to the
+--comment renderer, and the thing an audit trail describes as "the site changed". Who receives an
+--comment expiry warning is neither. Putting it there would mean adding an address shows up as a
+--comment configuration change, takes the site's optimistic lock, and needs the authority to alter
+--comment routing.
+--comment
+--comment Defaults to enabled, because that is what every existing site already does: the operator
+--comment addresses are told about everything. This adds an opt-out and a way to widen the list,
+--comment not a new requirement to configure something before it works.
+CREATE TABLE proxy_site_notifications (
+    proxy_site_id  uuid         PRIMARY KEY,
+    expiry_enabled boolean      NOT NULL DEFAULT true,
+    updated_by     varchar(128),
+    updated_at     timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT fk_site_notifications_site FOREIGN KEY (proxy_site_id)
+        REFERENCES proxy_sites (id) ON DELETE CASCADE
+);
+
+--rollback DROP TABLE proxy_site_notifications;
+
+--changeset enginx:baseline-035-proxy-site-notification-subscribers
+--comment Addresses told about this site in addition to the operator list.
+--comment
+--comment A child table rather than a delimited column: an address is a value the platform sends
+--comment mail to, and a list that has to be split on a separator is one where a stray comma
+--comment silently produces an address nobody will ever receive at.
+--comment
+--comment Lowercased by the application before it arrives, so the primary key is what stops the
+--comment same person being added twice under different capitalisation and then told twice.
+CREATE TABLE proxy_site_notification_subscribers (
+    proxy_site_id uuid         NOT NULL,
+    email         varchar(256) NOT NULL,
+    PRIMARY KEY (proxy_site_id, email),
+    CONSTRAINT ck_site_subscriber_email CHECK (email = lower(email) AND email LIKE '%@%'),
+    CONSTRAINT fk_site_subscribers_site FOREIGN KEY (proxy_site_id)
+        REFERENCES proxy_sites (id) ON DELETE CASCADE
+);
+--rollback DROP TABLE proxy_site_notification_subscribers;
+
 --changeset enginx:baseline-040-domain-groups
 --comment Hierarchy is a materialised path in varchar rather than an ltree. Descendants are a
 --comment prefix scan and ancestors are computed by splitting the string, so the extension buys
@@ -370,6 +522,62 @@ CREATE INDEX idx_grants_subject_ref ON permission_grants (subject_ref);
 CREATE INDEX idx_grants_scope_group ON permission_grants (scope_group_id) WHERE scope_group_id IS NOT NULL;
 CREATE INDEX idx_grants_scope_site  ON permission_grants (scope_site_id)  WHERE scope_site_id IS NOT NULL;
 --rollback DROP TABLE permission_grants;
+
+--changeset enginx:baseline-044-local-users
+--comment Accounts the platform authenticates itself, for deployments that do not want to stand up
+--comment an identity provider.
+--comment
+--comment Deliberately a separate table from app_users. That one mirrors Keycloak for grant
+--comment authoring and display and is authoritative for nothing; this one holds credentials and is
+--comment authoritative for everything about the account. Merging them would put a password hash in
+--comment a table a synchronisation job overwrites.
+CREATE TABLE local_users (
+    id            uuid         PRIMARY KEY,
+    username      varchar(128) NOT NULL,
+    -- BCrypt, which carries its own salt and cost factor in the string. Never the password.
+    password_hash varchar(255) NOT NULL,
+    email         varchar(256),
+    display_name  varchar(256),
+    enabled       boolean      NOT NULL DEFAULT true,
+    -- Forces a change at next login. Set for the bootstrap account, whose password came from
+    -- configuration and has therefore been readable by anything that can read configuration.
+    must_change_password boolean NOT NULL DEFAULT false,
+    last_login_at timestamptz,
+    created_by    varchar(128) NOT NULL,
+    created_at    timestamptz  NOT NULL DEFAULT now(),
+    updated_at    timestamptz  NOT NULL DEFAULT now(),
+    version       bigint       NOT NULL DEFAULT 0,
+    CONSTRAINT ck_local_user_username CHECK (username = lower(username) AND length(username) >= 3)
+);
+
+-- Case-insensitivity is enforced by the check constraint above rather than by a functional index,
+-- so two accounts cannot differ only by case — which is the shape of a convincing impersonation.
+CREATE UNIQUE INDEX uq_local_users_username ON local_users (username);
+--rollback DROP TABLE local_users;
+
+--changeset enginx:baseline-045-local-user-roles
+--comment Global roles, the same set Keycloak realm roles map onto. A local account and a
+--comment federated one are therefore indistinguishable to every authorization decision, which is
+--comment what keeps one permission model rather than two.
+CREATE TABLE local_user_roles (
+    local_user_id uuid        NOT NULL REFERENCES local_users(id) ON DELETE CASCADE,
+    role          varchar(32) NOT NULL,
+    CONSTRAINT pk_local_user_roles PRIMARY KEY (local_user_id, role),
+    CONSTRAINT ck_local_user_role CHECK (role IN ('SUPER_ADMIN','ADMIN','OPERATOR','READ_ONLY'))
+);
+--rollback DROP TABLE local_user_roles;
+
+--changeset enginx:baseline-046-local-user-groups
+--comment Group membership, so a grant made to a group reaches local accounts too. The value is a
+--comment group path in the same form Keycloak emits, because permission_grants stores that path
+--comment for a GROUP grant and the evaluator compares strings.
+CREATE TABLE local_user_groups (
+    local_user_id uuid         NOT NULL REFERENCES local_users(id) ON DELETE CASCADE,
+    group_path    varchar(512) NOT NULL,
+    CONSTRAINT pk_local_user_groups PRIMARY KEY (local_user_id, group_path)
+);
+CREATE INDEX idx_local_user_groups_path ON local_user_groups (group_path);
+--rollback DROP TABLE local_user_groups;
 
 --changeset enginx:baseline-050-config-bundles
 --comment The deployment unit is the whole instance (AD-3), so a bundle is the complete intended
@@ -496,6 +704,65 @@ ALTER TABLE proxy_sites ADD COLUMN last_deployment_id uuid
 --rollback ALTER TABLE nginx_instances DROP COLUMN observed_bundle_id;
 --rollback ALTER TABLE nginx_instances DROP COLUMN active_bundle_id;
 
+--changeset enginx:baseline-056-agent-jobs
+--comment Work waiting for a host that calls in.
+--comment
+--comment The outbox stays the trigger for a deployment; this is what a pull host collects. The two
+--comment are not the same queue and should not be merged: an outbox row is a job the server owes
+--comment itself, drained by whichever replica claims it, while these are owed to one specific host
+--comment and nobody else may run them.
+--comment
+--comment Leases rather than SKIP LOCKED, because the worker is not a thread in this process. A row
+--comment is handed out for a bounded time and returns to QUEUED if no result arrives, so an agent
+--comment that dies mid-job strands nothing.
+CREATE TABLE agent_jobs (
+    id                uuid         PRIMARY KEY,
+    nginx_instance_id uuid         NOT NULL,
+    -- Null for work that belongs to no deployment. Set null rather than cascading on delete: a
+    -- job that already ran is a record of what happened to a host, and outlives the deployment
+    -- that asked for it.
+    deployment_id     uuid,
+    type              varchar(32)  NOT NULL,
+    payload           jsonb        NOT NULL,
+    status            varchar(16)  NOT NULL DEFAULT 'QUEUED',
+    -- When the current lease runs out. Null unless LEASED.
+    lease_expires_at  timestamptz,
+    attempts          integer      NOT NULL DEFAULT 0,
+    result            jsonb,
+    error             text,
+    created_at        timestamptz  NOT NULL DEFAULT now(),
+    updated_at        timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT ck_agent_job_status CHECK (status IN ('QUEUED', 'LEASED', 'SUCCEEDED', 'FAILED')),
+    CONSTRAINT ck_agent_job_lease CHECK (
+        (status = 'LEASED' AND lease_expires_at IS NOT NULL)
+        OR (status <> 'LEASED' AND lease_expires_at IS NULL)),
+    CONSTRAINT fk_agent_jobs_instance FOREIGN KEY (nginx_instance_id)
+        REFERENCES nginx_instances (id) ON DELETE CASCADE,
+    CONSTRAINT fk_agent_jobs_deployment FOREIGN KEY (deployment_id)
+        REFERENCES deployments (id) ON DELETE SET NULL
+);
+
+-- The claim query: oldest waiting job for one host. Partial, because finished jobs accumulate and
+-- none of them is ever a candidate again.
+CREATE INDEX ix_agent_jobs_claimable ON agent_jobs (nginx_instance_id, created_at)
+    WHERE status IN ('QUEUED', 'LEASED');
+
+CREATE INDEX ix_agent_jobs_deployment ON agent_jobs (deployment_id)
+    WHERE deployment_id IS NOT NULL;
+
+--rollback DROP TABLE agent_jobs;
+
+--changeset enginx:baseline-057-agent-jobs-single-outstanding
+--comment At most one job outstanding per host.
+--comment
+--comment Risk R2 wants deployments serialised per instance, and this is where that is enforced for
+--comment a pull host: two jobs in flight against one NGINX means two processes racing to swap the
+--comment same symlink. A unique partial index states it as a database rule rather than leaving it
+--comment to the claim query being written correctly every time.
+CREATE UNIQUE INDEX ux_agent_jobs_one_leased_per_instance ON agent_jobs (nginx_instance_id)
+    WHERE status = 'LEASED';
+--rollback DROP INDEX ux_agent_jobs_one_leased_per_instance;
+
 --changeset enginx:baseline-060-audit-logs
 --comment Append-only audit trail, range-partitioned by month. A partitioned table requires the
 --comment partition key in its primary key, so the key is (id, occurred_at) rather than (id).
@@ -584,3 +851,93 @@ $$ LANGUAGE plpgsql;
 --comment The current month and the next two. Everything after this is the scheduled job's work.
 SELECT enginx_ensure_audit_partitions(2);
 --rollback SELECT 1;
+
+--changeset enginx:baseline-065-audit-retention-function splitStatements:false runOnChange:true
+--comment Drops audit partitions entirely older than a cutoff, and reports what it dropped.
+--comment
+--comment This is the reason the table is partitioned. The immutability trigger forbids DELETE, so
+--comment without partitioning there would be no way to enforce a retention policy at all short of
+--comment disabling the guarantee that makes the trail worth keeping. Dropping a partition removes
+--comment a month in constant time and never touches a row.
+--comment
+--comment Deliberately never touches audit_logs_default. Rows land there only when their timestamp
+--comment falls outside every monthly partition, which means something unexpected happened; those
+--comment are the last rows anyone should discard automatically.
+CREATE OR REPLACE FUNCTION enginx_drop_audit_partitions_before(cutoff date)
+RETURNS TABLE(dropped_partition text) AS $$
+DECLARE
+    part        record;
+    upper_bound date;
+BEGIN
+    FOR part IN
+        SELECT c.relname AS name,
+               pg_get_expr(c.relpartbound, c.oid) AS bound
+          FROM pg_class c
+          JOIN pg_inherits i ON i.inhrelid = c.oid
+          JOIN pg_class parent ON parent.oid = i.inhparent
+         WHERE parent.relname = 'audit_logs'
+           AND c.relname <> 'audit_logs_default'
+         ORDER BY c.relname
+    LOOP
+        -- The partition's upper bound, parsed from its own definition rather than reconstructed
+        -- from the name. A partition whose name and range disagree is exactly the case where
+        -- guessing from the name would drop the wrong month.
+        --
+        -- The capture is deliberately "everything up to the closing quote" rather than a date
+        -- shape: the partition key is timestamptz, so PostgreSQL renders bounds as
+        -- '2024-02-01 00:00:00+00'. A date-only pattern matches nothing, and the function then
+        -- silently drops nothing at all — a retention job that appears to work and does not.
+        upper_bound := (regexp_match(part.bound, 'TO \(''([^'']+)''\)'))[1]::timestamptz::date;
+
+        IF upper_bound IS NOT NULL AND upper_bound <= cutoff THEN
+            EXECUTE format('DROP TABLE %I', part.name);
+            dropped_partition := part.name;
+            RETURN NEXT;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+--rollback DROP FUNCTION IF EXISTS enginx_drop_audit_partitions_before(date);
+
+--changeset enginx:baseline-070-notification-ledger
+--comment A record of what has already been sent, so a condition that persists for days is
+--comment reported once rather than on every scan.
+--comment
+--comment Every notifiable condition is found by a job on a timer. Without this table, "expires in
+--comment 7 days" would be re-sent on every run for four days, and the recipients would filter the
+--comment whole channel into a folder they stop reading — which is a worse outcome than sending
+--comment nothing at all.
+--comment
+--comment `fingerprint` is what re-arms a notification. It holds a value identifying the underlying
+--comment fact — a site's expiry instant, a certificate's expiry, the last time an agent was heard
+--comment from. Extending a site's expiry changes the fingerprint, so the 7-day warning fires again
+--comment for the new date; an agent that recovers and later fails again is a new episode. That
+--comment happens without any code path having to remember to clear a flag, which is the version of
+--comment this that quietly stops working.
+CREATE TABLE notification_ledger (
+    id            uuid          PRIMARY KEY,
+    kind          varchar(48)   NOT NULL,
+    resource_type varchar(48)   NOT NULL,
+    resource_id   uuid          NOT NULL,
+    -- '' rather than NULL when a kind has no threshold. PostgreSQL treats NULLs as distinct in a
+    -- unique index, so a nullable column here would let every scan insert another row and the
+    -- deduplication would silently do nothing.
+    threshold     varchar(16)   NOT NULL DEFAULT '',
+    fingerprint   varchar(128)  NOT NULL,
+    status        varchar(16)   NOT NULL DEFAULT 'PENDING',
+    recipients    varchar(1024),
+    detail        text,
+    created_at    timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT ck_notification_status CHECK (status IN ('PENDING','SENT','FAILED','SUPPRESSED'))
+);
+
+-- The deduplication itself. Claiming a notification is an INSERT that either succeeds or violates
+-- this constraint, which makes "have we sent this already?" a single atomic operation rather than
+-- a check followed by a write that two schedulers could interleave.
+CREATE UNIQUE INDEX uq_notification_once
+    ON notification_ledger (kind, resource_id, threshold, fingerprint);
+
+-- For pruning old rows, and for showing an operator what was recently sent.
+CREATE INDEX idx_notification_created ON notification_ledger (created_at DESC);
+CREATE INDEX idx_notification_failed ON notification_ledger (created_at DESC) WHERE status = 'FAILED';
+--rollback DROP TABLE notification_ledger;

@@ -335,6 +335,23 @@ Developers wipe their volume (`docker compose down -v`), which is the whole poin
 before anyone outside the project has a database worth keeping. Testcontainers builds a fresh schema
 per run and needed no change.
 
+**Squashed a second time, before the first production deployment.** v0.0.8 and v0.0.9 were tagged
+but never ran against a database anyone needed to keep, so the eight changelogs added since — the
+notification ledger, audit retention, local accounts, pull agents, agent jobs, site notifications
+and push-transport tokens — were folded into `001-baseline.sql` the same way. The `nginx_instances`
+table is now created in its final shape: connectivity mode, push transport and the sealed
+`agent_token_*` columns in its column list, and `ck_instance_mode_fields` in its last form.
+
+Folding also deleted the code that existed only to carry a released database forward, because there
+is no such database: the plaintext `agent_auth_token` column and the startup job that sealed it, the
+`GRPC_TOKEN` → `HTTP_TOKEN` row rewrite, and the agent's acceptance of `AGENT_PUSH_PROTOCOL=grpc` as
+an alias. Shipping migration code for data that never existed would be the same false history the
+first squash removed.
+
+Verified the same way: the old chain and the new baseline applied to empty PostgreSQL 17 databases
+and their semantic snapshots diffed. The only differences are the intended ones — no
+`agent_auth_token` column, and no `agent_auth_token` terms in `ck_instance_mode_fields`.
+
 ## Implementation notes — Phase 10
 
 **Deduplication is a unique constraint, not a check-then-write.** Claiming a notification is a

@@ -17,15 +17,16 @@ network the host sits on, not a preference, and an estate can hold both.
 |---|---|---|
 | Who connects | the platform connects to the host | the host connects to the platform |
 | Inbound port | 8443 (or configured port), reachable from the management plane | none |
-| Host identity | certificate fingerprint (mTLS) or pre-shared bearer token (HTTP / gRPC) | a token, issued at enrolment |
-| Registration | operator enters URL + fingerprint (mTLS) or secret token (HTTP/gRPC) | the host enrols itself |
+| Host identity | a pinned certificate (mTLS), or a pre-shared token | a token, issued at enrolment |
+| Registration | an operator enters a URL and a fingerprint or token | the host enrols itself |
 | Works behind NAT | no | yes |
 | HTTP-01 certificates | yes | not yet |
 
 **Dial mode proves more.** With mutual TLS (`mtls`, the default), the platform pins the agent's
 certificate fingerprint, so a certificate signed by the same CA still cannot impersonate that host.
-When running behind layer-7 ingress proxies, reverse proxies, or internal networks where custom PKI
-is impractical, dial mode can also run over HTTP or gRPC using a pre-shared bearer token (`AGENT_PUSH_PROTOCOL=http` or `grpc`).
+A host behind a proxy or tunnel that terminates TLS cannot be offered a client certificate, so dial
+mode can instead authenticate the platform with a pre-shared token (`AGENT_PUSH_PROTOCOL=http`).
+A token is a weaker claim than a pinned certificate; prefer mTLS wherever it can reach.
 
 **Pull mode asks for less.** A host in another cloud, behind NAT, or on a network nobody routes to
 can satisfy no listener contract, but it can always make an outbound call.
@@ -90,23 +91,35 @@ the failure would arrive at deployment time, on somebody else's schedule.
 **Restrict 8443 at the firewall to the management plane's address.** Certificate pinning is the
 authentication; there is no reason for the port to be reachable from anywhere else at all.
 
-### Dial mode with pre-shared token (HTTP / gRPC)
+### Dial mode with a pre-shared token
 
-When the agent sits behind an edge load balancer, API gateway, ingress proxy, or layer-7 tunnel
-that terminates TLS, or when configuring mTLS PKI is not desired, configure the agent with a
-pre-shared secret token:
+For a host behind a load balancer, ingress, or tunnel that terminates TLS and so cannot pass a
+client certificate through:
 
 ```bash
-AGENT_PUSH_PROTOCOL=http      # or grpc
-AGENT_SECRET_TOKEN=enginx-sec-secret123
+AGENT_PUSH_PROTOCOL=http
+AGENT_SECRET_TOKEN=$(openssl rand -hex 32)   # at least 32 characters, or the agent refuses to start
 AGENT_LISTEN_ADDR=:8080
+# Optional: serve HTTPS from the agent itself. No client certificate is asked for.
+AGENT_TLS_CERT=/etc/enginx/pki/agent.crt
+AGENT_TLS_KEY=/etc/enginx/pki/agent.key
 enginx-agent
 ```
 
-When registering the instance in the console or API, choose the corresponding transport
-(`HTTP_TOKEN` or `GRPC_TOKEN`), provide the reachable `agentBaseUrl`, and enter the pre-shared
-`agentAuthToken`. The management plane then authenticates outbound requests using
-`Authorization: Bearer <agentAuthToken>`.
+Register the host with transport **Token** in the console, or `"pushTransport": "HTTP_TOKEN"` and
+the same value as `agentAuthToken` through the API. The platform sends it as
+`Authorization: Bearer …`; the agent compares it in constant time.
+
+**Without TLS, nothing is secret.** The token and every bundle the platform pushes — site private
+keys included — cross the network readable. Plain HTTP is accepted only so a proxy on the same
+machine can terminate TLS in front of the agent. Anywhere else, set `AGENT_TLS_CERT`/`AGENT_TLS_KEY`
+or front the port with something that does. Over HTTPS the platform checks the agent's certificate
+against the JVM trust store.
+
+The platform stores the token sealed under the same envelope encryption as private keys, and KEK
+re-wrap covers it. To rotate one, set the new `AGENT_SECRET_TOKEN` on the host, restart the agent,
+then `PUT /api/v1/nginx-instances/{id}/agent-token` with `{"agentAuthToken": "…"}`. Calls fail
+between the two steps; traffic does not.
 
 ## Pull mode
 
@@ -155,11 +168,11 @@ command-injection surface to protect.
 
 | Variable | Default | |
 |---|---|---|
-| `AGENT_PUSH_PROTOCOL` | `mtls` | Push listener protocol: `mtls` (default), `http` (REST + token), or `grpc` (gRPC + token) |
-| `AGENT_SECRET_TOKEN` | — | Pre-shared secret token. Required when `AGENT_PUSH_PROTOCOL` is `http` or `grpc` |
+| `AGENT_PUSH_PROTOCOL` | `mtls` | `mtls`, or `http` for a pre-shared token. Anything else is refused at startup |
+| `AGENT_SECRET_TOKEN` | — | Required under `http`, at least 32 characters |
 | `AGENT_LISTEN_ADDR` | `:8443` | Bind to the management network, not `0.0.0.0`, where you can |
 | `AGENT_HEALTH_ADDR` | `127.0.0.1:9099` | Unauthenticated liveness. Loopback only — it must never become a way to read host detail without authentication |
-| `AGENT_TLS_CERT` / `AGENT_TLS_KEY` | `/etc/enginx/pki/agent.{crt,key}` | This host's identity (`mtls` protocol only) |
+| `AGENT_TLS_CERT` / `AGENT_TLS_KEY` | `/etc/enginx/pki/agent.{crt,key}` | This host's identity. Under `http`, used only when both are set, to serve HTTPS |
 | `AGENT_CLIENT_CA` | `/etc/enginx/pki/ca.crt` | The CA that signs the management client certificate (`mtls` protocol only) |
 | `AGENT_CLIENT_CN` | `enginx-management` | Pinned in addition to CA verification (`mtls` protocol only) |
 

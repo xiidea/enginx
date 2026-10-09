@@ -1,11 +1,13 @@
 package net.xiidea.enginx.api.nginx.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import net.xiidea.enginx.domain.nginx.PushTransport;
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * @param connectivityMode      PUSH if the platform dials this host, PULL if it calls in
+ * @param pushTransport         how a push host is dialled; null for a pull host
  * @param agentBaseUrl          null for a pull host, which is never dialled
  * @param agentCertFingerprint  null for a pull host, which has no certificate to pin
  */
@@ -19,7 +21,7 @@ public record NginxInstanceResponse(
         String name,
         String hostname,
         String connectivityMode,
-        String pushTransport,
+        PushTransport pushTransport,
         String agentBaseUrl,
         String agentCertFingerprint,
         String environment,

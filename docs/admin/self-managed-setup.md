@@ -540,11 +540,14 @@ curl -sS -X POST https://nginx.example.com/api/v1/nginx-instances \
 The platform pins that fingerprint: a replacement certificate — even one signed by the same CA — is
 not trusted until someone re-registers the host. Within a heartbeat the instance turns **ONLINE**.
 
-### Alternative: Push mode over HTTP or gRPC with shared token
+### Alternative: push mode with a pre-shared token
 
-If the agent is reached through an ingress controller or layer-7 proxy that terminates TLS, or if
-you prefer token authentication over mTLS, set `AGENT_PUSH_PROTOCOL=http` (or `grpc`) and
-`AGENT_SECRET_TOKEN=enginx-sec-…` in `/etc/enginx/agent.env`. Then register with `pushTransport`:
+If the agent is reached through an ingress or layer-7 proxy that terminates TLS, and so cannot be
+offered a client certificate, set `AGENT_PUSH_PROTOCOL=http` and `AGENT_SECRET_TOKEN` (generate it
+with `openssl rand -hex 32`; at least 32 characters) in `/etc/enginx/agent.env`. Keep the port
+behind TLS — the proxy's, or the agent's own via `AGENT_TLS_CERT`/`AGENT_TLS_KEY` — because the
+token and every bundle, private keys included, are readable on the wire without it. Then register
+with `pushTransport`:
 
 ```bash
 curl -sS -X POST https://nginx.example.com/api/v1/nginx-instances \
@@ -555,7 +558,7 @@ curl -sS -X POST https://nginx.example.com/api/v1/nginx-instances \
         "hostname": "nginx-01.internal.example.com",
         "agentBaseUrl": "https://nginx-01.internal.example.com:8080",
         "pushTransport": "HTTP_TOKEN",
-        "agentAuthToken": "enginx-sec-your-secret-token",
+        "agentAuthToken": "<the AGENT_SECRET_TOKEN value>",
         "environment": "PRODUCTION"
       }'
 ```

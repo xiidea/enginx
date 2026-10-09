@@ -1,5 +1,6 @@
 package net.xiidea.enginx.domain.nginx;
 
+import net.xiidea.enginx.domain.certificate.EncryptedSecret;
 import net.xiidea.enginx.domain.shared.ValidationException;
 
 import java.net.URI;
@@ -21,11 +22,22 @@ import java.util.regex.Pattern;
  * <p>The two field sets are mutually exclusive, and enforced as such in both directions. A row
  * carrying a URL it will never be dialled at, or lacking one it needs, describes a host nobody
  * can reach.
+ *
+ * <p>A push host proves itself one of two ways, set by its {@link PushTransport}: a pinned
+ * certificate, or a pre-shared token. Never both, so neither can be mistaken for the one in use.
+ * The token is held only in sealed form; the plaintext exists at registration and at the moment
+ * of the call, and nowhere in between.
  */
 public final class NginxInstance {
 
     private static final Pattern SHA256_FINGERPRINT = Pattern.compile("^[A-Fa-f0-9]{64}$");
     private static final Pattern NAME = Pattern.compile("^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$");
+
+    /**
+     * The shortest agent token accepted. Matches the agent, which refuses to start with a shorter
+     * one, so a token registered here is always one an agent could actually be configured with.
+     */
+    public static final int MIN_AGENT_TOKEN_LENGTH = 32;
 
     private final UUID id;
     private String name;
@@ -34,7 +46,7 @@ public final class NginxInstance {
     private String agentCertFingerprint;
     private final ConnectivityMode connectivityMode;
     private PushTransport pushTransport;
-    private String agentAuthToken;
+    private EncryptedSecret agentToken;
     private String environment;
     private InstanceStatus status;
     private String nginxVersion;
@@ -45,7 +57,7 @@ public final class NginxInstance {
     private final long version;
 
     private NginxInstance(UUID id, String name, String hostname, URI agentBaseUrl, String agentCertFingerprint,
-                          ConnectivityMode connectivityMode, PushTransport pushTransport, String agentAuthToken,
+                          ConnectivityMode connectivityMode, PushTransport pushTransport, EncryptedSecret agentToken,
                           String environment, InstanceStatus status,
                           String nginxVersion, String agentVersion,
                           Instant lastSeenAt, Instant createdAt, Instant updatedAt, long version) {
@@ -56,7 +68,7 @@ public final class NginxInstance {
         this.agentCertFingerprint = agentCertFingerprint;
         this.connectivityMode = connectivityMode == null ? ConnectivityMode.PUSH : connectivityMode;
         this.pushTransport = pushTransport == null ? PushTransport.MTLS : pushTransport;
-        this.agentAuthToken = agentAuthToken;
+        this.agentToken = agentToken;
         this.environment = environment;
         this.status = status;
         this.nginxVersion = nginxVersion;
@@ -73,14 +85,35 @@ public final class NginxInstance {
         return registerPush(id, name, hostname, agentBaseUrl, PushTransport.MTLS, agentCertFingerprint, null, environment, now);
     }
 
-    /** A host the platform will dial over the specified transport. */
+    /**
+     * A host the platform will dial.
+     *
+     * @param agentCertFingerprint required for {@link PushTransport#MTLS}, refused otherwise
+     * @param agentToken           the sealed token, required for {@link PushTransport#HTTP_TOKEN} and
+     *                             refused otherwise. Check the plaintext with {@link #validAgentToken}
+     *                             before sealing it
+     */
     public static NginxInstance registerPush(UUID id, String name, String hostname, String agentBaseUrl,
                                              PushTransport pushTransport, String agentCertFingerprint,
-                                             String agentAuthToken, String environment, Instant now) {
+                                             EncryptedSecret agentToken, String environment, Instant now) {
         PushTransport transport = pushTransport == null ? PushTransport.MTLS : pushTransport;
         URI url = validAgentUrl(agentBaseUrl, transport);
-        String fingerprint = transport == PushTransport.MTLS ? validFingerprint(agentCertFingerprint) : null;
-        String token = transport.isToken() ? validAuthToken(agentAuthToken) : null;
+        String fingerprint = null;
+        if (transport.isToken()) {
+            if (agentCertFingerprint != null && !agentCertFingerprint.isBlank()) {
+                throw new ValidationException("agentCertFingerprint",
+                        "A host that authenticates with a token has no certificate to pin");
+            }
+            if (agentToken == null) {
+                throw new ValidationException("agentAuthToken", "An agent token is required for HTTP_TOKEN");
+            }
+        } else {
+            if (agentToken != null) {
+                throw new ValidationException("agentAuthToken",
+                        "A host that authenticates with a certificate takes no token");
+            }
+            fingerprint = validFingerprint(agentCertFingerprint);
+        }
 
         return new NginxInstance(id,
                 validName(name),
@@ -89,9 +122,26 @@ public final class NginxInstance {
                 fingerprint,
                 ConnectivityMode.PUSH,
                 transport,
-                token,
+                agentToken,
                 normalisedEnvironment(environment),
                 InstanceStatus.UNKNOWN, null, null, null, now, now, 0L);
+    }
+
+    /**
+     * Checks a plaintext agent token, before it is sealed and never seen again.
+     *
+     * @return the token, trimmed
+     */
+    public static String validAgentToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new ValidationException("agentAuthToken", "An agent token is required for HTTP_TOKEN");
+        }
+        String trimmed = token.trim();
+        if (trimmed.length() < MIN_AGENT_TOKEN_LENGTH) {
+            throw new ValidationException("agentAuthToken", "The agent token must be at least "
+                    + MIN_AGENT_TOKEN_LENGTH + " characters. Generate one with: openssl rand -hex 32");
+        }
+        return trimmed;
     }
 
     /**
@@ -123,12 +173,12 @@ public final class NginxInstance {
 
     public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
                                           String agentCertFingerprint, ConnectivityMode connectivityMode,
-                                          PushTransport pushTransport, String agentAuthToken,
+                                          PushTransport pushTransport, EncryptedSecret agentToken,
                                           String environment, InstanceStatus status,
                                           String nginxVersion, String agentVersion, Instant lastSeenAt,
                                           Instant createdAt, Instant updatedAt, long version) {
         return new NginxInstance(id, name, hostname, agentBaseUrl, agentCertFingerprint, connectivityMode,
-                pushTransport == null ? PushTransport.MTLS : pushTransport, agentAuthToken,
+                pushTransport == null ? PushTransport.MTLS : pushTransport, agentToken,
                 environment, status, nginxVersion, agentVersion, lastSeenAt, createdAt, updatedAt, version);
     }
 
@@ -157,10 +207,6 @@ public final class NginxInstance {
         return hostname.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static URI validAgentUrl(String agentBaseUrl) {
-        return validAgentUrl(agentBaseUrl, PushTransport.MTLS);
-    }
-
     private static URI validAgentUrl(String agentBaseUrl, PushTransport transport) {
         if (agentBaseUrl == null || agentBaseUrl.isBlank()) {
             throw new ValidationException("agentBaseUrl", "Agent base URL must not be blank");
@@ -171,23 +217,20 @@ public final class NginxInstance {
         } catch (IllegalArgumentException e) {
             throw new ValidationException("agentBaseUrl", "Agent base URL is not a valid URI");
         }
-        if (transport == PushTransport.MTLS && !"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new ValidationException("agentBaseUrl", "The mTLS agent must be reached over HTTPS with mTLS");
+        String scheme = uri.getScheme();
+        if (!transport.isToken() && !"https".equalsIgnoreCase(scheme)) {
+            throw new ValidationException("agentBaseUrl", "The agent must be reached over HTTPS with mTLS");
         }
-        if (transport.isToken() && !"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()) && !"grpc".equalsIgnoreCase(uri.getScheme())) {
-            throw new ValidationException("agentBaseUrl", "Agent base URL scheme must be http, https, or grpc");
+        // Plain HTTP is accepted for a token host: it may sit behind a proxy that terminates TLS
+        // on the same machine. The console warns, because without that proxy the token and every
+        // bundle, private keys included, cross the network in clear.
+        if (transport.isToken() && !"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
+            throw new ValidationException("agentBaseUrl", "The agent must be reached over HTTP or HTTPS");
         }
         if (uri.getHost() == null) {
             throw new ValidationException("agentBaseUrl", "Agent base URL must include a host");
         }
         return uri;
-    }
-
-    private static String validAuthToken(String token) {
-        if (token == null || token.isBlank()) {
-            throw new ValidationException("agentAuthToken", "Agent auth token is required for HTTP/gRPC push mode");
-        }
-        return token.trim();
     }
 
     private static String validFingerprint(String fingerprint) {
@@ -219,6 +262,11 @@ public final class NginxInstance {
                     "This host connects to the platform rather than being dialled, so it has no "
                             + "certificate to pin. Reissue its agent token instead.");
         }
+        if (pushTransport.isToken()) {
+            throw new ValidationException("agentCertFingerprint",
+                    "This host authenticates with a token, so it has no certificate to pin. "
+                            + "Rotate its token instead.");
+        }
         String normalised = validFingerprint(newFingerprint);
         if (normalised.equals(this.agentCertFingerprint)) {
             throw new ValidationException("agentCertFingerprint",
@@ -228,6 +276,25 @@ public final class NginxInstance {
         // Reset to UNKNOWN rather than left as it was: what the platform knew about this host was
         // learned through a certificate it no longer trusts, and the next heartbeat re-establishes
         // it. Claiming ONLINE on the strength of a superseded identity would be a small lie.
+        this.status = InstanceStatus.UNKNOWN;
+        this.updatedAt = now;
+    }
+
+    /**
+     * Trusts a new token for a host the platform dials with one.
+     *
+     * <p>The same window as a certificate rotation, and the same order works: set the new token on
+     * the host, then here. Calls fail in between; traffic does not.
+     */
+    public void agentTokenRotated(EncryptedSecret newToken, Instant now) {
+        if (connectivityMode.isPull() || !pushTransport.isToken()) {
+            throw new ValidationException("agentAuthToken",
+                    "This host does not authenticate the platform with a token");
+        }
+        if (newToken == null) {
+            throw new ValidationException("agentAuthToken", "An agent token is required");
+        }
+        this.agentToken = newToken;
         this.status = InstanceStatus.UNKNOWN;
         this.updatedAt = now;
     }
@@ -268,8 +335,9 @@ public final class NginxInstance {
         return pushTransport;
     }
 
-    public String agentAuthToken() {
-        return agentAuthToken;
+    /** Sealed. Null unless {@link PushTransport#HTTP_TOKEN}. */
+    public EncryptedSecret agentToken() {
+        return agentToken;
     }
 
     public String environment() {

@@ -1,6 +1,6 @@
 package net.xiidea.enginx.infrastructure.persistence.mapper;
 
-import net.xiidea.enginx.domain.nginx.ConnectivityMode;
+import net.xiidea.enginx.domain.certificate.EncryptedSecret;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.infrastructure.persistence.entity.NginxInstanceEntity;
 import org.springframework.stereotype.Component;
@@ -20,7 +20,7 @@ public class NginxInstanceMapper {
                 entity.getAgentCertFingerprint(),
                 entity.getConnectivityMode(),
                 entity.getPushTransport(),
-                entity.getAgentAuthToken(),
+                agentToken(entity),
                 entity.getEnvironment(),
                 entity.getStatus(),
                 entity.getNginxVersion(),
@@ -38,7 +38,12 @@ public class NginxInstanceMapper {
         entity.setAgentCertFingerprint(instance.agentCertFingerprint());
         entity.setConnectivityMode(instance.connectivityMode());
         entity.setPushTransport(instance.pushTransport());
-        entity.setAgentAuthToken(instance.agentAuthToken());
+        EncryptedSecret token = instance.agentToken();
+        if (token == null) {
+            entity.sealAgentToken(null, null, null, null, null);
+        } else {
+            entity.sealAgentToken(token.ciphertext(), token.wrappedDataKey(), token.kekId(), token.cipher(), token.iv());
+        }
         entity.setEnvironment(instance.environment());
         entity.setStatus(instance.status());
         entity.setNginxVersion(instance.nginxVersion());
@@ -46,5 +51,14 @@ public class NginxInstanceMapper {
         entity.setLastSeenAt(instance.lastSeenAt());
         entity.setCreatedAt(instance.createdAt());
         entity.setUpdatedAt(instance.updatedAt());
+    }
+
+    /** The sealed token, or null. Only the sealed columns: the legacy plaintext one is never read here. */
+    public static EncryptedSecret agentToken(NginxInstanceEntity entity) {
+        if (entity.getAgentTokenCiphertext() == null) {
+            return null;
+        }
+        return new EncryptedSecret(entity.getAgentTokenCiphertext(), entity.getAgentTokenWrappedDek(),
+                entity.getAgentTokenKekId(), entity.getAgentTokenCipher(), entity.getAgentTokenIv(), new byte[0]);
     }
 }

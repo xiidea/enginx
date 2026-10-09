@@ -1,11 +1,14 @@
 package net.xiidea.enginx.api.nginx;
 
 import net.xiidea.enginx.api.nginx.dto.NginxInstanceResponse;
-import net.xiidea.enginx.api.nginx.dto.RotateAgentCertificateRequest;
 import net.xiidea.enginx.api.nginx.dto.RegisterNginxInstanceRequest;
+import net.xiidea.enginx.api.nginx.dto.RotateAgentCertificateRequest;
+import net.xiidea.enginx.api.nginx.dto.RotateAgentTokenRequest;
 import net.xiidea.enginx.application.agent.AgentJobQueue;
 import net.xiidea.enginx.application.nginx.NginxInstanceService;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
+import net.xiidea.enginx.domain.nginx.PushTransport;
+import net.xiidea.enginx.domain.shared.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +27,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -63,12 +67,22 @@ public class NginxInstanceController {
         return toResponse(service.rotateAgentCertificate(id, request.agentCertFingerprint()));
     }
 
+    @PutMapping("/{id}/agent-token")
+    @Operation(summary = "Trust a new agent token for this host",
+            description = "For a host dialled with HTTP_TOKEN. Set the new AGENT_SECRET_TOKEN on the "
+                    + "host first, then call this: calls fail in between, traffic does not.")
+    public NginxInstanceResponse rotateAgentToken(
+            @PathVariable UUID id,
+            @Valid @RequestBody RotateAgentTokenRequest request) {
+        return toResponse(service.rotateAgentToken(id, request.agentAuthToken()));
+    }
+
     @PostMapping
     @Operation(summary = "Register an NGINX instance",
             description = "Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.")
     public ResponseEntity<NginxInstanceResponse> register(@Valid @RequestBody RegisterNginxInstanceRequest request,
                                                           UriComponentsBuilder uriBuilder) {
-        net.xiidea.enginx.domain.nginx.PushTransport transport = parsePushTransport(request);
+        PushTransport transport = parsePushTransport(request.pushTransport());
         NginxInstance instance = service.registerPush(request.name(), request.hostname(), request.agentBaseUrl(),
                 transport, request.agentCertFingerprint(), request.agentAuthToken(), request.environment());
 
@@ -76,19 +90,16 @@ public class NginxInstanceController {
         return ResponseEntity.created(location).body(toResponse(instance));
     }
 
-    private static net.xiidea.enginx.domain.nginx.PushTransport parsePushTransport(RegisterNginxInstanceRequest request) {
-        if (request.pushTransport() != null && !request.pushTransport().isBlank()) {
-            try {
-                return net.xiidea.enginx.domain.nginx.PushTransport.valueOf(request.pushTransport().trim().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                throw new net.xiidea.enginx.domain.shared.ValidationException("pushTransport",
-                        "Invalid push transport: " + request.pushTransport() + ". Supported values are MTLS, HTTP_TOKEN, GRPC_TOKEN");
-            }
+    /** MTLS when absent. Never inferred from which credential was sent: that guess hides mistakes. */
+    private static PushTransport parsePushTransport(String value) {
+        if (value == null || value.isBlank()) {
+            return PushTransport.MTLS;
         }
-        if (request.agentAuthToken() != null && !request.agentAuthToken().isBlank()) {
-            return net.xiidea.enginx.domain.nginx.PushTransport.HTTP_TOKEN;
+        try {
+            return PushTransport.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new ValidationException("pushTransport", "pushTransport must be MTLS or HTTP_TOKEN");
         }
-        return net.xiidea.enginx.domain.nginx.PushTransport.MTLS;
     }
 
     /**
@@ -132,7 +143,8 @@ public class NginxInstanceController {
                 instance.name(),
                 instance.hostname(),
                 instance.connectivityMode().name(),
-                instance.pushTransport() == null ? null : instance.pushTransport().name(),
+                // Null for a pull host: it is never dialled, so it has no transport to report.
+                instance.connectivityMode().isPull() ? null : instance.pushTransport(),
                 // Null for a pull host: it is never dialled, so there is no URL and nothing to pin.
                 instance.agentBaseUrl() == null ? null : instance.agentBaseUrl().toString(),
                 instance.agentCertFingerprint(),

@@ -1,5 +1,6 @@
 package net.xiidea.enginx.domain.nginx;
 
+import net.xiidea.enginx.domain.certificate.EncryptedSecret;
 import net.xiidea.enginx.domain.shared.ValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,121 +15,169 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class NginxInstanceTest {
 
-    private static final String VALID_FINGERPRINT = "A".repeat(64);
-    private static final String VALID_TOKEN = "enginx-sec-secret123";
+    private static final String FINGERPRINT = "A".repeat(64);
+    private static final String TOKEN = "0123456789abcdef0123456789abcdef";
     private static final Instant NOW = Instant.parse("2026-10-01T00:00:00Z");
 
+    private static EncryptedSecret sealed(String marker) {
+        return new EncryptedSecret(marker.getBytes(), new byte[]{1}, "k1", "AES-256-GCM", new byte[]{2}, null);
+    }
+
+    private static NginxInstance tokenHost() {
+        return NginxInstance.registerPush(UUID.randomUUID(), "edge-token", "edge.internal",
+                "http://edge.internal:8080", PushTransport.HTTP_TOKEN, null, sealed("t1"), "prod", NOW);
+    }
+
+    private static NginxInstance mtlsHost() {
+        return NginxInstance.registerPush(UUID.randomUUID(), "edge-mtls", "edge.internal",
+                "https://edge.internal:8443", PushTransport.MTLS, FINGERPRINT, null, "prod", NOW);
+    }
+
     @Nested
-    @DisplayName("Push mode registration")
-    class PushRegistration {
+    @DisplayName("Registering a push host")
+    class Registration {
 
         @Test
-        void registersPushWithMtls() {
-            NginxInstance instance = NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-01", "edge-01.internal",
-                    "https://edge-01.internal:8443", PushTransport.MTLS,
-                    VALID_FINGERPRINT, null, "prod", NOW);
+        void mtlsPinsTheFingerprintAndHoldsNoToken() {
+            NginxInstance instance = mtlsHost();
 
-            assertThat(instance.connectivityMode()).isEqualTo(ConnectivityMode.PUSH);
             assertThat(instance.pushTransport()).isEqualTo(PushTransport.MTLS);
-            assertThat(instance.agentCertFingerprint()).isEqualTo(VALID_FINGERPRINT);
-            assertThat(instance.agentAuthToken()).isNull();
-            assertThat(instance.agentBaseUrl()).isEqualTo(URI.create("https://edge-01.internal:8443"));
+            assertThat(instance.agentCertFingerprint()).isEqualTo(FINGERPRINT);
+            assertThat(instance.agentToken()).isNull();
+            assertThat(instance.agentBaseUrl()).isEqualTo(URI.create("https://edge.internal:8443"));
         }
 
         @Test
-        void rejectsMtlsWithoutFingerprint() {
-            assertThatThrownBy(() -> NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-01", "edge-01.internal",
-                    "https://edge-01.internal:8443", PushTransport.MTLS,
-                    null, null, "prod", NOW))
+        void mtlsNeedsAFingerprint() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "https://edge.internal:8443", PushTransport.MTLS, null, null, "prod", NOW))
                     .isInstanceOf(ValidationException.class)
-                    .hasMessageContaining("The agent certificate fingerprint is required");
+                    .hasMessageContaining("fingerprint is required");
         }
 
         @Test
-        void registersPushWithHttpToken() {
-            NginxInstance instance = NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-02", "edge-02.internal",
-                    "http://edge-02.internal:8080", PushTransport.HTTP_TOKEN,
-                    null, VALID_TOKEN, "prod", NOW);
+        void mtlsRefusesAToken() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "https://edge.internal:8443", PushTransport.MTLS, FINGERPRINT, sealed("t"), "prod", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("takes no token");
+        }
 
-            assertThat(instance.connectivityMode()).isEqualTo(ConnectivityMode.PUSH);
+        @Test
+        void mtlsNeedsHttps() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "http://edge.internal:8443", PushTransport.MTLS, FINGERPRINT, null, "prod", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("HTTPS");
+        }
+
+        @Test
+        void tokenHostHoldsTheSealedTokenAndNoFingerprint() {
+            NginxInstance instance = tokenHost();
+
             assertThat(instance.pushTransport()).isEqualTo(PushTransport.HTTP_TOKEN);
             assertThat(instance.agentCertFingerprint()).isNull();
-            assertThat(instance.agentAuthToken()).isEqualTo(VALID_TOKEN);
-            assertThat(instance.agentBaseUrl()).isEqualTo(URI.create("http://edge-02.internal:8080"));
+            assertThat(instance.agentToken().kekId()).isEqualTo("k1");
         }
 
         @Test
-        void registersPushWithGrpcToken() {
-            NginxInstance instance = NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-03", "edge-03.internal",
-                    "https://edge-03.internal:8443", PushTransport.GRPC_TOKEN,
-                    null, VALID_TOKEN, "prod", NOW);
-
-            assertThat(instance.connectivityMode()).isEqualTo(ConnectivityMode.PUSH);
-            assertThat(instance.pushTransport()).isEqualTo(PushTransport.GRPC_TOKEN);
-            assertThat(instance.agentCertFingerprint()).isNull();
-            assertThat(instance.agentAuthToken()).isEqualTo(VALID_TOKEN);
-        }
-
-        @Test
-        void rejectsHttpTokenWithoutAuthToken() {
-            assertThatThrownBy(() -> NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-02", "edge-02.internal",
-                    "http://edge-02.internal:8080", PushTransport.HTTP_TOKEN,
-                    null, null, "prod", NOW))
+        void tokenHostNeedsAToken() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "http://edge.internal:8080", PushTransport.HTTP_TOKEN, null, null, "prod", NOW))
                     .isInstanceOf(ValidationException.class)
-                    .hasMessageContaining("Agent auth token is required");
+                    .hasMessageContaining("token is required");
         }
 
         @Test
-        void rejectsHttpTokenWithBlankAuthToken() {
-            assertThatThrownBy(() -> NginxInstance.registerPush(
-                    UUID.randomUUID(), "edge-02", "edge-02.internal",
-                    "http://edge-02.internal:8080", PushTransport.HTTP_TOKEN,
-                    null, "   ", "prod", NOW))
+        void tokenHostRefusesAFingerprint() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "https://edge.internal:8443", PushTransport.HTTP_TOKEN, FINGERPRINT, sealed("t"), "prod", NOW))
                     .isInstanceOf(ValidationException.class)
-                    .hasMessageContaining("Agent auth token is required");
+                    .hasMessageContaining("no certificate to pin");
+        }
+
+        @Test
+        void tokenHostCannotBeDialledOverAnUndiallableScheme() {
+            assertThatThrownBy(() -> NginxInstance.registerPush(UUID.randomUUID(), "edge", "edge.internal",
+                    "grpc://edge.internal:50051", PushTransport.HTTP_TOKEN, null, sealed("t"), "prod", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("HTTP or HTTPS");
         }
     }
 
     @Nested
-    @DisplayName("Pull mode registration")
-    class PullRegistration {
+    @DisplayName("Checking a plaintext token")
+    class TokenValidation {
 
         @Test
-        void registersPullWithNullDialFields() {
-            NginxInstance instance = NginxInstance.registerPull(
-                    UUID.randomUUID(), "edge-pull", "edge-pull.internal",
+        void acceptsAndTrimsALongEnoughToken() {
+            assertThat(NginxInstance.validAgentToken("  " + TOKEN + " ")).isEqualTo(TOKEN);
+        }
+
+        @Test
+        void refusesATokenTheAgentWouldRefuse() {
+            assertThatThrownBy(() -> NginxInstance.validAgentToken(TOKEN.substring(1)))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("at least " + NginxInstance.MIN_AGENT_TOKEN_LENGTH);
+        }
+
+        @Test
+        void refusesABlankToken() {
+            assertThatThrownBy(() -> NginxInstance.validAgentToken("   "))
+                    .isInstanceOf(ValidationException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Rotating credentials")
+    class Rotation {
+
+        @Test
+        void aTokenHostHasNoCertificateToRotate() {
+            NginxInstance instance = tokenHost();
+
+            assertThatThrownBy(() -> instance.agentCertificateRotated(FINGERPRINT, NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("Rotate its token instead");
+        }
+
+        @Test
+        void aTokenHostTakesANewToken() {
+            NginxInstance instance = tokenHost();
+            instance.observed(InstanceStatus.ONLINE, "1.27.5", "1.0.0", NOW);
+
+            instance.agentTokenRotated(sealed("t2"), NOW.plusSeconds(60));
+
+            assertThat(instance.agentToken().ciphertext()).isEqualTo("t2".getBytes());
+            assertThat(instance.status()).isEqualTo(InstanceStatus.UNKNOWN);
+        }
+
+        @Test
+        void anMtlsHostHasNoTokenToRotate() {
+            NginxInstance instance = mtlsHost();
+
+            assertThatThrownBy(() -> instance.agentTokenRotated(sealed("t"), NOW))
+                    .isInstanceOf(ValidationException.class);
+        }
+
+        @Test
+        void aPullHostHasNoTokenToRotate() {
+            NginxInstance instance = NginxInstance.registerPull(UUID.randomUUID(), "edge-pull", "pull.internal",
                     "prod", NOW);
 
-            assertThat(instance.connectivityMode()).isEqualTo(ConnectivityMode.PULL);
-            assertThat(instance.agentBaseUrl()).isNull();
-            assertThat(instance.agentCertFingerprint()).isNull();
-            assertThat(instance.agentAuthToken()).isNull();
+            assertThatThrownBy(() -> instance.agentTokenRotated(sealed("t"), NOW))
+                    .isInstanceOf(ValidationException.class);
         }
     }
 
-    @Nested
-    @DisplayName("Rehydration")
-    class Rehydration {
+    @Test
+    void aPullHostHasNoDialFields() {
+        NginxInstance instance = NginxInstance.registerPull(UUID.randomUUID(), "edge-pull", "pull.internal",
+                "prod", NOW);
 
-        @Test
-        void rehydratesTokenPushInstance() {
-            UUID id = UUID.randomUUID();
-            NginxInstance instance = NginxInstance.rehydrate(
-                    id, "edge-01", "edge-01.internal",
-                    URI.create("http://edge-01.internal:8080"), null,
-                    ConnectivityMode.PUSH, PushTransport.HTTP_TOKEN, VALID_TOKEN,
-                    "prod", InstanceStatus.ONLINE,
-                    "1.27.5", "1.0.0", NOW, NOW, NOW, 1L);
-
-            assertThat(instance.id()).isEqualTo(id);
-            assertThat(instance.pushTransport()).isEqualTo(PushTransport.HTTP_TOKEN);
-            assertThat(instance.agentAuthToken()).isEqualTo(VALID_TOKEN);
-            assertThat(instance.agentCertFingerprint()).isNull();
-        }
+        assertThat(instance.connectivityMode()).isEqualTo(ConnectivityMode.PULL);
+        assertThat(instance.agentBaseUrl()).isNull();
+        assertThat(instance.agentCertFingerprint()).isNull();
+        assertThat(instance.agentToken()).isNull();
     }
 }

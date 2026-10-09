@@ -21,6 +21,8 @@ URI, never on the human-readable `detail`.
 | `DELETE` | `/api/v1/proxy-sites/{id}/expiration` | `OPERATOR` |
 | `GET` | `/api/v1/nginx-instances` | any |
 | `POST` | `/api/v1/nginx-instances` | `SUPER_ADMIN` |
+| `PUT` | `/api/v1/nginx-instances/{id}/agent-certificate` | `SUPER_ADMIN`. mTLS hosts only |
+| `PUT` | `/api/v1/nginx-instances/{id}/agent-token` | `SUPER_ADMIN`. Token hosts only; the token is never returned |
 | `GET` | `/api/v1/nginx-instances/{id}/agent-jobs` | any. Empty for a host the platform dials |
 | `GET` | `/api/v1/domain-groups?siteId=` | READ. With `siteId`, only the groups that site is in |
 | `POST` | `/api/v1/domain-groups` | MANAGE on the parent |
