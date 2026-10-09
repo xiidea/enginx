@@ -25,14 +25,23 @@ public interface NginxAgentPort {
     AgentStatus status(NginxInstance instance);
 
     /**
-     * Asks the host whether it now answers for each of these names.
+     * Asks the host whether each site is now served by the configuration just deployed.
      *
      * <p>The probe runs on the host and always dials loopback, so this cannot be used to reach
      * anything: the names travel as Host headers, never as addresses.
      *
-     * @return one result per name, in the order given
+     * @return one result per target, in the order given
      */
-    java.util.List<SiteVerification> verify(NginxInstance instance, java.util.List<String> serverNames);
+    java.util.List<SiteVerification> verify(NginxInstance instance, java.util.List<VerifyTarget> targets);
+
+    /**
+     * A site to probe for.
+     *
+     * @param marker what that site's own server block answers at
+     *               {@link NginxConfigRenderer#SITE_MARKER_PATH}: its id
+     */
+    record VerifyTarget(String serverName, String marker) {
+    }
 
     /**
      * Asks the host whether it can open a TCP connection to each upstream.

@@ -40,6 +40,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class NginxConfigRendererTest {
 
+    /** A current NGINX that has the platform supply its catch-all. */
+    private static final RenderTarget MODERN = new RenderTarget("1.27.5", true);
+
     private static final String SITE_ID = "aaaaaaaa-0000-0000-0000-000000000001";
     private final NginxConfigRenderer renderer = new NginxConfigRenderer();
 
@@ -50,13 +53,13 @@ class NginxConfigRendererTest {
         @Test
         void simpleHttpSite() {
             ProxySite site = spec("app.example.com").site(SITE_ID);
-            assertMatchesGolden("simple-http.conf", renderer.renderSitePreview(site, NO_CERTIFICATES));
+            assertMatchesGolden("simple-http.conf", renderer.renderSitePreview(site, NO_CERTIFICATES, MODERN));
         }
 
         @Test
         void httpsWithRedirectAndHsts() {
             ProxySite site = spec("secure.example.com").ssl(true, true).site(SITE_ID);
-            assertMatchesGolden("https-redirect-hsts.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE));
+            assertMatchesGolden("https-redirect-hsts.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN));
         }
 
         @Test
@@ -64,7 +67,7 @@ class NginxConfigRendererTest {
             // Turning the redirect off means HTTP is served too, not that port 80 falls through to
             // the catch-all. The plain server keeps the HTTP-01 location so renewals still work.
             ProxySite site = spec("both.example.com").ssl(false, false).site(SITE_ID);
-            assertMatchesGolden("https-and-http.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE));
+            assertMatchesGolden("https-and-http.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN));
         }
 
         @Test
@@ -76,7 +79,7 @@ class NginxConfigRendererTest {
                             new UpstreamTarget("http", "10.0.0.2", 8080, 1, 3, 10, false),
                             new UpstreamTarget("http", "10.0.0.9", 8080, 1, 3, 10, true))
                     .site(SITE_ID);
-            assertMatchesGolden("load-balanced.conf", renderer.renderSitePreview(site, NO_CERTIFICATES));
+            assertMatchesGolden("load-balanced.conf", renderer.renderSitePreview(site, NO_CERTIFICATES, MODERN));
         }
 
         @Test
@@ -88,7 +91,7 @@ class NginxConfigRendererTest {
                             location("/health", LocationMatchType.EXACT, 1))
                     .timeouts(new ProxyTimeouts(5, 120, 30, 52_428_800L))
                     .site(SITE_ID);
-            assertMatchesGolden("websocket-headers.conf", renderer.renderSitePreview(site, NO_CERTIFICATES));
+            assertMatchesGolden("websocket-headers.conf", renderer.renderSitePreview(site, NO_CERTIFICATES, MODERN));
         }
     }
 
@@ -103,8 +106,8 @@ class NginxConfigRendererTest {
                     spec("a.example.com").site("aaaaaaaa-0000-0000-0000-00000000000a"),
                     spec("b.example.com").site("aaaaaaaa-0000-0000-0000-00000000000b"));
 
-            ConfigBundle first = renderer.render(BUNDLE, INSTANCE, 1, forwards, NO_CERTIFICATES, "ada", NOW);
-            ConfigBundle second = renderer.render(UUID.randomUUID(), INSTANCE, 2,
+            ConfigBundle first = renderer.render(BUNDLE, INSTANCE, MODERN, 1, forwards, NO_CERTIFICATES, "ada", NOW);
+            ConfigBundle second = renderer.render(UUID.randomUUID(), INSTANCE, MODERN, 2,
                     forwards.reversed(), NO_CERTIFICATES, "ada", NOW);
 
             assertThat(second.contentHash()).isEqualTo(first.contentHash());
@@ -114,9 +117,9 @@ class NginxConfigRendererTest {
         @Test
         @DisplayName("a changed upstream changes the hash, which is what makes a redeploy detectable")
         void contentChangesTheHash() {
-            ConfigBundle before = renderer.render(BUNDLE, INSTANCE, 1,
+            ConfigBundle before = renderer.render(BUNDLE, INSTANCE, MODERN, 1,
                     List.of(spec("a.example.com").site(SITE_ID)), NO_CERTIFICATES, "ada", NOW);
-            ConfigBundle after = renderer.render(BUNDLE, INSTANCE, 2,
+            ConfigBundle after = renderer.render(BUNDLE, INSTANCE, MODERN, 2,
                     List.of(spec("a.example.com").upstreams(UpstreamTarget.of("http", "10.0.0.99", 9090))
                             .site(SITE_ID)), NO_CERTIFICATES, "ada", NOW);
 
@@ -125,7 +128,7 @@ class NginxConfigRendererTest {
 
         @Test
         void bundleCarriesTheSharedMapAndOneFilePerSite() {
-            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, 1,
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1,
                     List.of(spec("a.example.com").site("aaaaaaaa-0000-0000-0000-00000000000a"),
                             spec("b.example.com").site("aaaaaaaa-0000-0000-0000-00000000000b")),
                     NO_CERTIFICATES, "ada", NOW);
@@ -140,7 +143,7 @@ class NginxConfigRendererTest {
         @Test
         @DisplayName("a catch-all server answers unmatched hosts, so an expired domain stops resolving")
         void bundleDeclaresADefaultServer() {
-            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, 1,
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1,
                     List.of(spec("a.example.com").site(SITE_ID)), NO_CERTIFICATES, "ada", NOW);
 
             String base = bundle.files().stream()
@@ -164,7 +167,7 @@ class NginxConfigRendererTest {
         @Test
         @DisplayName("private key material is marked sensitive and excluded from the readable file list")
         void privateKeysAreMarkedSensitive() {
-            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, 1,
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1,
                     List.of(spec("secure.example.com").ssl(true, false).site(SITE_ID)),
                     TEST_CERTIFICATE, "ada", NOW);
 
@@ -182,7 +185,7 @@ class NginxConfigRendererTest {
                     spec("same.example.com").site("aaaaaaaa-0000-0000-0000-00000000000a"),
                     spec("same.example.com").site("aaaaaaaa-0000-0000-0000-00000000000b"));
 
-            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, 1, clashing, NO_CERTIFICATES, "ada", NOW))
+            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, MODERN, 1, clashing, NO_CERTIFICATES, "ada", NOW))
                     .isInstanceOf(ValidationException.class)
                     .hasMessageContaining("both serve same.example.com");
         }
@@ -190,7 +193,7 @@ class NginxConfigRendererTest {
         @Test
         @DisplayName("SSL without certificate material fails the render instead of emitting a config NGINX cannot load")
         void missingCertificateFailsTheRender() {
-            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, 1,
+            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, MODERN, 1,
                     List.of(spec("secure.example.com").ssl(false, false).site(SITE_ID)),
                     NO_CERTIFICATES, "ada", NOW))
                     .isInstanceOf(ValidationException.class)
@@ -229,6 +232,12 @@ class NginxConfigRendererTest {
                 .isEqualTo(expected);
     }
 
+    private static String fileContent(ConfigBundle bundle, String path) {
+        return bundle.files().stream()
+                .filter(file -> file.path().equals(path))
+                .findFirst().orElseThrow().content();
+    }
+
     private static String readGolden(String name) {
         try (InputStream in = NginxConfigRendererTest.class.getResourceAsStream("/golden/" + name)) {
             if (in == null) {
@@ -248,6 +257,50 @@ class NginxConfigRendererTest {
             java.nio.file.Files.writeString(path, content, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new AssertionError("Could not write golden/" + name, e);
+        }
+    }
+
+    @Nested
+    @DisplayName("hosts that already ran NGINX")
+    class SharedHosts {
+
+        @Test
+        void anNginxOlderThan1251GetsTheListenParameterForm() {
+            ProxySite site = spec("old.example.com").ssl(true, false).site(SITE_ID);
+            String rendered = renderer.renderSitePreview(site, TEST_CERTIFICATE, new RenderTarget("1.22.1", true));
+
+            // `http2 on;` arrived in 1.25.1; on 1.22 it fails nginx -t, which is every stock
+            // NGINX on current LTS distributions.
+            assertThat(rendered).contains("listen 443 ssl http2;").doesNotContain("http2 on;");
+        }
+
+        @Test
+        void anUnknownVersionGetsTheFormEveryVersionAccepts() {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, RenderTarget.UNKNOWN, 1,
+                    List.of(spec("x.example.com").site(SITE_ID)), NO_CERTIFICATES, "ada", NOW);
+            assertThat(fileContent(bundle, "conf.d/00-enginx-base.conf"))
+                    .contains("listen 443 ssl http2 default_server;").doesNotContain("http2 on;");
+        }
+
+        @Test
+        void aHostWithItsOwnDefaultServerGetsNoCatchAll() {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, new RenderTarget("1.22.1", false), 1,
+                    List.of(spec("x.example.com").site(SITE_ID)), NO_CERTIFICATES, "ada", NOW);
+            String base = fileContent(bundle, "conf.d/00-enginx-base.conf");
+
+            assertThat(base).doesNotContain("default_server").contains("map $http_upgrade");
+        }
+
+        @Test
+        void everyPort80ServerAnswersTheMarkerWithTheSiteId() {
+            ProxySite redirect = spec("r.example.com").ssl(true, true).site(SITE_ID);
+            ProxySite plain = spec("p.example.com").site(SITE_ID);
+            String marker = "location = " + NginxConfigRenderer.SITE_MARKER_PATH;
+
+            for (ProxySite site : List.of(redirect, plain)) {
+                String rendered = renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN);
+                assertThat(rendered).contains(marker).contains("return 200 \"" + SITE_ID + "\\n\";");
+            }
         }
     }
 }

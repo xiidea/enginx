@@ -322,6 +322,24 @@ class DeploymentWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("an answer from another server — a default page — is not the site being served")
+    void anAnswerFromAnotherServerIsNotVerified() {
+        // The case that made VERIFY report success for a site nobody was serving: a distribution's
+        // default page answers every name with 200.
+        agent.answerFromAnotherServer(true);
+
+        Deployment done = deployAndDrain();
+
+        assertThat(done.events())
+                .filteredOn(event -> event.phase() == DeploymentPhase.VERIFY)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.result()).isEqualTo(DeploymentEvent.EventResult.FAILURE);
+                    assertThat(event.detail()).contains("not by this site's configuration");
+                });
+    }
+
+    @Test
     @DisplayName("a host that cannot be probed is skipped, not reported as an outage")
     void unprobeableHostIsSkipped() {
         // Not knowing whether a site answers is a different thing from knowing that it does not,

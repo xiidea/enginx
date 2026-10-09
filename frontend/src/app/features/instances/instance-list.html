@@ -124,6 +124,14 @@
         <label for="ienv">Environment</label>
         <input id="ienv" [ngModel]="environment()" (ngModelChange)="environment.set($event)" />
       </div>
+      <div class="check">
+        <input id="ihostdefault" type="checkbox" [ngModel]="hostDefaultServer()" (ngModelChange)="hostDefaultServer.set($event)" />
+        <label for="ihostdefault">This host keeps its own default server</label>
+      </div>
+      <p class="hint">
+        For a host that already ran NGINX with a <code>default_server</code> of its own. The platform then
+        leaves out its catch-all, which would otherwise collide with it and fail every deployment.
+      </p>
       <div class="row">
         <button class="btn btn-primary" type="button"
           [disabled]="registering() || !name() || !hostname() || !agentBaseUrl() || (pushTransport() === 'MTLS' ? !fingerprint() : !agentAuthToken())"
@@ -286,6 +294,10 @@
                   </button>
                 }
                 @if (auth.isSuperAdmin()) {
+                  <button class="btn btn-sm" type="button" (click)="toggleDefaultServer(instance)"
+                    [title]="instance.defaultServerManaged ? 'The platform answers unmatched names' : 'The host\'s own default server answers unmatched names'">
+                    Catch-all: {{ instance.defaultServerManaged ? 'platform' : 'host' }}
+                  </button>
                   <button class="btn btn-sm" type="button" (click)="deploy(instance)">Deploy all</button>
                 }
               </td>

@@ -28,7 +28,8 @@ public class NginxInstanceMapper {
                 entity.getLastSeenAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getVersion());
+                entity.getVersion(),
+                entity.isDefaultServerManaged());
     }
 
     public void applyToEntity(NginxInstance instance, NginxInstanceEntity entity) {
@@ -38,6 +39,7 @@ public class NginxInstanceMapper {
         entity.setAgentCertFingerprint(instance.agentCertFingerprint());
         entity.setConnectivityMode(instance.connectivityMode());
         entity.setPushTransport(instance.pushTransport());
+        entity.setDefaultServerManaged(instance.defaultServerManaged());
         EncryptedSecret token = instance.agentToken();
         if (token == null) {
             entity.sealAgentToken(null, null, null, null, null);

@@ -104,11 +104,30 @@ public class NginxInstanceService {
         return saved;
     }
 
+    /**
+     * Decides who answers names no site on this host matches: the platform's catch-all, or a
+     * default server the host already has. Applies from the next deployment.
+     */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public NginxInstance setDefaultServerManaged(UUID id, boolean managed) {
+        NginxInstance instance = instances.findById(id)
+                .orElseThrow(() -> new NotFoundException(RESOURCE_TYPE, id));
+        boolean before = instance.defaultServerManaged();
+        instance.defaultServerManaged(managed, clock.instant());
+        NginxInstance saved = instances.save(instance);
+        audit.success(AuditAction.NGINX_INSTANCE_DEFAULT_SERVER_CHANGED, RESOURCE_TYPE, id,
+                Map.of("defaultServerManaged", String.valueOf(before)),
+                Map.of("defaultServerManaged", String.valueOf(managed)));
+        return saved;
+    }
+
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Transactional
     public NginxInstance register(String name, String hostname, String agentBaseUrl,
                                   String agentCertFingerprint, String environment) {
-        return registerPush(name, hostname, agentBaseUrl, PushTransport.MTLS, agentCertFingerprint, null, environment);
+        return registerPush(name, hostname, agentBaseUrl, PushTransport.MTLS, agentCertFingerprint, null, environment,
+                true);
     }
 
     /**
@@ -116,12 +135,13 @@ public class NginxInstanceService {
      *
      * @param agentToken plaintext, for {@link PushTransport#HTTP_TOKEN}. Sealed before it reaches
      *                   the aggregate, and never stored or audited in clear
+     * @param defaultServerManaged false for a host that keeps its own default server
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Transactional
     public NginxInstance registerPush(String name, String hostname, String agentBaseUrl,
                                       PushTransport pushTransport, String agentCertFingerprint,
-                                      String agentToken, String environment) {
+                                      String agentToken, String environment, boolean defaultServerManaged) {
         boolean tokenTransport = pushTransport != null && pushTransport.isToken();
         if (!tokenTransport && agentToken != null && !agentToken.isBlank()) {
             // Refused rather than dropped: an operator who sent a token believes the host uses it.
@@ -135,6 +155,8 @@ public class NginxInstanceService {
                 UUID.randomUUID(), name, hostname, agentBaseUrl, pushTransport,
                 agentCertFingerprint, sealed, environment, clock.instant());
 
+        instance.defaultServerManaged(defaultServerManaged, clock.instant());
+
         if (instances.existsByName(instance.name())) {
             throw new ConflictException("An NGINX instance named '" + instance.name() + "' already exists");
         }
@@ -145,6 +167,7 @@ public class NginxInstanceService {
                         "hostname", saved.hostname(),
                         "agentBaseUrl", saved.agentBaseUrl().toString(),
                         "pushTransport", saved.pushTransport().name(),
+                        "defaultServerManaged", String.valueOf(saved.defaultServerManaged()),
                         "environment", saved.environment()));
         return saved;
     }

@@ -62,6 +62,8 @@ export class InstanceList implements OnInit {
   readonly agentAuthToken = signal('');
   readonly showAuthToken = signal(false);
   readonly environment = signal('PRODUCTION');
+  /** Off for a host that already runs NGINX with its own default server. */
+  readonly hostDefaultServer = signal(false);
 
   ngOnInit(): void {
     this.reload();
@@ -234,6 +236,7 @@ export class InstanceList implements OnInit {
     this.showAuthToken.set(false);
     this.pushTransport.set('MTLS');
     this.environment.set('PRODUCTION');
+    this.hostDefaultServer.set(false);
   }
 
   register(): void {
@@ -247,12 +250,14 @@ export class InstanceList implements OnInit {
       agentCertFingerprint?: string;
       agentAuthToken?: string;
       environment: string;
+      defaultServerManaged: boolean;
     } = {
       name: this.name().trim(),
       hostname: this.hostname().trim(),
       agentBaseUrl: this.agentBaseUrl().trim(),
       pushTransport: transport,
       environment: this.environment(),
+      defaultServerManaged: !this.hostDefaultServer(),
     };
 
     if (transport === 'MTLS') {
@@ -276,6 +281,26 @@ export class InstanceList implements OnInit {
           this.notifications.problem(problem);
         },
       });
+  }
+
+  /** Switches who answers names no site matches; effective from the next deployment. */
+  toggleDefaultServer(instance: NginxInstance): void {
+    const managed = !instance.defaultServerManaged;
+    const question = managed
+      ? `Have the platform answer unmatched names on ${instance.name} with its own catch-all? ` +
+        'This fails validation if the host still has its own default server.'
+      : `Let ${instance.name}'s own default server answer unmatched names? ` +
+        'The platform stops rendering its catch-all from the next deployment.';
+    if (!confirm(question)) {
+      return;
+    }
+    this.api.setDefaultServer(instance.id, managed).subscribe({
+      next: () => {
+        this.notifications.success('Saved. Deploy to apply', instance.name);
+        this.reload();
+      },
+      error: (problem) => this.notifications.problem(problem),
+    });
   }
 
   deploy(instance: NginxInstance): void {

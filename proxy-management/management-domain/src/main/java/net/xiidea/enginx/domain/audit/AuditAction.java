@@ -22,6 +22,8 @@ public enum AuditAction {
     NGINX_INSTANCE_CERT_ROTATED,
     /** A new agent token was trusted for a host. The token itself is never recorded. */
     NGINX_INSTANCE_TOKEN_ROTATED,
+    /** Whether the platform or the host itself answers names no site matches. */
+    NGINX_INSTANCE_DEFAULT_SERVER_CHANGED,
 
     DOMAIN_GROUP_CREATED,
     DOMAIN_GROUP_UPDATED,

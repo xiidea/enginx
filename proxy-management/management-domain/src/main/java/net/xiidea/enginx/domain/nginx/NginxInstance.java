@@ -55,6 +55,11 @@ public final class NginxInstance {
     private final Instant createdAt;
     private Instant updatedAt;
     private final long version;
+    /**
+     * Whether bundles carry the platform's catch-all servers. True unless the host keeps its own
+     * default server: two {@code default_server} listeners on one port fail validation.
+     */
+    private boolean defaultServerManaged = true;
 
     private NginxInstance(UUID id, String name, String hostname, URI agentBaseUrl, String agentCertFingerprint,
                           ConnectivityMode connectivityMode, PushTransport pushTransport, EncryptedSecret agentToken,
@@ -184,6 +189,20 @@ public final class NginxInstance {
 
     public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
                                           String agentCertFingerprint, ConnectivityMode connectivityMode,
+                                          PushTransport pushTransport, EncryptedSecret agentToken,
+                                          String environment, InstanceStatus status,
+                                          String nginxVersion, String agentVersion, Instant lastSeenAt,
+                                          Instant createdAt, Instant updatedAt, long version,
+                                          boolean defaultServerManaged) {
+        NginxInstance instance = rehydrate(id, name, hostname, agentBaseUrl, agentCertFingerprint,
+                connectivityMode, pushTransport, agentToken, environment, status, nginxVersion,
+                agentVersion, lastSeenAt, createdAt, updatedAt, version);
+        instance.defaultServerManaged = defaultServerManaged;
+        return instance;
+    }
+
+    public static NginxInstance rehydrate(UUID id, String name, String hostname, URI agentBaseUrl,
+                                          String agentCertFingerprint, ConnectivityMode connectivityMode,
                                           String environment, InstanceStatus status,
                                           String nginxVersion, String agentVersion, Instant lastSeenAt,
                                           Instant createdAt, Instant updatedAt, long version) {
@@ -299,6 +318,15 @@ public final class NginxInstance {
         this.updatedAt = now;
     }
 
+    /**
+     * Decides who answers names no site matches: the platform's catch-all, or a default server the
+     * host already has. Takes effect at the next deployment.
+     */
+    public void defaultServerManaged(boolean managed, Instant now) {
+        this.defaultServerManaged = managed;
+        this.updatedAt = now;
+    }
+
     public void observed(InstanceStatus newStatus, String nginxVersion, String agentVersion, Instant now) {
         this.status = newStatus;
         this.nginxVersion = nginxVersion;
@@ -325,6 +353,10 @@ public final class NginxInstance {
 
     public String agentCertFingerprint() {
         return agentCertFingerprint;
+    }
+
+    public boolean defaultServerManaged() {
+        return defaultServerManaged;
     }
 
     public ConnectivityMode connectivityMode() {

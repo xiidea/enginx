@@ -187,6 +187,7 @@ export class InstancesApi {
     agentCertFingerprint?: string;
     agentAuthToken?: string;
     environment?: string;
+    defaultServerManaged?: boolean;
   }): Observable<NginxInstance> {
     return this.api.post('/nginx-instances', body);
   }
@@ -203,6 +204,11 @@ export class InstancesApi {
 
   deploy(id: string): Observable<Deployment> {
     return this.api.post(`/nginx-instances/${id}/deploy`);
+  }
+
+  /** Whether the platform's catch-all or the host's own default server answers unmatched names. */
+  setDefaultServer(id: string, managed: boolean): Observable<NginxInstance> {
+    return this.api.put(`/nginx-instances/${id}/default-server`, { managed });
   }
 }
 

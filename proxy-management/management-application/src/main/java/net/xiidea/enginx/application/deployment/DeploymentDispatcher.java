@@ -15,6 +15,7 @@ import net.xiidea.enginx.domain.deployment.DeploymentRepository;
 import net.xiidea.enginx.domain.deployment.DeploymentTrigger;
 import net.xiidea.enginx.domain.deployment.NginxAgentPort;
 import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
+import net.xiidea.enginx.domain.deployment.RenderTarget;
 import net.xiidea.enginx.domain.nginx.InstanceStatus;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
@@ -142,8 +143,9 @@ public class DeploymentDispatcher {
             return bundles.findById(deployment.configBundleId()).orElseThrow();
         }
 
+        learnNginxVersion(instance, now);
         List<ProxySite> deployable = sites.findDeployableForInstance(instance.id(), now);
-        ConfigBundle rendered = renderer.render(UUID.randomUUID(), instance.id(),
+        ConfigBundle rendered = renderer.render(UUID.randomUUID(), instance.id(), RenderTarget.of(instance),
                 bundles.nextSequence(instance.id()), deployable, certificates,
                 deployment.createdBy(), now);
 
@@ -246,6 +248,29 @@ public class DeploymentDispatcher {
     }
 
     /**
+     * Asks a dialled host which NGINX it runs, when that is not yet known.
+     *
+     * <p>The grammar is version-dependent, so rendering blind would produce the conservative form
+     * now and the modern one at the next deployment — a change of bytes with no change of intent,
+     * which turns the first redeploy of an untouched host into a real one. A pull host reports
+     * its version when it first calls in, before any work reaches it. Failing to ask is not
+     * fatal: the conservative form is valid on every version.
+     */
+    private void learnNginxVersion(NginxInstance instance, Instant now) {
+        if (instance.nginxVersion() != null || instance.connectivityMode().isPull()) {
+            return;
+        }
+        try {
+            String version = agent.status(instance).nginxVersion();
+            if (version != null && !version.isBlank()) {
+                instance.observed(instance.status(), version, instance.agentVersion(), now);
+            }
+        } catch (RuntimeException e) {
+            // The deployment will reach the host or fail on its own terms; this was only a question.
+        }
+    }
+
+    /**
      * Asks the host whether it actually answers for the names just deployed.
      *
      * <p>A successful reload proves the configuration parsed and loaded. It does not prove a
@@ -260,15 +285,17 @@ public class DeploymentDispatcher {
      */
     private void verify(Deployment deployment, NginxInstance instance, ConfigBundle bundle) {
         try {
-            List<String> serverNames = sites.findDeployableForInstance(instance.id(), clock.instant())
+            // Each with its marker, the id its own server block answers with, so a response from
+            // anything else on the port does not count as the site being served.
+            List<NginxAgentPort.VerifyTarget> targets = sites.findDeployableForInstance(instance.id(), clock.instant())
                     .stream()
-                    .map(site -> site.domain().value())
+                    .map(site -> new NginxAgentPort.VerifyTarget(site.domain().value(), site.id().toString()))
                     .toList();
 
-            if (serverNames.isEmpty()) {
+            if (targets.isEmpty()) {
                 return;
             }
-            deployment.verified(agent.verify(instance, serverNames), clock.instant());
+            deployment.verified(agent.verify(instance, targets), clock.instant());
 
         } catch (RuntimeException e) {
             deployment.verificationSkipped("The host could not be probed: " + e.getMessage(), clock.instant());

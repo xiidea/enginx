@@ -4,6 +4,7 @@ import net.xiidea.enginx.api.nginx.dto.NginxInstanceResponse;
 import net.xiidea.enginx.api.nginx.dto.RegisterNginxInstanceRequest;
 import net.xiidea.enginx.api.nginx.dto.RotateAgentCertificateRequest;
 import net.xiidea.enginx.api.nginx.dto.RotateAgentTokenRequest;
+import net.xiidea.enginx.api.nginx.dto.SetDefaultServerRequest;
 import net.xiidea.enginx.application.agent.AgentJobQueue;
 import net.xiidea.enginx.application.nginx.NginxInstanceService;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
@@ -77,6 +78,17 @@ public class NginxInstanceController {
         return toResponse(service.rotateAgentToken(id, request.agentAuthToken()));
     }
 
+    @PutMapping("/{id}/default-server")
+    @Operation(summary = "Choose who answers names no site on this host matches",
+            description = "True (the default): bundles carry the platform's catch-all, answering 404. "
+                    + "False: the host keeps its own default server — on a host that already ran NGINX, "
+                    + "two would fail validation on every deployment. Applies from the next deployment.")
+    public NginxInstanceResponse setDefaultServer(
+            @PathVariable UUID id,
+            @Valid @RequestBody SetDefaultServerRequest request) {
+        return toResponse(service.setDefaultServerManaged(id, request.managed()));
+    }
+
     @PostMapping
     @Operation(summary = "Register an NGINX instance",
             description = "Restricted to SUPER_ADMIN: registering a host decides where configuration is deployed.")
@@ -84,7 +96,8 @@ public class NginxInstanceController {
                                                           UriComponentsBuilder uriBuilder) {
         PushTransport transport = parsePushTransport(request.pushTransport());
         NginxInstance instance = service.registerPush(request.name(), request.hostname(), request.agentBaseUrl(),
-                transport, request.agentCertFingerprint(), request.agentAuthToken(), request.environment());
+                transport, request.agentCertFingerprint(), request.agentAuthToken(), request.environment(),
+                request.defaultServerManaged() == null || request.defaultServerManaged());
 
         URI location = uriBuilder.path("/api/v1/nginx-instances/{id}").buildAndExpand(instance.id()).toUri();
         return ResponseEntity.created(location).body(toResponse(instance));
@@ -154,6 +167,7 @@ public class NginxInstanceController {
                 instance.agentVersion(),
                 instance.lastSeenAt(),
                 instance.createdAt(),
-                instance.version());
+                instance.version(),
+                instance.defaultServerManaged());
     }
 }

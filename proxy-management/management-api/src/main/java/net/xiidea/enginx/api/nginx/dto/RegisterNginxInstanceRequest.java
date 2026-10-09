@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
  *                             mistyped value is answered with what to send instead
  * @param agentCertFingerprint for MTLS only
  * @param agentAuthToken       for HTTP_TOKEN only. Sealed on arrival and never returned
+ * @param defaultServerManaged false for a host that keeps its own default server; absent means true
  */
 public record RegisterNginxInstanceRequest(
         @NotBlank(message = "Name is required") String name,
@@ -17,5 +18,6 @@ public record RegisterNginxInstanceRequest(
         @Schema(allowableValues = {"MTLS", "HTTP_TOKEN"}, defaultValue = "MTLS") String pushTransport,
         String agentCertFingerprint,
         @Size(max = 512, message = "The agent token is at most 512 characters") String agentAuthToken,
-        String environment) {
+        String environment,
+        @Schema(defaultValue = "true") Boolean defaultServerManaged) {
 }

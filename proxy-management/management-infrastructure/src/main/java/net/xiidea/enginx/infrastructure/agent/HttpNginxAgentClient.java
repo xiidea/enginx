@@ -138,13 +138,17 @@ public class HttpNginxAgentClient implements NginxAgentPort {
     }
 
     @Override
-    public List<SiteVerification> verify(NginxInstance instance, List<String> serverNames) {
-        if (serverNames.isEmpty()) {
+    public List<SiteVerification> verify(NginxInstance instance, List<VerifyTarget> targets) {
+        if (targets.isEmpty()) {
             return List.of();
         }
         ObjectNode payload = JSON.createObjectNode();
-        ArrayNode names = payload.putArray("serverNames");
-        serverNames.forEach(names::add);
+        ArrayNode sites = payload.putArray("sites");
+        for (VerifyTarget target : targets) {
+            ObjectNode node = sites.addObject();
+            node.put("serverName", target.serverName());
+            node.put("marker", target.marker());
+        }
 
         HttpResponse<String> response = send(instance, "POST", "/agent/v1/verify",
                 JSON.writeValueAsString(payload), null);
@@ -158,6 +162,7 @@ public class HttpNginxAgentClient implements NginxAgentPort {
                     textOf(result, "serverName"),
                     result.path("responded").asBoolean(false),
                     result.path("statusCode").asInt(0),
+                    result.path("identified").asBoolean(false),
                     textOf(result, "error")));
         }
         return results;

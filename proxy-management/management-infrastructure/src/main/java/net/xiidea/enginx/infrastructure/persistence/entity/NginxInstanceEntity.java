@@ -61,6 +61,9 @@ public class NginxInstanceEntity {
     @Column(name = "agent_token_iv")
     private byte[] agentTokenIv;
 
+    @Column(name = "default_server_managed", nullable = false)
+    private boolean defaultServerManaged = true;
+
     @Column(name = "environment", nullable = false, length = 32)
     private String environment;
 
@@ -140,6 +143,14 @@ public class NginxInstanceEntity {
 
     public void setPushTransport(PushTransport pushTransport) {
         this.pushTransport = pushTransport;
+    }
+
+    public boolean isDefaultServerManaged() {
+        return defaultServerManaged;
+    }
+
+    public void setDefaultServerManaged(boolean defaultServerManaged) {
+        this.defaultServerManaged = defaultServerManaged;
     }
 
     public byte[] getAgentTokenCiphertext() {

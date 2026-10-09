@@ -44,6 +44,7 @@ public class TestAgent implements NginxAgentPort {
     private volatile boolean upstreamsReachable = true;
     /** Whether the probe call itself fails, as an unreachable agent would. */
     private volatile boolean verificationFails;
+    private volatile boolean answeredByAnotherServer;
     private final List<String> verifiedNames = new ArrayList<>();
     private final AtomicInteger stageCalls = new AtomicInteger();
     private final AtomicInteger activateCalls = new AtomicInteger();
@@ -83,6 +84,7 @@ public class TestAgent implements NginxAgentPort {
         sitesRespond = true;
         upstreamsReachable = true;
         verificationFails = false;
+        answeredByAnotherServer = false;
         synchronized (verifiedNames) {
             verifiedNames.clear();
         }
@@ -143,18 +145,24 @@ public class TestAgent implements NginxAgentPort {
     }
 
     @Override
-    public List<SiteVerification> verify(NginxInstance instance, List<String> serverNames) {
+    public List<SiteVerification> verify(NginxInstance instance, List<VerifyTarget> targets) {
         if (verificationFails) {
             throw new AgentException("the agent could not be reached", true);
         }
         synchronized (verifiedNames) {
-            verifiedNames.addAll(serverNames);
+            targets.forEach(target -> verifiedNames.add(target.serverName()));
         }
-        return serverNames.stream()
-                .map(name -> sitesRespond
-                        ? new SiteVerification(name, true, 200, null)
-                        : new SiteVerification(name, false, 0, "connection refused"))
+        return targets.stream()
+                .map(target -> !sitesRespond
+                        ? new SiteVerification(target.serverName(), false, 0, false, "connection refused")
+                        // Something answers, but only an identified answer is this site.
+                        : new SiteVerification(target.serverName(), true, 200, !answeredByAnotherServer, null))
                 .toList();
+    }
+
+    /** Makes every name answered by something other than its own server block, as a default page does. */
+    public void answerFromAnotherServer(boolean another) {
+        this.answeredByAnotherServer = another;
     }
 
     @Override

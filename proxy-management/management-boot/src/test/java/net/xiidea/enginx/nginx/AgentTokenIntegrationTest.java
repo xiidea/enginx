@@ -48,7 +48,7 @@ class AgentTokenIntegrationTest extends AbstractIntegrationTest {
 
     private NginxInstance registerTokenHost(String name) {
         return service.registerPush(name, name + ".internal", "http://" + name + ".internal:8080",
-                PushTransport.HTTP_TOKEN, null, TOKEN, "TEST");
+                PushTransport.HTTP_TOKEN, null, TOKEN, "TEST", true);
     }
 
     private String opened(UUID id) {
@@ -134,7 +134,7 @@ class AgentTokenIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("a token sent for a certificate host is refused rather than dropped")
     void aTokenForAnMtlsHostIsRefused() {
         assertThatThrownBy(() -> service.registerPush("nginx-mixed", "mixed.internal",
-                "https://mixed.internal:8443", PushTransport.MTLS, "A".repeat(64), TOKEN, "TEST"))
+                "https://mixed.internal:8443", PushTransport.MTLS, "A".repeat(64), TOKEN, "TEST", true))
                 .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("takes no token");
     }

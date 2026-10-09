@@ -119,3 +119,7 @@ table.jobs td { padding: 0.25rem 0.5rem; border-top: 1px solid var(--rule); }
 
 /* Danger, not warn: this is a host whose private keys would be sent unencrypted. */
 .hint.insecure { color: var(--danger); }
+
+.check { display: flex; align-items: center; gap: 0.5rem; }
+.check label { margin: 0; font-size: 0.87rem; color: var(--ink); }
+.check input { flex: none; }

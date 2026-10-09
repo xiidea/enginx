@@ -44,6 +44,9 @@ CREATE TABLE nginx_instances (
     agent_token_kek_id      varchar(64),
     agent_token_cipher      varchar(32),
     agent_token_iv          bytea,
+    -- False on a host that keeps its own default server: bundles then carry no catch-all, since
+    -- two default_server listeners on one port fail validation on every deployment.
+    default_server_managed  boolean      NOT NULL DEFAULT true,
     environment             varchar(32)  NOT NULL DEFAULT 'PRODUCTION',
     status                  varchar(16)  NOT NULL DEFAULT 'UNKNOWN',
     nginx_version           varchar(32),

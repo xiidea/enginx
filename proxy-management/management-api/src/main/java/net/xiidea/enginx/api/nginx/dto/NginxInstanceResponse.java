@@ -8,6 +8,7 @@ import java.util.UUID;
 /**
  * @param connectivityMode      PUSH if the platform dials this host, PULL if it calls in
  * @param pushTransport         how a push host is dialled; null for a pull host
+ * @param defaultServerManaged  whether bundles carry the platform's catch-all servers
  * @param agentBaseUrl          null for a pull host, which is never dialled
  * @param agentCertFingerprint  null for a pull host, which has no certificate to pin
  */
@@ -15,7 +16,8 @@ import java.util.UUID;
         // Required means always present and non-null. Nullable fields are left optional
         // on purpose: that is what tells a generated client it must handle their absence --
         // and the two agent fields became nullable when pull-mode hosts arrived.
-        requiredProperties = {"id", "name", "hostname", "connectivityMode", "environment", "status", "createdAt", "version"})
+        requiredProperties = {"id", "name", "hostname", "connectivityMode", "environment", "status", "createdAt",
+                "version", "defaultServerManaged"})
 public record NginxInstanceResponse(
         UUID id,
         String name,
@@ -30,5 +32,6 @@ public record NginxInstanceResponse(
         String agentVersion,
         Instant lastSeenAt,
         Instant createdAt,
-        long version) {
+        long version,
+        boolean defaultServerManaged) {
 }

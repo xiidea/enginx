@@ -763,6 +763,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nginx-instances/{id}/default-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose who answers names no site on this host matches
+         * @description True (the default): bundles carry the platform's catch-all, answering 404. False: the host keeps its own default server — on a host that already ran NGINX, two would fail validation on every deployment. Applies from the next deployment.
+         */
+        put: operations["nginxInstance_setDefaultServer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nginx-instances/{id}/deploy": {
         parameters: {
             query?: never;
@@ -1529,6 +1549,7 @@ export interface components {
             connectivityMode: string;
             /** Format: date-time */
             createdAt: string;
+            defaultServerManaged: boolean;
             environment: string;
             hostname: string;
             /** Format: uuid */
@@ -1721,6 +1742,8 @@ export interface components {
             agentAuthToken?: string;
             agentBaseUrl: string;
             agentCertFingerprint?: string;
+            /** @default true */
+            defaultServerManaged: boolean;
             environment?: string;
             hostname: string;
             name: string;
@@ -1754,6 +1777,9 @@ export interface components {
         };
         RotateAgentTokenRequest: {
             agentAuthToken: string;
+        };
+        SetDefaultServerRequest: {
+            managed: boolean;
         };
         SiteNotificationSettingsRequest: {
             expiryEnabled?: boolean;
@@ -3369,6 +3395,41 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BundleSummaryResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    nginxInstance_setDefaultServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDefaultServerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NginxInstanceResponse"];
                 };
             };
             /** @description Unauthorized */

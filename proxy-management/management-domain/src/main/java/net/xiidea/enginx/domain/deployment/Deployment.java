@@ -187,7 +187,7 @@ public final class Deployment {
         if (results.isEmpty()) {
             return;
         }
-        List<SiteVerification> unanswered = results.stream().filter(r -> !r.responded()).toList();
+        List<SiteVerification> unanswered = results.stream().filter(r -> !r.served()).toList();
 
         String detail = results.stream().map(SiteVerification::describe)
                 .collect(java.util.stream.Collectors.joining("\n"));
