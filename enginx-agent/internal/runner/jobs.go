@@ -73,6 +73,16 @@ func (r *Runner) execute(ctx context.Context, authenticated *client.Client, job 
 			return failed(fmt.Sprintf("discarding the bundle: %v", err))
 		}
 		return client.JobResult{Succeeded: true}
+	case "PUBLISH_ACME_CHALLENGE":
+		if err := r.api.PublishAcmeChallenge(job.AcmeToken, job.AcmeAuthorization); err != nil {
+			return failed(fmt.Sprintf("publishing the ACME challenge: %v", err))
+		}
+		return client.JobResult{Succeeded: true}
+	case "REMOVE_ACME_CHALLENGE":
+		if err := r.api.RemoveAcmeChallenge(job.AcmeToken); err != nil {
+			return failed(fmt.Sprintf("removing the ACME challenge: %v", err))
+		}
+		return client.JobResult{Succeeded: true}
 	default:
 		// A server newer than this agent. Reporting it rather than ignoring it means the platform
 		// sees a host that cannot do what it was asked, instead of a job that never comes back.

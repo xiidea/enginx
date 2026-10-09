@@ -140,6 +140,9 @@ type Job struct {
 	BundleID       string `json:"bundleId"`
 	IdempotencyKey string `json:"idempotencyKey"`
 	Reload         bool   `json:"reload"`
+	// Set for ACME challenge jobs only.
+	AcmeToken         string `json:"acmeToken,omitempty"`
+	AcmeAuthorization string `json:"acmeAuthorization,omitempty"`
 }
 
 // JobResult is what this host reports back.

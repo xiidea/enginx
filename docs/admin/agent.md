@@ -20,7 +20,7 @@ network the host sits on, not a preference, and an estate can hold both.
 | Host identity | a pinned certificate (mTLS), or a pre-shared token | a token, issued at enrolment |
 | Registration | an operator enters a URL and a fingerprint or token | the host enrols itself |
 | Works behind NAT | no | yes |
-| HTTP-01 certificates | yes | not yet |
+| HTTP-01 certificates | yes | yes |
 
 **Dial mode proves more.** With mutual TLS (`mtls`, the default), the platform pins the agent's
 certificate fingerprint, so a certificate signed by the same CA still cannot impersonate that host.
@@ -252,8 +252,12 @@ rotation and reports it without restarting anything.
 Carry a slow start in `start_period` rather than in `retries`. Retries are how long a *genuine*
 failure takes to surface, and a host that stopped serving should say so quickly.
 
-## One thing it does not do yet
+## HTTP-01 on a pull-mode host
 
-**A pull-mode host cannot answer HTTP-01 challenges.** Publishing a challenge is a question asked
-of the host within seconds, and only queued work is delivered today. Certificates for a pull host
-have to come from DNS-01 or be uploaded.
+A challenge reaches a pull host as a job, delivered on its next long-poll — normally within a
+second. Issuance waits up to `enginx.acme.pull-confirm-timeout` (default `20s`) for the host to
+report the response in place before the authority is asked to look; a host that does not confirm in
+time is not counted, and issuance fails only if no host at all confirmed.
+
+A host runs one job at a time, so a challenge queued behind a deployment in progress waits for it.
+Keep the timeout comfortably above how long an activation takes on your slowest host.

@@ -170,6 +170,9 @@ enginx:
     accept-terms-of-service: ${ACME_ACCEPT_TOS:false}
     challenge-timeout: 60s
     order-timeout: 120s
+    # How long issuance waits for a pull-mode host to confirm a challenge response is in place.
+    # One that has not confirmed by then is not counted; issuance fails only if none confirmed.
+    pull-confirm-timeout: ${ACME_PULL_CONFIRM_TIMEOUT:20s}
     dns:
       # DNS-01 validation, which is the only method an authority accepts for a wildcard.
       # Without a provider here, a wildcard request fails with a clear message rather than

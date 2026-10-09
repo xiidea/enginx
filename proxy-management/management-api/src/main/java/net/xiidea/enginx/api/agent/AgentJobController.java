@@ -43,9 +43,9 @@ import java.util.concurrent.TimeUnit;
  * How a pull host collects its work and reports on it.
  *
  * <p>Long-polling rather than a fixed interval, so a queued job reaches its host in about as long
- * as the request takes rather than waiting out a poll. That matters most for the operations this
- * phase does not yet cover — an ACME challenge has seconds to appear — but it also means a
- * deployment feels immediate instead of arriving whenever the next tick happens to land.
+ * as the request takes rather than waiting out a poll. That matters most for an ACME challenge,
+ * which has seconds to appear, but it also means a deployment feels immediate instead of arriving
+ * whenever the next tick happens to land.
  */
 @RestController
 @RequestMapping("/api/v1/agents")
@@ -210,11 +210,13 @@ public class AgentJobController {
     }
 
     @Schema(name = "AgentJobResponse", requiredProperties = {"jobId", "type", "bundleId", "idempotencyKey"})
-    public record JobResponse(UUID jobId, String type, UUID bundleId, String idempotencyKey, boolean reload) {
+    public record JobResponse(UUID jobId, String type, UUID bundleId, String idempotencyKey, boolean reload,
+                              String acmeToken, String acmeAuthorization) {
 
         static JobResponse of(AgentJob job) {
             return new JobResponse(job.id(), job.type().name(), job.payload().bundleId(),
-                    job.payload().idempotencyKey(), job.payload().reload());
+                    job.payload().idempotencyKey(), job.payload().reload(),
+                    job.payload().acmeToken(), job.payload().acmeAuthorization());
         }
     }
 
