@@ -89,7 +89,7 @@ func (s *Server) handleActivateConfiguration(w http.ResponseWriter, r *http.Requ
 				"Default HTTPS certificate unavailable", err.Error())
 		}
 
-		result, err := s.bundles.Activate(r.Context(), bundleID, nginxForBundle{s.nginx}, reload)
+		result, err := s.bundles.Activate(r.Context(), bundleID, s.bundleNginx(), reload)
 		switch {
 		case errors.Is(err, bundle.ErrBundleUnknown):
 			return http.StatusNotFound, problemBody(r, "bundle-not-staged",

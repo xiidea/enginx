@@ -86,3 +86,19 @@ func TestTokenTLSIsOnWhenAKeypairIsGiven(t *testing.T) {
 		t.Fatal("expected TLS on the token listener")
 	}
 }
+
+func TestNginxManagedDefaultsOnAndRefusesNonsense(t *testing.T) {
+	pushEnv(t, "http", goodToken)
+	t.Setenv("AGENT_NGINX_MANAGED", "")
+	if cfg, err := Load(); err != nil || !cfg.NginxManaged {
+		t.Fatalf("expected managed by default, got %v / %v", cfg.NginxManaged, err)
+	}
+	t.Setenv("AGENT_NGINX_MANAGED", "false")
+	if cfg, err := Load(); err != nil || cfg.NginxManaged {
+		t.Fatalf("expected external, got %v / %v", cfg.NginxManaged, err)
+	}
+	t.Setenv("AGENT_NGINX_MANAGED", "sometimes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AGENT_NGINX_MANAGED") {
+		t.Fatalf("expected an AGENT_NGINX_MANAGED error, got %v", err)
+	}
+}

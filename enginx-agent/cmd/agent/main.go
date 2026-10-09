@@ -53,19 +53,45 @@ func main() {
 		os.Exit(1)
 	}
 
-	controller := nginx.New(cfg.NginxBinary, cfg.NginxConf, cfg.CommandTimeout)
+	var controller *nginx.Controller
+	if cfg.NginxManaged {
+		// A master already running means the host's own service owns NGINX. Starting a second one
+		// cannot bind the same ports; it would die at once and take the agent with it, and under
+		// a service manager that restarts the agent, do so every few seconds. Refuse with the fix.
+		if pid, alive := nginx.PIDAlive(cfg.NginxPIDFile); alive {
+			slog.Error("NGINX is already running on this host (it is not this agent's child). "+
+				"Either stop and disable the host's NGINX service so the agent runs it, or set "+
+				"AGENT_NGINX_MANAGED=false so the agent works with the running one.",
+				"pid", pid, "pidFile", cfg.NginxPIDFile)
+			os.Exit(1)
+		}
+		controller = nginx.New(cfg.NginxBinary, cfg.NginxConf, cfg.CommandTimeout)
+	} else {
+		controller = nginx.NewExternal(cfg.NginxBinary, cfg.NginxConf, cfg.CommandTimeout, cfg.NginxPIDFile)
+	}
 
 	startupCtx, cancelStartup := context.WithTimeout(context.Background(), cfg.CommandTimeout)
 	startupCheck := controller.Test(startupCtx)
 	cancelStartup()
 
-	if startupCheck.OK {
+	startedAt := time.Now()
+	switch {
+	case startupCheck.OK && controller.External():
+		if controller.Running() {
+			slog.Info("working with the host's running nginx", "pid", controller.MasterPID(),
+				"version", controller.Version(context.Background()))
+		} else {
+			// Not fatal: readiness reports it, and the host's service manager is what starts it.
+			slog.Warn("nginx is not running; it is the host's service manager's to start",
+				"pidFile", cfg.NginxPIDFile)
+		}
+	case startupCheck.OK:
 		if err := controller.Start(); err != nil {
 			slog.Error("could not start nginx", "error", err)
 			os.Exit(1)
 		}
 		slog.Info("nginx started", "pid", controller.MasterPID(), "version", controller.Version(context.Background()))
-	} else {
+	default:
 		// Loud, but not fatal. The agent's API comes up regardless so the management server can
 		// deploy a corrected bundle; exiting here would mean the only way to repair a host is to
 		// log into it by hand, which is the thing this platform exists to avoid. It also happens
@@ -79,6 +105,14 @@ func main() {
 	defer stop()
 
 	server := api.NewServer(cfg, controller, bundle.NewStore(cfg.ReleasesDir))
+
+	// Said at startup rather than discovered at the first deployment, which refuses on this too.
+	// On a host that already ran NGINX this is the one line that usually needs adding.
+	includeCtx, cancelInclude := context.WithTimeout(context.Background(), cfg.CommandTimeout)
+	if loaded, err := server.IncludeLoaded(includeCtx); err == nil && !loaded {
+		slog.Warn(api.MissingIncludeMessage(server.IncludeDir()))
+	}
+	cancelInclude()
 	// Two writers in pull mode: the runner and the health listener. Buffered for both, so the
 	// loser of the race does not block forever on a send nobody will receive.
 	serverErr := make(chan error, 2)
@@ -117,6 +151,11 @@ func main() {
 	case <-controller.Exited():
 		// NGINX dying is different from never having started: something that was serving traffic
 		// has stopped, and the container should be replaced rather than left half-alive.
+		if time.Since(startedAt) < 10*time.Second {
+			// Dying straight away is almost always something else holding its ports.
+			slog.Error("nginx exited immediately after starting; if another NGINX or web server " +
+				"already serves ports 80/443 here, stop it or set AGENT_NGINX_MANAGED=false")
+		}
 		slog.Error("nginx exited; shutting down the agent")
 		os.Exit(1)
 	case <-ctx.Done():

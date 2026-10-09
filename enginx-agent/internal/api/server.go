@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/xiidea/enginx/enginx-agent/internal/bundle"
@@ -306,7 +307,21 @@ func (s *Server) ActivateBundle(ctx context.Context, bundleID string, reload boo
 	if err := defaulttls.Ensure(s.cfg.ReleasesDir); err != nil {
 		return bundle.Result{}, err
 	}
-	return s.bundles.Activate(ctx, bundleID, nginxForBundle{s.nginx}, reload)
+	return s.bundles.Activate(ctx, bundleID, s.bundleNginx(), reload)
+}
+
+// IncludeDir is the directory the host's nginx.conf must include for bundles to be served.
+func (s *Server) IncludeDir() string {
+	return filepath.Join(s.cfg.ReleasesDir, "current", "conf.d")
+}
+
+// IncludeLoaded reports whether the configuration NGINX loads includes IncludeDir.
+func (s *Server) IncludeLoaded(ctx context.Context) (bool, error) {
+	return includesDir(ctx, s.nginx, s.IncludeDir())
+}
+
+func (s *Server) bundleNginx() nginxForBundle {
+	return nginxForBundle{controller: s.nginx, includeDir: s.IncludeDir()}
 }
 
 // DiscardBundle removes a superseded bundle.

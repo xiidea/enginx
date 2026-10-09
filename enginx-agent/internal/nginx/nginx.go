@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,19 +21,71 @@ import (
 
 var versionPattern = regexp.MustCompile(`nginx/(\S+)`)
 
-// Controller owns the NGINX process on this host.
+// Controller drives the NGINX on this host.
+//
+// Two ways round. Managed, the default and what the container image does: the agent starts NGINX
+// as its own child and supervises it. External: the host's service manager (systemd, typically
+// the distribution's nginx.service) runs NGINX, and the agent only validates and reloads it,
+// finding the running master through its pid file. The second is what a host that already runs
+// NGINX needs — two masters cannot both bind the same ports.
 type Controller struct {
 	binary   string
 	confPath string
 	timeout  time.Duration
+	// external is set when NGINX belongs to the host's service manager, not to this process.
+	external bool
+	pidFile  string
 
 	mu      sync.Mutex
 	process *exec.Cmd
 	exited  chan struct{}
 }
 
+// ErrExternallyManaged refuses to start NGINX on a host whose service manager owns it.
+var ErrExternallyManaged = errors.New(
+	"NGINX is run by this host's service manager (AGENT_NGINX_MANAGED=false); start it there, e.g. systemctl start nginx")
+
+// New controls an NGINX this agent starts and supervises itself.
 func New(binary, confPath string, timeout time.Duration) *Controller {
 	return &Controller{binary: binary, confPath: confPath, timeout: timeout}
+}
+
+// NewExternal controls an NGINX the host's service manager runs, found through its pid file.
+func NewExternal(binary, confPath string, timeout time.Duration, pidFile string) *Controller {
+	return &Controller{binary: binary, confPath: confPath, timeout: timeout, external: true, pidFile: pidFile}
+}
+
+// External reports whether the host's service manager, not this agent, runs NGINX.
+func (c *Controller) External() bool {
+	return c.external
+}
+
+// Dump returns the whole configuration NGINX would load, every included file inlined (`nginx -T`).
+func (c *Controller) Dump(ctx context.Context) (string, error) {
+	return c.run(ctx, "-T")
+}
+
+// PIDAlive reads an NGINX pid file and reports whether that process is running.
+//
+// A pid file can outlive its process, and the number can be reused, so where /proc exists the
+// process is also checked to be NGINX; elsewhere a live pid is taken at its word.
+func PIDAlive(pidFile string) (int, bool) {
+	raw, err := os.ReadFile(pidFile)
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err != nil || pid <= 0 {
+		return 0, false
+	}
+	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
+		return 0, false
+	}
+	if cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid)); err == nil &&
+		!strings.Contains(string(cmdline), "nginx") {
+		return 0, false
+	}
+	return pid, true
 }
 
 // TestResult is the outcome of `nginx -t`. A failing test is a successful call: the caller
@@ -95,6 +148,9 @@ func (c *Controller) Version(ctx context.Context) string {
 // The agent runs NGINX rather than sitting beside it because signalling a process in another
 // container is not possible; co-location is a requirement of the design, not a convenience.
 func (c *Controller) Start() error {
+	if c.external {
+		return ErrExternallyManaged
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.process != nil {
@@ -117,7 +173,8 @@ func (c *Controller) Start() error {
 	return nil
 }
 
-// Exited is closed when the supervised NGINX process terminates.
+// Exited is closed when the supervised NGINX process terminates. Nil, and so never ready, when
+// NGINX is external: its lifecycle is the service manager's to watch, not this agent's.
 func (c *Controller) Exited() <-chan struct{} {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -141,8 +198,12 @@ func (c *Controller) Stop(ctx context.Context) {
 	}
 }
 
-// Running reports whether the supervised process is still alive.
+// Running reports whether NGINX is up: the supervised child, or the master in the pid file.
 func (c *Controller) Running() bool {
+	if c.external {
+		_, alive := PIDAlive(c.pidFile)
+		return alive
+	}
 	c.mu.Lock()
 	done := c.exited
 	c.mu.Unlock()
@@ -159,6 +220,10 @@ func (c *Controller) Running() bool {
 
 // MasterPID is the pid of the supervised process, or 0 when nothing is running.
 func (c *Controller) MasterPID() int {
+	if c.external {
+		pid, _ := PIDAlive(c.pidFile)
+		return pid
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.process == nil || c.process.Process == nil {

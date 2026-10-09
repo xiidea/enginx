@@ -55,6 +55,14 @@ type Config struct {
 	ReleasesDir string
 	NginxBinary string
 	NginxConf   string
+	// NginxManaged is true when the agent starts and supervises NGINX itself, as in the container
+	// image. False when the host's service manager already runs it (a distribution's
+	// nginx.service): the agent then only validates and reloads, and finds the running master
+	// through NginxPIDFile.
+	NginxManaged bool
+	// NginxPIDFile is where the running NGINX master records its pid. Read to tell whether NGINX
+	// is up when it is external, and to refuse to start a second master when it is managed.
+	NginxPIDFile string
 
 	CommandTimeout time.Duration
 	AgentVersion   string
@@ -107,6 +115,7 @@ func Load() (Config, error) {
 		ReleasesDir:       env("AGENT_RELEASES_DIR", "/etc/nginx/enginx"),
 		NginxBinary:       env("AGENT_NGINX_BINARY", "/usr/sbin/nginx"),
 		NginxConf:         env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
+		NginxPIDFile:      env("AGENT_NGINX_PID_FILE", "/run/nginx.pid"),
 		CommandTimeout:    30 * time.Second,
 		AgentVersion:      env("AGENT_VERSION", version.Version),
 
@@ -118,6 +127,12 @@ func Load() (Config, error) {
 		HeartbeatInterval: envDuration("ENGINX_HEARTBEAT_INTERVAL", 60*time.Second),
 		PollWait:          envDuration("ENGINX_POLL_WAIT", 30*time.Second),
 	}
+
+	managed, err := envBool("AGENT_NGINX_MANAGED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.NginxManaged = managed
 
 	if cfg.PullMode() {
 		if cfg.InstanceName == "" {
@@ -189,6 +204,19 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
+}
+
+func envBool(key string, fallback bool) (bool, error) {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch raw {
+	case "":
+		return fallback, nil
+	case "true", "yes", "1":
+		return true, nil
+	case "false", "no", "0":
+		return false, nil
+	}
+	return false, fmt.Errorf("%s must be true or false, not %q", key, raw)
 }
 
 func env(key, fallback string) string {

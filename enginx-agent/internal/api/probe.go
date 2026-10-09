@@ -38,7 +38,24 @@ const (
 
 // --- site verification -----------------------------------------------------
 
+// SiteMarkerPath is where every rendered site answers with its own identity. Requested by the
+// probe instead of "/" for two reasons: a response there proves the platform's server block for
+// that name answered, not merely that something on port 80 did; and it never reaches a backend.
+const SiteMarkerPath = "/.well-known/enginx/site"
+
+// maxMarker bounds what is read from the marker response. A site id is 36 characters.
+const maxMarker = 256
+
+type verifyTarget struct {
+	ServerName string `json:"serverName"`
+	// Marker is what the platform's server block for this name returns at SiteMarkerPath.
+	Marker string `json:"marker"`
+}
+
 type verifyRequest struct {
+	Sites []verifyTarget `json:"sites"`
+	// Names without markers, as earlier servers sent them. Such a name can be found to respond
+	// but never to be identified.
 	ServerNames []string `json:"serverNames"`
 	// Port to dial on loopback. Defaults to 80.
 	Port int `json:"port"`
@@ -48,6 +65,9 @@ type verifyResult struct {
 	ServerName string `json:"serverName"`
 	Responded  bool   `json:"responded"`
 	StatusCode int    `json:"statusCode,omitempty"`
+	// Identified is true only when the answer carried this name's marker: the platform's own
+	// configuration answered, not a default page or another server block sharing the port.
+	Identified bool   `json:"identified"`
 	Error      string `json:"error,omitempty"`
 }
 
@@ -55,23 +75,27 @@ type verifyResponse struct {
 	Results []verifyResult `json:"results"`
 }
 
-// handleVerify checks that each server name is answered by the NGINX now running.
+// handleVerify checks that each server name is answered by the configuration just deployed.
 //
-// The question is whether the server *responded*, not whether it returned 200. A site with
-// forceHttps answers port 80 with a 301, and a backend behind it may legitimately return 404 or
-// 502 for the site root — none of which mean the configuration failed to take effect. What this
-// catches is the case the whole phase exists for: the reload succeeded, and the name is
-// nonetheless served by nothing.
+// Responding is not enough. On a host that already ran NGINX, a distribution's default page
+// answers any name with 200, so "something responded" was reported as success for a site that was
+// not being served at all. Each rendered site answers SiteMarkerPath with its own marker, and only
+// that answer counts. The path is served by NGINX itself, so a backend that is down or returns
+// errors does not make a correctly deployed site look broken.
 func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	var req verifyRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if len(req.ServerNames) == 0 {
+	targets := req.Sites
+	for _, name := range req.ServerNames {
+		targets = append(targets, verifyTarget{ServerName: name})
+	}
+	if len(targets) == 0 {
 		writeJSON(w, http.StatusOK, verifyResponse{Results: []verifyResult{}})
 		return
 	}
-	if len(req.ServerNames) > maxProbeTargets {
+	if len(targets) > maxProbeTargets {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "too-many-targets",
 			"Too many server names",
 			fmt.Sprintf("At most %d names may be verified in one request", maxProbeTargets))
@@ -99,23 +123,47 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	results := runConcurrently(r.Context(), req.ServerNames, func(ctx context.Context, name string) verifyResult {
-		return probeSite(ctx, client, name, port)
+	results := runConcurrently(r.Context(), targets, func(ctx context.Context, target verifyTarget) verifyResult {
+		return probeSite(ctx, client, target, port)
 	})
 
 	writeJSON(w, http.StatusOK, verifyResponse{Results: results})
 }
 
-func probeSite(ctx context.Context, client *http.Client, serverName string, port int) verifyResult {
-	name := strings.TrimSpace(serverName)
+// markerSettle is how long a probe keeps asking before accepting that the marker is absent.
+//
+// A reload is asynchronous: NGINX starts new workers on the new configuration while the old ones
+// finish what they hold, and for that moment a request can still reach an old worker. The probe
+// runs straight after the reload, so a single attempt would sometimes report a correctly deployed
+// site as answered by something else. Retrying briefly waits out the hand-over; a site that is
+// genuinely not served fails just as surely, a few seconds later.
+const markerSettle = 5 * time.Second
+
+func probeSite(ctx context.Context, client *http.Client, target verifyTarget, port int) verifyResult {
+	deadline := time.Now().Add(markerSettle)
+	for {
+		result := probeOnce(ctx, client, target, port)
+		if result.Identified || target.Marker == "" || !time.Now().Before(deadline) || ctx.Err() != nil {
+			return result
+		}
+		select {
+		case <-ctx.Done():
+			return result
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+func probeOnce(ctx context.Context, client *http.Client, target verifyTarget, port int) verifyResult {
+	name := strings.TrimSpace(target.ServerName)
 	if name == "" {
-		return verifyResult{ServerName: serverName, Error: "empty server name"}
+		return verifyResult{ServerName: target.ServerName, Error: "empty server name"}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+name+"/", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+name+SiteMarkerPath, nil)
 	if err != nil {
 		return verifyResult{ServerName: name, Error: err.Error()}
 	}
@@ -128,7 +176,12 @@ func probeSite(ctx context.Context, client *http.Client, serverName string, port
 	}
 	defer response.Body.Close()
 
-	return verifyResult{ServerName: name, Responded: true, StatusCode: response.StatusCode}
+	result := verifyResult{ServerName: name, Responded: true, StatusCode: response.StatusCode}
+	if response.StatusCode == http.StatusOK && target.Marker != "" {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, maxMarker))
+		result.Identified = strings.TrimSpace(string(body)) == target.Marker
+	}
+	return result
 }
 
 // --- upstream reachability -------------------------------------------------
