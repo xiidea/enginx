@@ -63,6 +63,16 @@ func (s *Store) Activate(ctx context.Context, bundleID string, nginx Nginx, relo
 			// reporting a cheerful no-op.
 			return Result{BundleID: bundleID, TestOutput: output}, ErrValidationFailed
 		}
+		// Nothing to swap, but the platform only sends the running bundle again when it has
+		// reason to doubt NGINX loaded it: a reload accepted by `nginx -t` can still fail at
+		// runtime (a port another process holds), and NGINX then keeps the configuration before
+		// while this bundle sits in place as `current`. Reloading again is the repair, and is
+		// harmless on a host that was serving it all along.
+		if reload {
+			if err := nginx.Reload(ctx); err != nil {
+				return Result{BundleID: bundleID, TestOutput: output}, fmt.Errorf("nginx reload failed: %w", err)
+			}
+		}
 		return Result{
 			BundleID:     bundleID,
 			TestOutput:   output,

@@ -157,7 +157,15 @@ public class DeploymentDispatcher {
         //
         // Still never automatic. Nothing redeploys on its own; this only changes what happens
         // once a person decides to, which is the line R4 draws.
-        boolean hostMayNotMatch = instance.status() == InstanceStatus.DEGRADED;
+        //
+        // The same holds after a deployment whose VERIFY found a site not served by what it sent:
+        // the files are in place and the database calls them active, but NGINX kept running the
+        // configuration before (a reload that failed at runtime, such as a port another process
+        // holds). The agent reports that bundle as active, so status polling cannot tell, and
+        // the deployment's own record is the only place the platform knows it.
+        boolean hostMayNotMatch = instance.status() == InstanceStatus.DEGRADED
+                || deployments.findLatestForInstanceExcept(instance.id(), deployment.id())
+                        .map(Deployment::verificationFailed).orElse(false);
 
         if (active != null && active.hasSameContentAs(rendered) && !hostMayNotMatch) {
             deployment.bundleRendered(active.id(), active.id(), now);
@@ -165,8 +173,9 @@ public class DeploymentDispatcher {
             return null;
         }
         if (hostMayNotMatch && active != null && active.hasSameContentAs(rendered)) {
-            // Re-send the bundle the database already considers active. Activation is idempotent
-            // on the agent, so this is a no-op on a host that turns out to be fine after all.
+            // Re-send the bundle the database already considers active. The agent re-validates and
+            // reloads it without swapping anything, which is harmless on a host that turns out to
+            // be fine after all and is the repair on one where the last reload did not take.
             deployment.bundleRendered(active.id(), active.id(), now);
             deployments.save(deployment);
             return active;
@@ -285,11 +294,11 @@ public class DeploymentDispatcher {
      */
     private void verify(Deployment deployment, NginxInstance instance, ConfigBundle bundle) {
         try {
-            // Each with its marker, the id its own server block answers with, so a response from
-            // anything else on the port does not count as the site being served.
-            List<NginxAgentPort.VerifyTarget> targets = sites.findDeployableForInstance(instance.id(), clock.instant())
-                    .stream()
-                    .map(site -> new NginxAgentPort.VerifyTarget(site.domain().value(), site.id().toString()))
+            // Each with the marker the deployed bundle renders for it, read from that bundle's own
+            // files: a response from anything else on the port, or from an earlier render of the
+            // same site, does not count as this deployment being served.
+            List<NginxAgentPort.VerifyTarget> targets = NginxConfigRenderer.siteMarkers(bundle).entrySet().stream()
+                    .map(entry -> new NginxAgentPort.VerifyTarget(entry.getKey(), entry.getValue()))
                     .toList();
 
             if (targets.isEmpty()) {

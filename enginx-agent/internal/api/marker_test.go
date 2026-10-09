@@ -56,8 +56,31 @@ func TestVerifyIdentifiesTheSiteByItsMarker(t *testing.T) {
 	if r := byName["app.example.com"]; !r.Responded || !r.Identified {
 		t.Errorf("the deployed site must be identified, got %+v", r)
 	}
-	if r := byName["missing.example.com"]; !r.Responded || r.Identified {
-		t.Errorf("a default page answering 200 must not identify a site, got %+v", r)
+	if r := byName["missing.example.com"]; !r.Responded || r.Identified || r.Marker != "" {
+		t.Errorf("a default page answering 200 must not identify a site, nor be reported as a marker, got %+v", r)
+	}
+	if r := byName["app.example.com"]; r.Marker != "site-1" {
+		t.Errorf("the marker seen must be reported, got %q", r.Marker)
+	}
+}
+
+// After an update the old config answers with the same site but an earlier marker. It must not
+// count, and what it said must come back so the platform can name it.
+func TestVerifyReportsAnOlderMarkerOfTheSameSite(t *testing.T) {
+	port := listenLikeASharedHost(t, "app.example.com", "site-1 v11 aaaaaaaaaaaa")
+
+	body := verifyRequest{Port: port, Sites: []verifyTarget{
+		{ServerName: "app.example.com", Marker: "site-1 v12 bbbbbbbbbbbb"},
+	}}
+	var decoded verifyResponse
+	decode(t, postJSON(t, (&Server{}).handleVerify, "/agent/v1/verify", body), &decoded)
+
+	r := decoded.Results[0]
+	if r.Identified {
+		t.Fatal("an earlier render of the site must not identify the deployment")
+	}
+	if r.Marker != "site-1 v11 aaaaaaaaaaaa" {
+		t.Errorf("expected the older marker reported, got %q", r.Marker)
 	}
 }
 

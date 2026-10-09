@@ -198,6 +198,21 @@ public final class Deployment {
     }
 
     /**
+     * Whether this deployment's last VERIFY found a site not served by the configuration it sent,
+     * for instance because the reload never took effect and NGINX kept the one before. The
+     * platform then cannot assume the host serves the bundle it believes is active.
+     */
+    public boolean verificationFailed() {
+        for (int i = events.size() - 1; i >= 0; i--) {
+            DeploymentEvent event = events.get(i);
+            if (event.phase() == DeploymentPhase.VERIFY) {
+                return event.result() == DeploymentEvent.EventResult.FAILURE;
+            }
+        }
+        return false;
+    }
+
+    /**
      * The host could not be asked. Recorded as skipped rather than failed: not knowing whether a
      * site answers is a different thing from knowing that it does not, and conflating them would
      * make an agent restart look like an outage.

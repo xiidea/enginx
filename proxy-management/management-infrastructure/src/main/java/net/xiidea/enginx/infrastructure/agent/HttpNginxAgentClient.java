@@ -156,13 +156,19 @@ public class HttpNginxAgentClient implements NginxAgentPort {
             throw failure(instance, response, "verifying sites");
         }
 
+        java.util.Map<String, String> expected = new java.util.HashMap<>();
+        targets.forEach(target -> expected.put(target.serverName(), target.marker()));
+
         List<SiteVerification> results = new ArrayList<>();
         for (JsonNode result : parse(response).path("results")) {
+            String serverName = textOf(result, "serverName");
             results.add(new SiteVerification(
-                    textOf(result, "serverName"),
+                    serverName,
                     result.path("responded").asBoolean(false),
                     result.path("statusCode").asInt(0),
                     result.path("identified").asBoolean(false),
+                    textOf(result, "marker"),
+                    expected.get(serverName),
                     textOf(result, "error")));
         }
         return results;

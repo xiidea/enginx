@@ -17,6 +17,9 @@ public interface DeploymentRepository {
     /** The most recent deployment for an instance, whatever its outcome. */
     Optional<Deployment> findLatestForInstance(UUID nginxInstanceId);
 
+    /** The most recent deployment for an instance other than {@code excluding}, whatever its outcome. */
+    Optional<Deployment> findLatestForInstanceExcept(UUID nginxInstanceId, UUID excluding);
+
     /** Whether a deployment is already queued or running for this instance. */
     boolean hasActiveDeployment(UUID nginxInstanceId);
 }

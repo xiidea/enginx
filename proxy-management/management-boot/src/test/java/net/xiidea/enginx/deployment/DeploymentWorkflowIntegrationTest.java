@@ -340,6 +340,63 @@ class DeploymentWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("an earlier render of the site still answering is reported as the reload not taking effect")
+    void anOlderConfigurationStillLiveIsNotVerified() {
+        // NGINX accepted the reload signal but kept its old config: the site's own server block
+        // answers, with an earlier marker. The site id alone would have called this served.
+        agent.serveOlderConfiguration(true);
+
+        Deployment done = deployAndDrain();
+
+        assertThat(done.events())
+                .filteredOn(event -> event.phase() == DeploymentPhase.VERIFY)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.result()).isEqualTo(DeploymentEvent.EventResult.FAILURE);
+                    assertThat(event.detail()).contains("an older configuration is still live")
+                            .contains("the reload did not take effect");
+                });
+    }
+
+    @Test
+    @DisplayName("after a reload that did not take, a redeploy reaches the host again")
+    void aRedeployRepairsAReloadThatDidNotTakeEffect() {
+        agent.serveOlderConfiguration(true);
+        deployAndDrain();
+
+        // Whatever held the port is gone. Nothing about the site changed, so without the failed
+        // VERIFY on record this redeploy would be skipped as already served — and the host would
+        // keep the old configuration while the platform reported success.
+        agent.serveOlderConfiguration(false);
+        int activationsBefore = agent.activateCalls();
+
+        Deployment repaired = deployAndDrain();
+
+        assertThat(agent.activateCalls()).isEqualTo(activationsBefore + 1);
+        assertThat(repaired.status()).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(repaired.verificationFailed()).isFalse();
+
+        // Once VERIFY has confirmed it, the next identical deployment is a no-op again.
+        int activationsAfterRepair = agent.activateCalls();
+        deployAndDrain();
+        assertThat(agent.activateCalls()).isEqualTo(activationsAfterRepair);
+    }
+
+    @Test
+    @DisplayName("a served site reports the revision that is live")
+    void aServedSiteNamesItsRevision() {
+        Deployment done = deployAndDrain();
+
+        assertThat(done.events())
+                .filteredOn(event -> event.phase() == DeploymentPhase.VERIFY)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.result()).isEqualTo(DeploymentEvent.EventResult.SUCCESS);
+                    assertThat(event.detail()).containsPattern("served \\(v\\d+ [0-9a-f]{12}\\)");
+                });
+    }
+
+    @Test
     @DisplayName("a host that cannot be probed is skipped, not reported as an outage")
     void unprobeableHostIsSkipped() {
         // Not knowing whether a site answers is a different thing from knowing that it does not,

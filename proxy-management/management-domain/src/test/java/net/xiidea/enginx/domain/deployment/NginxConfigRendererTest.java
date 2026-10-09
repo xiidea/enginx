@@ -292,14 +292,15 @@ class NginxConfigRendererTest {
         }
 
         @Test
-        void everyPort80ServerAnswersTheMarkerWithTheSiteId() {
+        void everyPort80ServerAnswersTheMarker() {
             ProxySite redirect = spec("r.example.com").ssl(true, true).site(SITE_ID);
             ProxySite plain = spec("p.example.com").site(SITE_ID);
-            String marker = "location = " + NginxConfigRenderer.SITE_MARKER_PATH;
+            String location = "location = " + NginxConfigRenderer.SITE_MARKER_PATH;
 
             for (ProxySite site : List.of(redirect, plain)) {
                 String rendered = renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN);
-                assertThat(rendered).contains(marker).contains("return 200 \"" + SITE_ID + "\\n\";");
+                assertThat(rendered).contains(location)
+                        .containsPattern("return 200 \"" + SITE_ID + " v\\d+ [0-9a-f]{12}\\\\n\";");
             }
         }
     }
@@ -339,6 +340,54 @@ class NginxConfigRendererTest {
             assertThat(managed).contains("include " + CUSTOM + "http/*.conf;");
             assertThat(managed.split("include " + CUSTOM + "default/\\*\\.conf;", -1)).hasSize(3);
             assertThat(hostOwned).contains("include " + CUSTOM + "http/*.conf;").doesNotContain("default/");
+        }
+    }
+
+    @Nested
+    @DisplayName("the site marker")
+    class SiteMarker {
+
+        private String markerOf(ProxySite site, CertificateMaterialProvider certificates, RenderTarget target) {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, target, 1, List.of(site), certificates, "ada", NOW);
+            return NginxConfigRenderer.siteMarkers(bundle).get(site.domain().value());
+        }
+
+        @Test
+        void carriesTheSiteIdTheRecordVersionAndAFingerprint() {
+            ProxySite site = spec("m.example.com").site(SITE_ID);
+            assertThat(markerOf(site, NO_CERTIFICATES, MODERN)).matches(SITE_ID + " v\\d+ [0-9a-f]{12}");
+        }
+
+        @Test
+        void isStableForTheSameInput() {
+            ProxySite site = spec("m.example.com").site(SITE_ID);
+            assertThat(markerOf(site, NO_CERTIFICATES, MODERN)).isEqualTo(markerOf(site, NO_CERTIFICATES, MODERN));
+        }
+
+        @Test
+        void changesWhenWhatTheSiteServesChanges() {
+            String before = markerOf(spec("m.example.com").site(SITE_ID), NO_CERTIFICATES, MODERN);
+            String after = markerOf(spec("m.example.com")
+                    .timeouts(new ProxyTimeouts(5, 120, 30, 52_428_800L)).site(SITE_ID), NO_CERTIFICATES, MODERN);
+            assertThat(after).isNotEqualTo(before);
+        }
+
+        @Test
+        void changesWhenTheHostsGrammarChangesThoughTheRecordDidNot() {
+            ProxySite site = spec("m.example.com").ssl(true, false).site(SITE_ID);
+            String modern = markerOf(site, TEST_CERTIFICATE, MODERN);
+            String legacy = markerOf(site, TEST_CERTIFICATE, new RenderTarget("1.22.1", true));
+            // Same site version, different served config: only the fingerprint can tell them apart.
+            assertThat(modern.split(" ")[1]).isEqualTo(legacy.split(" ")[1]);
+            assertThat(modern).isNotEqualTo(legacy);
+        }
+
+        @Test
+        void isReadBackForEverySiteInTheBundle() {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1,
+                    List.of(spec("a.example.com").site(SITE_ID), spec("b.example.com").ssl(true, true).site(SITE_ID)),
+                    TEST_CERTIFICATE, "ada", NOW);
+            assertThat(NginxConfigRenderer.siteMarkers(bundle)).containsOnlyKeys("a.example.com", "b.example.com");
         }
     }
 }

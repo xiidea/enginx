@@ -87,6 +87,12 @@ public class DeploymentRepositoryAdapter implements DeploymentRepository {
     }
 
     @Override
+    public Optional<Deployment> findLatestForInstanceExcept(UUID nginxInstanceId, UUID excluding) {
+        return repository.findFirstByNginxInstanceIdAndIdNotOrderByCreatedAtDesc(nginxInstanceId, excluding)
+                .map(DeploymentRepositoryAdapter::toDomain);
+    }
+
+    @Override
     public boolean hasActiveDeployment(UUID nginxInstanceId) {
         return repository.existsByNginxInstanceIdAndStatusIn(nginxInstanceId,
                 List.of(DeploymentStatus.PENDING, DeploymentStatus.IN_PROGRESS));

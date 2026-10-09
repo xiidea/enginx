@@ -38,7 +38,7 @@ public interface NginxAgentPort {
      * A site to probe for.
      *
      * @param marker what that site's own server block answers at
-     *               {@link NginxConfigRenderer#SITE_MARKER_PATH}: its id
+     *               {@link NginxConfigRenderer#SITE_MARKER_PATH} in the bundle just deployed
      */
     record VerifyTarget(String serverName, String marker) {
     }

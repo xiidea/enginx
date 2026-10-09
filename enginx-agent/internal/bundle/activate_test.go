@@ -174,7 +174,7 @@ func TestActivateWithoutReloadValidatesAndLeavesTrafficUntouched(t *testing.T) {
 	}
 }
 
-func TestReactivatingTheCurrentBundleIsANoop(t *testing.T) {
+func TestReactivatingTheCurrentBundleReloadsWithoutSwapping(t *testing.T) {
 	store, nginx := newStoreWith(t, bundleWith("only", "a"))
 
 	if _, err := store.Activate(context.Background(), "only", nginx, true); err != nil {
@@ -187,10 +187,29 @@ func TestReactivatingTheCurrentBundleIsANoop(t *testing.T) {
 		t.Fatalf("re-activating: %v", err)
 	}
 	if !result.Noop {
-		t.Error("re-activating the running bundle should report a no-op")
+		t.Error("re-activating the running bundle should report a no-op: nothing was swapped")
+	}
+	if store.Active() != "only" {
+		t.Errorf("the running bundle must stay current, got %q", store.Active())
+	}
+	if nginx.reloadCalls != reloadsBefore+1 {
+		t.Error("re-activating with reload must reload: it is how a reload that did not take is repaired")
+	}
+}
+
+func TestReactivatingTheCurrentBundleWithoutReloadDoesNotReload(t *testing.T) {
+	store, nginx := newStoreWith(t, bundleWith("only", "a"))
+
+	if _, err := store.Activate(context.Background(), "only", nginx, true); err != nil {
+		t.Fatalf("activating: %v", err)
+	}
+	reloadsBefore := nginx.reloadCalls
+
+	if _, err := store.Activate(context.Background(), "only", nginx, false); err != nil {
+		t.Fatalf("re-activating: %v", err)
 	}
 	if nginx.reloadCalls != reloadsBefore {
-		t.Error("a no-op must not reload; that is what makes redeployment safe to retry")
+		t.Error("a dry run of the running bundle must not reload")
 	}
 }
 

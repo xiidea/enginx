@@ -43,8 +43,11 @@ const (
 // that name answered, not merely that something on port 80 did; and it never reaches a backend.
 const SiteMarkerPath = "/.well-known/enginx/site"
 
-// maxMarker bounds what is read from the marker response. A site id is 36 characters.
+// maxMarker bounds what is read from the marker response.
 const maxMarker = 256
+
+// maxReportedMarker bounds what is reported back as the marker seen. A marker is about 60.
+const maxReportedMarker = 128
 
 type verifyTarget struct {
 	ServerName string `json:"serverName"`
@@ -65,10 +68,14 @@ type verifyResult struct {
 	ServerName string `json:"serverName"`
 	Responded  bool   `json:"responded"`
 	StatusCode int    `json:"statusCode,omitempty"`
-	// Identified is true only when the answer carried this name's marker: the platform's own
-	// configuration answered, not a default page or another server block sharing the port.
-	Identified bool   `json:"identified"`
-	Error      string `json:"error,omitempty"`
+	// Identified is true only when the answer was exactly this name's expected marker: the
+	// configuration just deployed answered, not a default page, another server block sharing the
+	// port, or an earlier render of the same site still live after a reload that did not apply.
+	Identified bool `json:"identified"`
+	// Marker is what came back at SiteMarkerPath, when it looked like a marker — one short line.
+	// Lets the platform say *which* config answered, not only that the expected one did not.
+	Marker string `json:"marker,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 type verifyResponse struct {
@@ -177,9 +184,15 @@ func probeOnce(ctx context.Context, client *http.Client, target verifyTarget, po
 	defer response.Body.Close()
 
 	result := verifyResult{ServerName: name, Responded: true, StatusCode: response.StatusCode}
-	if response.StatusCode == http.StatusOK && target.Marker != "" {
+	if response.StatusCode == http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, maxMarker))
-		result.Identified = strings.TrimSpace(string(body)) == target.Marker
+		seen := strings.TrimSpace(string(body))
+		// A default page is not a marker; reporting its HTML would only fill the deployment
+		// record with someone else's markup.
+		if seen != "" && len(seen) <= maxReportedMarker && !strings.ContainsAny(seen, "\n<") {
+			result.Marker = seen
+		}
+		result.Identified = target.Marker != "" && seen == target.Marker
 	}
 	return result
 }

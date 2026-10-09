@@ -45,6 +45,7 @@ public class TestAgent implements NginxAgentPort {
     /** Whether the probe call itself fails, as an unreachable agent would. */
     private volatile boolean verificationFails;
     private volatile boolean answeredByAnotherServer;
+    private volatile boolean olderConfigurationLive;
     private final List<String> verifiedNames = new ArrayList<>();
     private final AtomicInteger stageCalls = new AtomicInteger();
     private final AtomicInteger activateCalls = new AtomicInteger();
@@ -85,6 +86,7 @@ public class TestAgent implements NginxAgentPort {
         upstreamsReachable = true;
         verificationFails = false;
         answeredByAnotherServer = false;
+        olderConfigurationLive = false;
         synchronized (verifiedNames) {
             verifiedNames.clear();
         }
@@ -153,11 +155,27 @@ public class TestAgent implements NginxAgentPort {
             targets.forEach(target -> verifiedNames.add(target.serverName()));
         }
         return targets.stream()
-                .map(target -> !sitesRespond
-                        ? new SiteVerification(target.serverName(), false, 0, false, "connection refused")
-                        // Something answers, but only an identified answer is this site.
-                        : new SiteVerification(target.serverName(), true, 200, !answeredByAnotherServer, null))
+                .map(target -> {
+                    if (!sitesRespond) {
+                        return new SiteVerification(target.serverName(), false, 0, false, null, target.marker(),
+                                "connection refused");
+                    }
+                    if (answeredByAnotherServer) {
+                        return new SiteVerification(target.serverName(), true, 200, false, null, target.marker(), null);
+                    }
+                    if (olderConfigurationLive) {
+                        // The same site, an earlier render: what a reload NGINX accepted but did not apply leaves.
+                        String older = target.marker().substring(0, target.marker().indexOf(' ')) + " v0 000000000000";
+                        return new SiteVerification(target.serverName(), true, 200, false, older, target.marker(), null);
+                    }
+                    return new SiteVerification(target.serverName(), true, 200, true, target.marker(), target.marker(), null);
+                })
                 .toList();
+    }
+
+    /** Makes every site answer with an earlier render of itself, as when a reload did not take effect. */
+    public void serveOlderConfiguration(boolean older) {
+        this.olderConfigurationLive = older;
     }
 
     /** Makes every name answered by something other than its own server block, as a default page does. */
