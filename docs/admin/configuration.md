@@ -82,6 +82,9 @@ cd docker && docker compose down -v && docker compose up -d
 Its `databasechangelog` names changesets that no longer exist. Testcontainers builds a fresh schema
 per run, so tests are unaffected.
 
+This is the last time. From v0.1.0 the schema only moves forward through new changelogs, and an
+upgrade between releases keeps its data.
+
 ## Key management
 
 Certificate private keys and the ACME account key are envelope-encrypted: a per-secret data key

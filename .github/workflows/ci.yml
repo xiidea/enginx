@@ -25,6 +25,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history and tags, for the released-changelog check below.
+          fetch-depth: 0
+
+      # A released changelog is history, not source. Liquibase records a checksum per changeset,
+      # so editing or deleting one that a release shipped makes every database upgraded from that
+      # release refuse to start. Changes after a release go in a new file.
+      - name: Released changelogs are unchanged
+        run: |
+          set -euo pipefail
+          # 0.0.x tags were development snapshots whose schema was deliberately rebuilt; the
+          # freeze starts at 0.1.0 (docs/releases.md, "Versioning and compatibility").
+          released=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v0.0.*' 2>/dev/null || true)
+          if [ -z "$released" ]; then
+            echo "No release tag from 0.1.0 on yet; nothing is frozen."
+            exit 0
+          fi
+          changed=$(git diff --name-only --diff-filter=MD "$released" -- \
+            proxy-management/management-boot/src/main/resources/db/changelog/changes/)
+          if [ -n "$changed" ]; then
+            echo "::error::These changelogs were released in $released and must not change:"
+            echo "$changed"
+            exit 1
+          fi
+          echo "Changelogs released in $released are unchanged."
 
       - uses: actions/setup-java@v5
         with:

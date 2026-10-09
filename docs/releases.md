@@ -1,11 +1,45 @@
 # Releases
 
-
 Pushing a tag cuts a release. Nothing else publishes.
 
 ```bash
 git tag v1.2.0 && git push origin v1.2.0
 ```
+
+## Before tagging
+
+1. **Write the changelog.** `CHANGELOG.md` needs a `## <version>` section: highlights, breaking
+   changes, upgrade steps. It becomes the release notes, ahead of the list generated from pull
+   requests; a final release without one is refused. A candidate (`1.2.0-rc.1`) uses the section of
+   the version it is a candidate for.
+2. **Move the pinned versions.** The compose files, the Kubernetes manifests and the install
+   examples in `docs/admin` name an exact release rather than `latest`. Update them in the same
+   commit as the changelog: `grep -rn "enginx-\(management\|agent\|console\):" docker deploy docs`.
+3. **Bump `frontend/package.json`** (`npm version <version> --no-git-tag-version`).
+4. **Rehearse** with `workflow_dispatch` and a test version, then tag a candidate, smoke-test its
+   images on a clean host, and tag the final release from the same commit.
+
+## Versioning and compatibility
+
+[Semantic versioning](https://semver.org), with the usual pre-1.0 reading:
+
+- **A minor release (`0.x.0`) may break** the REST API, configuration or the agent protocol. Every
+  break is listed under *Breaking changes* in the changelog, with what to do about it.
+- **A patch release (`0.x.y`) never breaks.** Fixes only; a host or client that worked keeps
+  working.
+- **Agents before the management server**, on every upgrade
+  ([production guide §2.3](admin/production.md)). Done the other way round, an agent older than the
+  server reports a job type it does not know as a failed job rather than ignoring it, so the
+  mistake is visible rather than silent.
+
+**The schema only moves forward.** From 0.1.0, a changelog under
+`db/changelog/changes/` is part of a release once tagged and is never edited or deleted: Liquibase
+records a checksum per changeset, and a changed one makes every database upgraded from that
+release refuse to start. A schema change after a release is a new numbered file. CI enforces this
+against the latest release tag. The `0.0.x` tags were development snapshots, rebuilt twice from a
+squashed baseline; they are excluded, and there is no upgrade path from them.
+
+## What a release contains
 
 The workflow builds and attaches:
 

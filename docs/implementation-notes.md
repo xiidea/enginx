@@ -352,6 +352,11 @@ Verified the same way: the old chain and the new baseline applied to empty Postg
 and their semantic snapshots diffed. The only differences are the intended ones — no
 `agent_auth_token` column, and no `agent_auth_token` terms in `ck_instance_mode_fields`.
 
+**Frozen at v0.1.0.** This was the last squash. From the first release meant to be kept, the
+baseline is history like any other changelog: changes go in new files, and CI fails if a changelog
+present at the latest release tag is edited or removed (see
+[`releases.md`](releases.md#versioning-and-compatibility)).
+
 ## Implementation notes — Phase 10
 
 **Deduplication is a unique constraint, not a check-then-write.** Claiming a notification is a
