@@ -430,6 +430,14 @@ default site took the request. On a host that already ran NGINX, check the inclu
 default server first ([agent guide](agent.md#beside-an-existing-nginx)). A dead upstream does not
 fail VERIFY; use **Check upstreams** on the site, or `GET $API/proxy-sites/{id}/upstream-check`.
 
+**An older configuration is still live** means the files are in place and passed `nginx -t`, but
+NGINX did not apply them on reload and kept serving the configuration before. `nginx -t` cannot see
+everything a reload needs: the usual cause is a port another process holds, which shows in the
+NGINX error log as `[emerg] bind() to … failed` or `still could not bind()`. Fix the cause on the
+host, then deploy again. The next deployment re-sends the configuration even though nothing about
+the site changed, and the agent reloads; once its VERIFY passes, identical deployments are skipped
+again.
+
 A VERIFY phase marked SKIPPED means the agent could not be probed at all. That is not a site
 outage; check the agent.
 

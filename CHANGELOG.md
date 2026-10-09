@@ -7,6 +7,22 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## 0.1.1
+
+- **VERIFY proves the new configuration is live, not just the site.** Each site's marker now carries
+  the revision of its record and a fingerprint of its rendered configuration and certificate
+  (`<id> v<revision> <fingerprint>`), and the agent reports the marker it saw. A reload that
+  `nginx -t` accepted but NGINX did not apply — a port held by another process is the usual cause —
+  used to verify as served, because the old configuration answered with the same id. It is now
+  reported as *an older configuration is still live*.
+- **Redeploying repairs it.** After a deployment whose VERIFY failed, the next deployment re-sends
+  the configuration even when nothing changed, and the agent reloads when asked to re-activate the
+  bundle it already has. Before, the redeploy was skipped as already served.
+
+Nothing changes in the API, the configuration or the schema. Upgrade agents first, as always: a
+0.1.0 agent still verifies against a 0.1.1 server, but cannot report what it saw, so a stale
+configuration is reported as answered by something else, and its re-activation does not reload.
+
 ## 0.1.0
 
 The first release meant to be kept. Earlier `0.0.x` tags were development snapshots: their

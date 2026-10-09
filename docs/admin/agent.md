@@ -260,10 +260,15 @@ distribution's, or register the host as keeping its own default server (the cons
 and each version rejects the other's form. The agent reports the host's version, and the platform
 renders whichever that version accepts — the parameter form until it knows.
 
-**How a deployment is verified.** Every site answers `/.well-known/enginx/site` on port 80 with its
-own id, served by NGINX itself. After a reload the agent asks for it under each site's name, for up
-to five seconds while old workers hand over, and a site counts as served only when its own id comes
-back. A distribution's default page answering 200 is reported as answered by something else.
+**How a deployment is verified.** Every site answers `/.well-known/enginx/site` on port 80 with a
+marker, served by NGINX itself: the site's id, the revision of its record and a fingerprint of the
+configuration rendered for it (`<id> v<revision> <fingerprint>`). The fingerprint covers the site's
+file and its certificate, so it changes whenever what NGINX serves for the site does. After a reload
+the agent asks for the marker under each site's name, for up to five seconds while old workers hand
+over, and reports what it saw. A site counts as served only when the marker of the bundle just
+deployed comes back. The same site answering with an earlier marker means the reload did not take
+effect and NGINX kept the configuration before; a distribution's default page answering 200 is
+reported as answered by something else.
 
 ## Custom directives
 

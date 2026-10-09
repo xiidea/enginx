@@ -240,6 +240,22 @@ served by NGINX itself, and only that id counts — which also keeps a dead back
 correct deployment. The probe retries for a few seconds: a reload hands over to new workers
 gradually, and checking once, instantly, caught old workers still answering.
 
+**The marker names the revision, not just the site.** An id proves the site's server block
+answered, not that it is the one just deployed: `nginx -t` passes, `nginx -s reload` exits 0, the
+new configuration then fails to bind a port at runtime, and NGINX keeps the old one — whose block
+answers with the same id. The marker is now `<id> v<record version> <fingerprint>`. The version
+alone would miss a change that does not touch the record (a renderer change on upgrade, a renewed
+certificate), so the fingerprint hashes the site's rendered file, with a placeholder where the
+marker goes, and the certificate chain. The platform reads the expected markers from the bundle it
+deployed rather than recomputing them, and the agent reports the marker it saw, which is what lets
+VERIFY say *an older configuration is still live* instead of *not served*.
+
+**That failure must be repairable by redeploying.** The no-op shortcut compares against the bundle
+the database calls active, which is exactly the one NGINX failed to load, and status polling cannot
+tell — the agent reports that bundle as active too. So the dispatcher also bypasses the shortcut
+when the previous deployment's VERIFY failed, and the agent reloads when asked to re-activate the
+bundle already current, instead of treating it as a no-op.
+
 **A verification failure never fails the deployment.** R3 says surface it rather than act on it,
 and the rule lives in `Deployment.verified`, which cannot change `status`. Reverting would not fix
 the usual causes — a dead upstream, a DNS name pointing elsewhere — while it would discard the

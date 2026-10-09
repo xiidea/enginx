@@ -103,15 +103,19 @@ pointing the management server at user-supplied addresses.
 
 **`VERIFY`** runs after a successful reload. The agent issues a loopback request for each deployed
 name with the Host header set, for `/.well-known/enginx/site` — which each site's own server block
-answers with the site's id — and the result is recorded as a deployment phase:
+answers with a marker naming the site, the revision of its record and a fingerprint of its rendered
+configuration — and the result is recorded as a deployment phase:
 
 ```
 RENDER → UPLOAD → VALIDATE → ACTIVATE → RELOAD → VERIFY
 ```
 
-The check is whether *this site's configuration* answered: its own id must come back. Anything
-else answering — a distribution's default page, another server sharing the port — is reported as
-answered by something else, however healthy its status code. NGINX serves the path itself, so a
+The check is whether *this deployment's configuration* of the site answered: the marker of the
+bundle just deployed must come back, reported as `served (v12 3f9a0c51b2de)`. The same site
+answering with an earlier marker is reported as *an older configuration is still live*: NGINX
+accepted the reload but kept running the configuration before. Anything else answering — a
+distribution's default page, another server sharing the port — is reported as answered by
+something else, however healthy its status code. NGINX serves the path itself, so a
 backend that is down or returns errors does not fail the check; **Check upstreams** covers that.
 The agent retries for up to five seconds, because a reload hands over to new workers gradually.
 A failure is surfaced, never acted
