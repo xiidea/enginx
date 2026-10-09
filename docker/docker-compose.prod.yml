@@ -88,7 +88,7 @@ services:
     networks: [enginx]
 
   proxy-management:
-    image: ${MANAGEMENT_IMAGE:-ghcr.io/xiidea/enginx-management:0.1.0}
+    image: ${MANAGEMENT_IMAGE:-ghcr.io/xiidea/enginx-management:0.1.1}
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/enginx
@@ -174,7 +174,7 @@ services:
     networks: [enginx]
 
   console:
-    image: ${CONSOLE_IMAGE:-ghcr.io/xiidea/enginx-console:0.1.0}
+    image: ${CONSOLE_IMAGE:-ghcr.io/xiidea/enginx-console:0.1.1}
     restart: unless-stopped
     environment:
       API_BASE: ${API_PUBLIC_URL:?set API_PUBLIC_URL, e.g. https://nginx.example.com/api/v1}/

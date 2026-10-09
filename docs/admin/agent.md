@@ -60,7 +60,7 @@ binary that will be given every site's private key.
 The container image is the other way to run it, and carries NGINX with it:
 
 ```
-ghcr.io/xiidea/enginx-agent:0.1.0
+ghcr.io/xiidea/enginx-agent:0.1.1
 ```
 
 ## Dial mode

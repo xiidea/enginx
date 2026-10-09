@@ -484,8 +484,8 @@ Everything below is an environment variable on the management container. Default
 |---|---|---|
 | `DB_URL`, `DB_USERNAME` | localhost | Password comes from the secret, not from here |
 | `DB_POOL_SIZE` | 10 | 20 is reasonable in production |
-| `MANAGEMENT_IMAGE` | `ghcr.io/xiidea/enginx-management:0.1.0` | Pinned to a release. Move it deliberately, not by tracking `latest` |
-| `AGENT_IMAGE` | `ghcr.io/xiidea/enginx-agent:0.1.0` | The same release as the management plane |
+| `MANAGEMENT_IMAGE` | `ghcr.io/xiidea/enginx-management:0.1.1` | Pinned to a release. Move it deliberately, not by tracking `latest` |
+| `AGENT_IMAGE` | `ghcr.io/xiidea/enginx-agent:0.1.1` | The same release as the management plane |
 | `AUTH_OIDC_ENABLED` | `true` | Trust an identity provider |
 | `AUTH_LOCAL_ENABLED` | `false` | Authenticate accounts held by the platform. At least one of the two must be on |
 | `AUTH_JWT_SECRET` | — | Signs local tokens. At least 32 bytes, identical across replicas, from a file rather than here |
@@ -624,7 +624,7 @@ docker run -d --name enginx-agent \
   -e ENGINX_INSTANCE_NAME=nginx-edge-01 \
   -v /var/lib/enginx:/var/lib/enginx \
   -p 80:80 -p 443:443 \
-  ghcr.io/xiidea/enginx-agent:0.1.0
+  ghcr.io/xiidea/enginx-agent:0.1.1
 ```
 
 Only 80 and 443 are published, and both are for the traffic the host serves — nothing is published

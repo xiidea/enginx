@@ -317,7 +317,7 @@ name: enginx
 
 services:
   proxy-management:
-    image: ghcr.io/xiidea/enginx-management:0.1.0
+    image: ghcr.io/xiidea/enginx-management:0.1.1
     restart: unless-stopped
     environment:
       # --- external database (§2) ---
@@ -368,7 +368,7 @@ services:
     networks: [enginx]
 
   console:
-    image: ghcr.io/xiidea/enginx-console:0.1.0
+    image: ghcr.io/xiidea/enginx-console:0.1.1
     restart: unless-stopped
     environment:
       API_BASE: https://nginx.example.com/api/v1/
