@@ -15,6 +15,7 @@ Every setting the platform reads, and the schema behind it.
 | `OIDC_ISSUER_URI` | `http://localhost:8081/realms/enginx` | Must match the issuer **inside** the token |
 | `OIDC_JWK_SET_URI` | unset | Where this service fetches signing keys, when that differs from the issuer |
 | `OIDC_CLIENT_ID` | `enginx-api` | Required audience, for local tokens as well |
+| `OIDC_ROLE_CLIENT_ID` | `enginx-frontend` | The console's client. Its client roles count alongside realm roles; other clients' roles are ignored |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | |
 
 ### Choosing an authentication method

@@ -82,6 +82,8 @@ services:
       OIDC_ISSUER_URI: http://localhost:8081/realms/enginx
       OIDC_JWK_SET_URI: http://keycloak:8081/realms/enginx/protocol/openid-connect/certs
       OIDC_CLIENT_ID: enginx-api
+      # Client roles on the console's client grant access as well as realm roles do.
+      OIDC_ROLE_CLIENT_ID: enginx-frontend
       CORS_ALLOWED_ORIGINS: http://localhost:4200
       AGENT_KEYSTORE: /etc/enginx/pki/management.p12
       AGENT_TRUSTSTORE: /etc/enginx/pki/truststore.p12

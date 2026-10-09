@@ -1,7 +1,6 @@
 package net.xiidea.enginx.security.ratelimit;
 
 import tools.jackson.databind.ObjectMapper;
-import net.xiidea.enginx.security.KeycloakJwtAuthenticationConverter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -102,7 +101,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static String caller(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof JwtAuthenticationToken token) {
-            return "sub:" + KeycloakJwtAuthenticationConverter.toPrincipal(token.getToken()).subject();
+            return "sub:" + token.getToken().getSubject();
         }
         return "ip:" + request.getRemoteAddr();
     }

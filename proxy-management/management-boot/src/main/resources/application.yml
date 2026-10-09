@@ -115,6 +115,9 @@ enginx:
 
   security:
     client-id: ${OIDC_CLIENT_ID:enginx-api}
+    # The client whose client roles grant access, in addition to realm roles: the console's own
+    # client. Either source works and neither is required; other clients' roles are ignored.
+    role-client-id: ${OIDC_ROLE_CLIENT_ID:enginx-frontend}
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
     # Set only when this service reaches Keycloak by a different name than the browser does,
     # which is the case inside Docker. See SecurityProperties for why.

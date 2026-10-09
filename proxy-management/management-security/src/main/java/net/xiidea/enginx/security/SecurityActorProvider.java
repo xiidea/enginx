@@ -28,6 +28,12 @@ import java.util.Set;
 @Component
 public class SecurityActorProvider implements ActorProvider, SubjectProvider {
 
+    private final KeycloakJwtAuthenticationConverter tokens;
+
+    public SecurityActorProvider(KeycloakJwtAuthenticationConverter tokens) {
+        this.tokens = tokens;
+    }
+
     @Override
     public Actor currentActor() {
         Jwt jwt = currentJwt();
@@ -35,7 +41,7 @@ public class SecurityActorProvider implements ActorProvider, SubjectProvider {
             // Background jobs and startup tasks run without a request.
             return withRequestContext(Actor.system());
         }
-        UserPrincipal principal = KeycloakJwtAuthenticationConverter.toPrincipal(jwt);
+        UserPrincipal principal = tokens.toPrincipal(jwt);
         return withRequestContext(new Actor(principal.subject(), principal.username(), null, null));
     }
 
@@ -47,7 +53,7 @@ public class SecurityActorProvider implements ActorProvider, SubjectProvider {
             // every permission check fails closed.
             return new AuthenticatedSubject(null, Set.of(), Set.of());
         }
-        UserPrincipal principal = KeycloakJwtAuthenticationConverter.toPrincipal(jwt);
+        UserPrincipal principal = tokens.toPrincipal(jwt);
 
         Set<GlobalRole> roles = new LinkedHashSet<>();
         for (String role : principal.roles()) {

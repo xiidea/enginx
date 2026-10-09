@@ -44,12 +44,15 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
     private final LocalTokenRevocationFilter localTokenRevocationFilter;
+    private final KeycloakJwtAuthenticationConverter tokenConverter;
 
     public SecurityConfig(SecurityProperties properties, IdentityMirrorFilter identityMirrorFilter,
                           RateLimitFilter rateLimitFilter,
                           PasswordChangeRequiredFilter passwordChangeRequiredFilter,
-                          LocalTokenRevocationFilter localTokenRevocationFilter) {
+                          LocalTokenRevocationFilter localTokenRevocationFilter,
+                          KeycloakJwtAuthenticationConverter tokenConverter) {
         this.properties = properties;
+        this.tokenConverter = tokenConverter;
         this.identityMirrorFilter = identityMirrorFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
@@ -70,7 +73,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(
-                                new KeycloakJwtAuthenticationConverter(properties.clientId()))))
+                                tokenConverter)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Both run immediately after the bearer token is validated, so they see the
                 // authenticated subject. The limiter goes first: a request that is being shed
@@ -152,7 +155,7 @@ public class SecurityConfig {
                 // metrics while looking like a working authorization rule.
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(
-                                new KeycloakJwtAuthenticationConverter(properties.clientId()))))
+                                tokenConverter)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // The same confinement as the API chain. Metrics and thread dumps are exactly the
                 // sort of thing a not-yet-rotated bootstrap credential should not reach.

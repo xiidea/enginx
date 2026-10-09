@@ -33,7 +33,31 @@
         "name": "READ_ONLY",
         "description": "Read access only. Explicit grants above READ are clamped down to READ."
       }
-    ]
+    ],
+    "client": {
+      "enginx-frontend": [
+        {
+          "name": "SUPER_ADMIN",
+          "description": "Full control, including permission administration and NGINX instance registration.",
+          "clientRole": true
+        },
+        {
+          "name": "ADMIN",
+          "description": "Implicit MANAGE on every scope; may grant permissions at or below MANAGE.",
+          "clientRole": true
+        },
+        {
+          "name": "OPERATOR",
+          "description": "No implicit scope access. Enables, disables, renews and deploys where explicitly granted.",
+          "clientRole": true
+        },
+        {
+          "name": "READ_ONLY",
+          "description": "Read access only. Explicit grants above READ are clamped down to READ.",
+          "clientRole": true
+        }
+      ]
+    }
   },
   "groups": [
     {
@@ -199,6 +223,29 @@
       ],
       "groups": [
         "/platform/testing"
+      ]
+    },
+    {
+      "username": "console-admin",
+      "email": "console-admin@example.com",
+      "firstName": "Cleo",
+      "lastName": "Client",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "console123",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "enginx-frontend": [
+          "SUPER_ADMIN"
+        ]
+      },
+      "groups": [
+        "/platform"
       ]
     }
   ]

@@ -23,9 +23,11 @@ import java.io.IOException;
 public class IdentityMirrorFilter extends OncePerRequestFilter {
 
     private final IdentityMirror mirror;
+    private final KeycloakJwtAuthenticationConverter tokens;
 
-    public IdentityMirrorFilter(IdentityMirror mirror) {
+    public IdentityMirrorFilter(IdentityMirror mirror, KeycloakJwtAuthenticationConverter tokens) {
         this.mirror = mirror;
+        this.tokens = tokens;
     }
 
     @Override
@@ -35,7 +37,7 @@ public class IdentityMirrorFilter extends OncePerRequestFilter {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof JwtAuthenticationToken token) {
-            UserPrincipal principal = KeycloakJwtAuthenticationConverter.toPrincipal(token.getToken());
+            UserPrincipal principal = tokens.toPrincipal(token.getToken());
             mirror.recordSeen(principal.subject(), principal.username(), principal.email(),
                     token.getToken().getClaimAsString("name"), principal.groups());
         }

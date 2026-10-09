@@ -61,7 +61,7 @@ You provide:
 | Dependency | Requirement |
 |---|---|
 | **PostgreSQL** | Version 17. An empty database the platform owns (Liquibase creates every table). §2. |
-| **Keycloak** | A realm with two clients, four roles, and one audience mapper. §3. Or skip it and use local accounts — see the note in §3. |
+| **Keycloak** | A realm with two clients, four roles (realm or client), and one audience mapper. §3. Or skip it and use local accounts — see the note in §3. |
 | **TLS edge** | A reverse proxy or ingress that terminates HTTPS in front of the console and API. Not covered here; the platform expects `X-Forwarded-*` from it (§6). |
 | **DNS** | A public name for the console/API, and (push mode) a name or route from the management plane to each agent's `:8443`. |
 | **NGINX hosts** | One or more Linux hosts running NGINX, each with an agent binary. §7 / §8. |
@@ -109,11 +109,21 @@ In the realm you run:
 
 **1. Realm** — name it `enginx` (any name works, as long as the issuer URLs in §6 match it).
 
-**2. Realm roles** — create all four. They set the global floor and ceiling for access:
+**2. Roles** — create all four. They set the global floor and ceiling for access:
 
 ```
 SUPER_ADMIN   ADMIN   OPERATOR   READ_ONLY
 ```
+
+Create them as **realm roles**, as **client roles of `enginx-frontend`** (the console's client,
+step 3), or both — the platform reads either and requires neither. Client roles are the choice for
+a realm shared with other applications: the names stay scoped to this console, and assigning them
+grants nothing anywhere else. A user's roles are the union of the two. Client roles defined on any
+*other* client, `enginx-api` included, are ignored.
+
+The client is set by `OIDC_ROLE_CLIENT_ID` (default `enginx-frontend`); change it only if you named
+the console's client differently. Keycloak's default `roles` client scope already puts client roles
+in the access token, so no extra mapper is needed.
 
 Assign `SUPER_ADMIN` to your first operator so there is someone who can register hosts and author
 grants. `SUPER_ADMIN` cannot be self-granted through the API, which is why it is seeded here.
@@ -145,6 +155,7 @@ The values the management plane and console need to point back here (§6):
 | `OIDC_ISSUER_URI` (API) | the **public** realm URL a browser sees, e.g. `https://id.example.com/realms/enginx` |
 | `OIDC_JWK_SET_URI` (API) | how the API reaches Keycloak **internally**, e.g. `http://keycloak.internal:8080/realms/enginx/protocol/openid-connect/certs` |
 | `OIDC_CLIENT_ID` (API) | `enginx-api` — the expected **audience** |
+| `OIDC_ROLE_CLIENT_ID` (API) | `enginx-frontend` — the client whose **client roles** count, alongside realm roles |
 | `OIDC_AUTHORITY` (console) | the public realm URL, same as the issuer |
 | console client id | `enginx-frontend` |
 
@@ -318,6 +329,7 @@ services:
       OIDC_ISSUER_URI: https://id.example.com/realms/enginx
       OIDC_JWK_SET_URI: https://id.example.com/realms/enginx/protocol/openid-connect/certs
       OIDC_CLIENT_ID: enginx-api            # the audience
+      OIDC_ROLE_CLIENT_ID: enginx-frontend  # client roles on the console's client count too
       CORS_ALLOWED_ORIGINS: https://nginx.example.com
 
       # Secrets as files, not values (see the table above).

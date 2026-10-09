@@ -46,7 +46,7 @@ class LocalTokenRoundTripTest {
     }
 
     private static SecurityProperties security() {
-        return new SecurityProperties(CLIENT_ID, new String[0], null);
+        return new SecurityProperties(CLIENT_ID, null, new String[0], null);
     }
 
     private static LocalTokenIssuer issuer(String secret) {
@@ -143,7 +143,7 @@ class LocalTokenRoundTripTest {
     @DisplayName("a token for another audience is refused, even with a valid signature")
     void wrongAudienceIsRefused() {
         LocalTokenIssuer other = new LocalTokenIssuer(auth(SECRET),
-                new SecurityProperties("some-other-client", new String[0], null), CLOCK);
+                new SecurityProperties("some-other-client", null, new String[0], null), CLOCK);
 
         assertThatThrownBy(() -> decoder(SECRET).decode(other.issue(user()).token()))
                 .isInstanceOf(JwtException.class);

@@ -4,8 +4,13 @@ Who may do what, and how to grant it without granting more than you meant to.
 
 ## The permission model
 
-Two layers. Realm roles set a floor and a ceiling that apply everywhere; scoped grants in
+Two layers. Global roles set a floor and a ceiling that apply everywhere; scoped grants in
 `permission_grants` decide who reaches which domains.
+
+A global role may come from a Keycloak **realm role** or a **client role on the console's client**
+(`OIDC_ROLE_CLIENT_ID`, default `enginx-frontend`). Either is enough, and a user holding both gets
+the union. The same set decides both the coarse endpoint checks and the scoped permission
+evaluation, so a role cannot count in one and not the other.
 
 Both layers read the caller's token and nothing else, so it makes no difference whether an identity
 provider or the platform's own local account store authenticated them.

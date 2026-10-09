@@ -16,6 +16,9 @@ data:
   OIDC_ISSUER_URI: https://enginx.example.com/realms/enginx
   OIDC_JWK_SET_URI: http://keycloak:8080/realms/enginx/protocol/openid-connect/certs
   OIDC_CLIENT_ID: enginx-api
+  # The console's client (OIDC_CLIENT_ID in 40-console-and-ingress.yaml). Client roles defined on
+  # it grant access alongside realm roles; keep the two in step if you rename the client.
+  OIDC_ROLE_CLIENT_ID: enginx-frontend
   CORS_ALLOWED_ORIGINS: https://enginx.example.com
 
   ACME_DIRECTORY_URL: acme://letsencrypt.org

@@ -105,6 +105,8 @@ services:
       OIDC_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:?}/realms/enginx
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/enginx/protocol/openid-connect/certs
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-enginx-api}
+      # The console's client: roles defined on it count alongside realm roles.
+      OIDC_ROLE_CLIENT_ID: ${OIDC_FRONTEND_CLIENT_ID:-enginx-frontend}
       CORS_ALLOWED_ORIGINS: ${CONSOLE_PUBLIC_URL:?set CONSOLE_PUBLIC_URL, e.g. https://nginx.example.com}
 
       # Which upstream addresses are trusted to set X-Forwarded-* (client IP, scheme, host). This
