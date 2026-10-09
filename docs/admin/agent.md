@@ -8,6 +8,11 @@ open a shell, because the platform must not be able to do those things even by m
 It must share a host with NGINX — it signals the NGINX process, and a process in another container
 cannot be signalled. In the container image the two ship together and the agent is PID 1.
 
+On a host that already runs NGINX, the agent either takes over running it or works with the
+NGINX the host's own service runs (`AGENT_NGINX_MANAGED=false`). Either way, the host's
+`nginx.conf` needs one line to include the platform's tree, and a decision about who answers names
+no site matches. See [Beside an existing NGINX](#beside-an-existing-nginx).
+
 ## Two modes
 
 The agent and the platform reach each other one of two ways. The choice is a property of the
@@ -162,6 +167,8 @@ command-injection surface to protect.
 | `AGENT_RELEASES_DIR` | `/etc/nginx/enginx` | Where bundles are stored and `current` points |
 | `AGENT_NGINX_BINARY` | `/usr/sbin/nginx` | Must exist, or the agent refuses to start |
 | `AGENT_NGINX_CONF` | `/etc/nginx/nginx.conf` | The configuration NGINX is started with |
+| `AGENT_NGINX_MANAGED` | `true` | `true`: the agent starts and supervises NGINX. `false`: the host's service manager runs it, and the agent only validates and reloads |
+| `AGENT_NGINX_PID_FILE` | `/run/nginx.pid` | Where the running master's pid is. Read when NGINX is external, and checked at startup so a managed agent refuses to start a second master |
 | `AGENT_VERSION` | the compiled-in version | Overridden only for testing |
 
 **Dial mode only**
@@ -195,6 +202,9 @@ command-injection surface to protect.
 Description=Easy NGINX Admin agent
 After=network-online.target
 Wants=network-online.target
+# The agent runs NGINX, so the distribution's service must not start another. With
+# AGENT_NGINX_MANAGED=false use After=nginx.service and Requires=nginx.service instead.
+Conflicts=nginx.service
 
 [Service]
 # Root, and only because it signals the NGINX master and writes into the release tree. Its
@@ -216,7 +226,44 @@ file — a unit file is world-readable and ends up in configuration management.
 
 The agent supervises NGINX as its child and exits if NGINX dies, so `Restart=always` restarts both
 together. That is deliberate: NGINX dying is different from never having started, and a host that
-was serving traffic and stopped should be replaced rather than left half-alive.
+was serving traffic and stopped should be replaced rather than left half-alive. With
+`AGENT_NGINX_MANAGED=false` none of that applies: NGINX's lifecycle is its own service's, and the
+agent keeps running while it restarts.
+
+## Beside an existing NGINX
+
+What a host that already ran NGINX needs. The self-managed guide walks through it step by step
+([§7](self-managed-setup.md#prepare-the-hosts-nginx-both-modes)).
+
+**The include line.** A distribution's `nginx.conf` loads `conf.d/` and `sites-enabled/`, not the
+platform's tree. Add, inside `http { … }`:
+
+```nginx
+include /etc/nginx/enginx/current/conf.d/*.conf;
+```
+
+Without it a deployment would validate and reload and serve nothing, so the agent checks for it
+(`nginx -T`): it warns at startup, and a deployment fails validation with the line to add. Existing
+sites keep working beside the platform's, as long as no `server_name` is used by both.
+
+**Who runs NGINX.** Either disable the distribution's service and let the agent run NGINX (the
+default), or keep the service and set `AGENT_NGINX_MANAGED=false`. Starting the agent on its default
+while the distribution's NGINX runs is refused with that choice spelled out: a second master cannot
+bind ports 80 and 443, and would take the agent down on every restart.
+
+**Who answers unmatched names.** The platform's catch-all and a distribution's
+`sites-enabled/default` both claim `default_server`, and two fail validation. Remove the
+distribution's, or register the host as keeping its own default server (the console's checkbox, or
+`"defaultServerManaged": false`) so bundles leave the catch-all out.
+
+**Versions.** NGINX 1.25.1 replaced the `listen … http2` parameter with an `http2 on;` directive,
+and each version rejects the other's form. The agent reports the host's version, and the platform
+renders whichever that version accepts — the parameter form until it knows.
+
+**How a deployment is verified.** Every site answers `/.well-known/enginx/site` on port 80 with its
+own id, served by NGINX itself. After a reload the agent asks for it under each site's name, for up
+to five seconds while old workers hand over, and a site counts as served only when its own id comes
+back. A distribution's default page answering 200 is reported as answered by something else.
 
 ## Switching a host between modes
 
@@ -236,7 +283,7 @@ neither reveals anything about the host beyond whether it is serving.
 | | | |
 |---|---|---|
 | `GET /agent/v1/health` | always `200` while the agent runs | **liveness** |
-| `GET /agent/v1/ready` | `200` when NGINX is running, `503` when it is not | **readiness** |
+| `GET /agent/v1/ready` | `200` when NGINX is running — the agent's child, or the master in `AGENT_NGINX_PID_FILE` when external — `503` when it is not | **readiness** |
 
 **Liveness deliberately ignores NGINX, and that separation is load-bearing.** The agent stays up
 when NGINX will not start — an unresolvable upstream on a cold boot is enough to do it — precisely

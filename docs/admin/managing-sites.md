@@ -102,14 +102,19 @@ rather than on the management server — which is where the answer means somethi
 pointing the management server at user-supplied addresses.
 
 **`VERIFY`** runs after a successful reload. The agent issues a loopback request for each deployed
-name with the Host header set, and the result is recorded as a deployment phase:
+name with the Host header set, for `/.well-known/enginx/site` — which each site's own server block
+answers with the site's id — and the result is recorded as a deployment phase:
 
 ```
 RENDER → UPLOAD → VALIDATE → ACTIVATE → RELOAD → VERIFY
 ```
 
-The check is whether the server *responded*, not whether it returned 200 — a site with forced HTTPS
-answers port 80 with a 301, and a backend may legitimately 404. A failure is surfaced, never acted
+The check is whether *this site's configuration* answered: its own id must come back. Anything
+else answering — a distribution's default page, another server sharing the port — is reported as
+answered by something else, however healthy its status code. NGINX serves the path itself, so a
+backend that is down or returns errors does not fail the check; **Check upstreams** covers that.
+The agent retries for up to five seconds, because a reload hands over to new workers gradually.
+A failure is surfaced, never acted
 on: it does not change the deployment's status and nothing is rolled back, because the usual causes
 are a dead upstream or a DNS name pointing elsewhere, and reverting fixes neither while discarding
 the operator's change. A host that cannot be probed is recorded as SKIPPED rather than FAILED.

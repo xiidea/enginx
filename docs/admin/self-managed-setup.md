@@ -463,6 +463,53 @@ The one thing that does not scale by replication is the in-process rate limiter 
 
 The management plane dials each host on `:8443` over mutual TLS. Do this per NGINX host.
 
+### Prepare the host's NGINX (both modes)
+
+The agent manages NGINX's configuration, not its installation: install NGINX from your
+distribution or nginx.org first. Any NGINX from **1.18** on is expected to work; **1.22** (Debian 12)
+and **1.27** (the container image) are tested. The agent learns the version and renders HTTP/2 in the
+form that version understands.
+
+**1. Include the platform's tree.** Inside the `http { … }` block of `/etc/nginx/nginx.conf`, after
+the distribution's own includes:
+
+```nginx
+include /etc/nginx/enginx/current/conf.d/*.conf;
+```
+
+This is the only line the platform needs. Sites you already serve from `sites-enabled/` or
+`conf.d/` keep working beside it, as long as no platform site uses the same `server_name`. The
+agent checks the line is there: it warns at startup, and refuses a deployment without it — with the
+line to add — rather than deploying sites NGINX would never load.
+
+**2. Decide who runs the NGINX process.**
+
+| | The agent runs NGINX (default) | The host's service runs NGINX |
+|---|---|---|
+| Setting | `AGENT_NGINX_MANAGED` unset | `AGENT_NGINX_MANAGED=false` |
+| The distribution's `nginx.service` | `systemctl disable --now nginx` | stays enabled and running |
+| The agent | starts NGINX as its child, and exits if it dies | validates and reloads the running NGINX |
+| Choose it when | the host is dedicated to the platform | NGINX already serves other things you manage with systemd |
+
+With the host's service, the agent finds the running master through `AGENT_NGINX_PID_FILE`
+(default `/run/nginx.pid`, the Debian and Ubuntu location; match the `pid` directive in your
+`nginx.conf` if it differs). Leave the agent on its default with the distribution's NGINX still
+running and it refuses to start, saying which of the two to do — two masters cannot share ports 80
+and 443.
+
+**3. Decide who answers names no site matches.** The platform renders a catch-all that answers
+unmatched names with 404, so an expired site stops answering and a stray DNS name reaches nothing.
+A distribution's stock config has a catch-all of its own (`sites-enabled/default`), and two cannot
+coexist — every deployment would fail validation. Either remove the distribution's:
+
+```bash
+rm /etc/nginx/sites-enabled/default
+```
+
+or keep it, and register the host with **This host keeps its own default server** ticked in the
+console (`"defaultServerManaged": false` over the API; changeable later with
+`PUT /api/v1/nginx-instances/{id}/default-server`). Unmatched names are then the host's to answer.
+
 **Install the binary** (same for both modes):
 
 ```bash
@@ -496,6 +543,8 @@ AGENT_CLIENT_CN=enginx-management
 AGENT_RELEASES_DIR=/etc/nginx/enginx
 AGENT_NGINX_BINARY=/usr/sbin/nginx
 AGENT_NGINX_CONF=/etc/nginx/nginx.conf
+# Only if the host's own nginx.service runs NGINX (see "Prepare the host's NGINX"):
+# AGENT_NGINX_MANAGED=false
 ```
 
 **Run it under systemd** — `/etc/systemd/system/enginx-agent.service`:
@@ -503,8 +552,11 @@ AGENT_NGINX_CONF=/etc/nginx/nginx.conf
 ```ini
 [Unit]
 Description=Easy NGINX Admin agent (push mode)
-After=network-online.target nginx.service
+After=network-online.target
 Wants=network-online.target
+# The agent runs NGINX itself, so the distribution's service must not also start one. With
+# AGENT_NGINX_MANAGED=false, replace this line with: After=nginx.service and Requires=nginx.service
+Conflicts=nginx.service
 
 [Service]
 # Root, only to signal the NGINX master and write the release tree. It runs no shell and accepts
@@ -583,7 +635,8 @@ The host enrols itself and long-polls for work over HTTPS. **Nothing connects to
 port, no certificate. This is the mode for hosts behind NAT, in another cloud, or on a network the
 management plane cannot route to.
 
-**Install the binary** exactly as in §7 (download, checksum, `install`).
+**Prepare the host's NGINX and install the binary** exactly as in §7 (include line, who runs
+NGINX, default server; then download, checksum, `install`).
 
 **Mint a registration token** — the console's **NGINX instances** page shows it once with the exact
 command, or the API:
@@ -612,6 +665,8 @@ ENGINX_TOKEN_FILE=/var/lib/enginx/agent-token
 AGENT_RELEASES_DIR=/etc/nginx/enginx
 AGENT_NGINX_BINARY=/usr/sbin/nginx
 AGENT_NGINX_CONF=/etc/nginx/nginx.conf
+# Only if the host's own nginx.service runs NGINX:
+# AGENT_NGINX_MANAGED=false
 ```
 
 Setting `ENGINX_SERVER_URL` is the **only** thing that selects pull mode — there is no flag to get
@@ -626,8 +681,10 @@ install -d -m 0700 /var/lib/enginx
 ```ini
 [Unit]
 Description=Easy NGINX Admin agent (pull mode)
-After=network-online.target nginx.service
+After=network-online.target
 Wants=network-online.target
+# As in §7: with AGENT_NGINX_MANAGED=false, use After=nginx.service and Requires=nginx.service.
+Conflicts=nginx.service
 
 [Service]
 User=root
@@ -653,8 +710,8 @@ to `ENGINX_TOKEN_FILE`**, and reuses it on every restart. Two rules that save an
   works, but if the platform ever rejects the stored one the agent re-enrols itself exactly once
   and recovers. (See the recovery caveat in [`agent.md`](agent.md).)
 
-One thing pull mode cannot do yet: **answer HTTP-01 ACME challenges.** Certificates for a pull host
-must come from DNS-01 or be uploaded. Push hosts have no such limit.
+A pull host answers HTTP-01 ACME challenges like a push host: the challenge reaches it as a job on
+its next poll, and issuance waits for it to confirm (see [`agent.md`](agent.md)).
 
 ---
 

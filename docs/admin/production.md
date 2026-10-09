@@ -420,13 +420,15 @@ The next heartbeat returns the instance to `ONLINE`.
 
 ### A deployment succeeded but VERIFY failed
 
-The configuration is loaded and being served — VERIFY does not change that, and nothing was rolled
-back. What failed is the loopback probe: the host did not answer for that name.
+The configuration was loaded — VERIFY does not change that, and nothing was rolled back. What
+failed is the loopback probe: the site's own server block did not answer for that name.
 
-Usual causes, in the order worth checking: the upstream is down (use **Check upstreams** on the
-site, or `GET $API/proxy-sites/{id}/upstream-check`); a `server_name` collision with another site;
-or the site is HTTPS-only, in which case port 80 is answered by the catch-all with a 404 — see the
-open decision in the roadmap.
+The phase says which way. **No response** means nothing listens on port 80 for it. **Answered, but
+not by this site's configuration** means something else served the name: the host's `nginx.conf`
+does not load the platform's tree, another server block with the same `server_name` won, or a
+default site took the request. On a host that already ran NGINX, check the include line and the
+default server first ([agent guide](agent.md#beside-an-existing-nginx)). A dead upstream does not
+fail VERIFY; use **Check upstreams** on the site, or `GET $API/proxy-sites/{id}/upstream-check`.
 
 A VERIFY phase marked SKIPPED means the agent could not be probed at all. That is not a site
 outage; check the agent.

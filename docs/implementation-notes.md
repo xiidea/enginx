@@ -231,11 +231,14 @@ meaningful answer. Both probes therefore live on the agent — which is the proc
 that connection anyway when NGINX loads the configuration. The site probe additionally always dials
 loopback and treats the name purely as a Host header, so it cannot be pointed anywhere at all.
 
-**`VERIFY` asks whether the server responded, not whether it returned 200.** A site with forced
-HTTPS answers port 80 with a 301, and a backend may legitimately return 404 or 502 for the site
-root. Treating any of those as failure would report every correctly configured site as broken. What
-the phase catches is the case a successful reload cannot rule out: the configuration loaded, and
-the name is served by nothing.
+**`VERIFY` asks whether the site's own server block answered.** It first asked only whether
+*anything* responded, on the grounds that a 301, a 404 or a 502 from a backend all show the
+configuration took effect. Testing against a host that already ran NGINX disproved that: the
+distribution's default page answered every name with 200, so a deployment whose bundle NGINX never
+loaded verified as healthy. Each rendered site now answers `/.well-known/enginx/site` with its id,
+served by NGINX itself, and only that id counts — which also keeps a dead backend from failing a
+correct deployment. The probe retries for a few seconds: a reload hands over to new workers
+gradually, and checking once, instantly, caught old workers still answering.
 
 **A verification failure never fails the deployment.** R3 says surface it rather than act on it,
 and the rule lives in `Deployment.verified`, which cannot change `status`. Reverting would not fix

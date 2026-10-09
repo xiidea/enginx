@@ -23,6 +23,7 @@ URI, never on the human-readable `detail`.
 | `POST` | `/api/v1/nginx-instances` | `SUPER_ADMIN` |
 | `PUT` | `/api/v1/nginx-instances/{id}/agent-certificate` | `SUPER_ADMIN`. mTLS hosts only |
 | `PUT` | `/api/v1/nginx-instances/{id}/agent-token` | `SUPER_ADMIN`. Token hosts only; the token is never returned |
+| `PUT` | `/api/v1/nginx-instances/{id}/default-server` | `SUPER_ADMIN`. Platform catch-all, or the host's own default server |
 | `GET` | `/api/v1/nginx-instances/{id}/agent-jobs` | any. Empty for a host the platform dials |
 | `GET` | `/api/v1/domain-groups?siteId=` | READ. With `siteId`, only the groups that site is in |
 | `POST` | `/api/v1/domain-groups` | MANAGE on the parent |

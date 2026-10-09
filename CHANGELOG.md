@@ -10,11 +10,22 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 ## 0.1.0
 
 The first release meant to be kept. Earlier `0.0.x` tags were development snapshots: their
-databases cannot be upgraded and must be recreated (see [Upgrading](#upgrading-to-010)). From this
-release on, the schema only moves forward through migrations.
+databases cannot be upgraded and must be recreated (see
+[Upgrading to 0.1.0](https://github.com/xiidea/enginx/blob/main/CHANGELOG.md#upgrading-to-010)).
+From this release on, the schema only moves forward through migrations.
 
 ### Highlights
 
+- **Runs beside an existing NGINX.** On a host that already serves sites, the agent either takes
+  over running NGINX or works with the one the host's own service runs (`AGENT_NGINX_MANAGED=false`).
+  It refuses to start a second master instead of crash-looping, checks that `nginx.conf` includes
+  the platform's tree and refuses a deployment that NGINX would never load, and a host can keep its
+  own default server (`PUT /api/v1/nginx-instances/{id}/default-server`). HTTP/2 is rendered in the
+  form the host's version understands, so stock NGINX on current Debian and Ubuntu LTS loads it.
+  1.22 (Debian 12) and 1.27 are tested; 1.18 and later is expected to work.
+- **VERIFY proves the site is served.** Each site answers `/.well-known/enginx/site` with its own id,
+  and only that answer verifies it. A default page answering 200 used to pass for a site that was not
+  being served at all.
 - **Push agents behind a TLS-terminating proxy.** A dialled agent can authenticate the platform with
   a pre-shared token (`AGENT_PUSH_PROTOCOL=http`) instead of a client certificate. The token is
   compared in constant time, must be at least 32 characters, and is stored sealed under the same
@@ -46,6 +57,12 @@ release on, the schema only moves forward through migrations.
 - OpenAPI operation ids are now `<controller>_<method>`. Generated clients keyed on the old ids
   must be regenerated.
 - Compose files and Kubernetes manifests reference `0.1.0` images rather than `latest`.
+- VERIFY now fails when a name is answered by anything other than the site's own server block. The
+  agent's verify request carries `sites` with markers; agents from before 0.1.0 do not understand it,
+  which is one more reason to upgrade agents first.
+- An agent left on the default `AGENT_NGINX_MANAGED=true` refuses to start while another NGINX master
+  is running, and a deployment to a host whose `nginx.conf` does not include
+  `/etc/nginx/enginx/current/conf.d/*.conf` fails validation instead of reporting success.
 
 ### Upgrading to 0.1.0
 
