@@ -12,6 +12,8 @@ export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'OPERATOR' | 'READ_ONLY';
 export interface AuthMethods {
   localEnabled: boolean;
   oidcEnabled: boolean;
+  /** The management server's release; absent when it was built without build-info. */
+  serverVersion?: string;
 }
 
 /**

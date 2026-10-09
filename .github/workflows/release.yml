@@ -376,9 +376,11 @@ jobs:
           # check that passes by accident is one nobody can rely on.
           agent="ghcr.io/${OWNER}/enginx-agent:${VERSION}"
           management="ghcr.io/${OWNER}/enginx-management:${VERSION}"
+          console="ghcr.io/${OWNER}/enginx-console:${VERSION}"
           if [ "$PUSHED" = "true" ]; then
             docker pull --quiet --platform linux/amd64 "$agent"
             docker pull --quiet --platform linux/amd64 "$management"
+            docker pull --quiet --platform linux/amd64 "$console"
           fi
 
           reported=$(docker run --rm --platform linux/amd64 \
@@ -400,6 +402,19 @@ jobs:
             -c 'unzip -p /app/app.jar META-INF/build-info.properties' | grep '^build.version=' | cut -d= -f2)
           echo "management jar reports: $built"
           [ "$built" = "$VERSION" ] || { echo "::error::jar says '$built', expected ${VERSION}"; exit 1; }
+
+          # The console the same two ways: the label, and what it will actually show. The version
+          # reaches the browser through the runtime config its entrypoint writes, so that script is
+          # run and its output read, rather than trusting the environment variable it reads from.
+          labelled=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$console")
+          echo "console image labelled: $labelled"
+          [ "$labelled" = "$VERSION" ] || { echo "::error::console label says '$labelled'"; exit 1; }
+
+          shown=$(docker run --rm --platform linux/amd64 --entrypoint sh "$console" \
+            -c '/docker-entrypoint.d/40-enginx-config.sh >/dev/null && cat /usr/share/nginx/html/config.js' \
+            | sed -n 's/.*version: "\(.*\)".*/\1/p')
+          echo "console shows: $shown"
+          [ "$shown" = "$VERSION" ] || { echo "::error::console shows '$shown', expected ${VERSION}"; exit 1; }
 
   publish:
     name: Publish the release

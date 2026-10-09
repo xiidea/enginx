@@ -1249,6 +1249,7 @@ export interface components {
             oidcClientId?: string;
             oidcEnabled: boolean;
             oidcIssuer?: string;
+            serverVersion?: string;
         };
         BundleFileResponse: {
             content?: string;

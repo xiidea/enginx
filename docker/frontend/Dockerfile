@@ -32,6 +32,9 @@ LABEL org.opencontainers.image.title="Easy NGINX Admin console" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 
+# The release this image was built for, read by the entrypoint into the console's runtime config.
+ENV ENGINX_VERSION=${VERSION}
+
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 

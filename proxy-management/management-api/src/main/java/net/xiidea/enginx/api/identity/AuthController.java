@@ -9,6 +9,7 @@ import net.xiidea.enginx.application.identity.AccessTokenIssuer;
 import net.xiidea.enginx.application.identity.AuthenticationMethods;
 import net.xiidea.enginx.application.identity.LocalAuthenticationService;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,10 +34,16 @@ public class AuthController {
      */
     private final ObjectProvider<LocalAuthenticationService> localAuth;
 
+    /** Null when the jar carries no build-info, as in tests run from the IDE. */
+    private final String serverVersion;
+
     public AuthController(AuthenticationMethods methods,
-                          ObjectProvider<LocalAuthenticationService> localAuth) {
+                          ObjectProvider<LocalAuthenticationService> localAuth,
+                          ObjectProvider<BuildProperties> build) {
         this.methods = methods;
         this.localAuth = localAuth;
+        BuildProperties properties = build.getIfAvailable();
+        this.serverVersion = properties == null ? null : properties.getVersion();
     }
 
     @GetMapping("/methods")
@@ -45,7 +52,7 @@ public class AuthController {
                     + "Returns only what a login page needs — never whether an account exists.")
     public MethodsResponse methods() {
         return new MethodsResponse(methods.localEnabled(), methods.oidcEnabled(),
-                methods.oidcIssuer(), methods.oidcClientId());
+                methods.oidcIssuer(), methods.oidcClientId(), serverVersion);
     }
 
     @PostMapping("/login")
@@ -78,8 +85,13 @@ public class AuthController {
                                 java.time.Instant expiresAt) {
     }
 
+    /**
+     * @param serverVersion the management server's release, shown beside the console's own so a
+     *                      mismatched pair after a partial upgrade is visible. Public, as it is on
+     *                      /actuator/info; read here because this is the call the console already makes
+     */
     @Schema(name = "AuthMethodsResponse", requiredProperties = {"localEnabled", "oidcEnabled"})
     public record MethodsResponse(boolean localEnabled, boolean oidcEnabled,
-                                  String oidcIssuer, String oidcClientId) {
+                                  String oidcIssuer, String oidcClientId, String serverVersion) {
     }
 }

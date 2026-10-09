@@ -77,6 +77,12 @@
   font-size: 0.68rem;
   font-weight: 600;
 }
+.version {
+  font-family: var(--f-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
 .details { display: flex; flex-direction: column; min-width: 0; }
 .user { font-size: 0.82rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 .roles {

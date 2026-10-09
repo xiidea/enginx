@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
+import { environment } from '../environments/environment';
 import { PasswordChange } from './features/auth/password-change';
 import { SignIn } from './features/auth/sign-in';
 import { Toasts } from './shared/notifications';
@@ -53,6 +54,17 @@ export class App implements OnInit {
         && (!item.localOnly || this.auth.methods().localEnabled),
     ),
   );
+
+  /**
+   * Both halves of the platform, so a console and server left at different releases after a partial
+   * upgrade is visible at a glance rather than discovered through a broken page.
+   */
+  readonly versions = computed(() => {
+    const server = this.auth.methods().serverVersion;
+    return server && server !== environment.version
+      ? `console ${environment.version} · server ${server}`
+      : `v${server ?? environment.version}`;
+  });
 
   /** The realm roles, for the sidebar. Domain-scoped grants are shown on the pages they affect. */
   roleLabel(): string {

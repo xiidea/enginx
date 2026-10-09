@@ -9,7 +9,8 @@ cat > /usr/share/nginx/html/config.js <<CONFIG
 window.__enginx = {
   apiBase: "${API_BASE:-http://localhost:8080/api/v1}",
   oidcAuthority: "${OIDC_AUTHORITY:-http://localhost:8081/realms/enginx}",
-  oidcClientId: "${OIDC_CLIENT_ID:-enginx-frontend}"
+  oidcClientId: "${OIDC_CLIENT_ID:-enginx-frontend}",
+  version: "${ENGINX_VERSION:-dev}"
 };
 CONFIG
 

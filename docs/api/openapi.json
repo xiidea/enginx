@@ -346,6 +346,9 @@
           },
           "oidcIssuer": {
             "type": "string"
+          },
+          "serverVersion": {
+            "type": "string"
           }
         },
         "required": [
