@@ -7,6 +7,18 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## 0.1.2
+
+- **Client roles show in the console.** A user whose role is a client role on the console's client
+  (`OIDC_ROLE_CLIENT_ID`) rather than a realm role was allowed by the API but shown a console with
+  every admin action hidden. The console now reads the same two sources the server does.
+- **Identity-provider tokens no longer reach browser storage.** The access and refresh tokens of a
+  Keycloak session are held in memory only. A reload or a new tab signs the user back in silently
+  from the provider's own session, on the same page, without a password; when that session has
+  ended, the sign-in page appears. Local sessions are unchanged and survive a reload as before.
+
+Nothing changes in the API, the configuration or the schema; only the console image differs.
+
 ## 0.1.1
 
 - **VERIFY proves the new configuration is live, not just the site.** Each site's marker now carries
