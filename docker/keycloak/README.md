@@ -31,12 +31,13 @@ similarly named groups under different parents.
 
 All passwords are development-only.
 
-| Username | Password | Realm role |
+| Username | Password | Role |
 |---|---|---|
-| `admin` | `admin123` | `SUPER_ADMIN` |
-| `manager` | `manager123` | `ADMIN` |
-| `operator` | `operator123` | `OPERATOR` |
-| `viewer` | `viewer123` | `READ_ONLY` |
+| `admin` | `admin123` | `SUPER_ADMIN` (realm) |
+| `manager` | `manager123` | `ADMIN` (realm) |
+| `operator` | `operator123` | `OPERATOR` (realm) |
+| `viewer` | `viewer123` | `READ_ONLY` (realm) |
+| `console-admin` | `console123` | `SUPER_ADMIN` (client role on `enginx-frontend`, no realm role) |
 
 ## Re-importing after a change
 

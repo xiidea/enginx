@@ -79,6 +79,33 @@ describe('AuthService', () => {
     expect(oidc.checkAuth).toHaveBeenCalled();
   });
 
+  /**
+   * The server counts client roles on the console's own client as well as realm roles, so a
+   * deployment that keeps its roles on the client alone must not get a console that hides
+   * everything. Another client's roles grant nothing on the server, and so nothing here.
+   */
+  it('reads roles from the realm and from the console client only', async () => {
+    const oidcToken = tokenWith({
+      sub: 'user-1',
+      preferred_username: 'console-admin',
+      realm_access: { roles: ['READ_ONLY'] },
+      resource_access: {
+        [environment.oidcClientId]: { roles: ['SUPER_ADMIN'] },
+        'some-other-app': { roles: ['ADMIN'] },
+      },
+    });
+    oidc.checkAuth.mockReturnValue(of({ isAuthenticated: true, accessToken: oidcToken }));
+
+    const auth = TestBed.inject(AuthService);
+    const started = auth.initialise();
+    answerMethods(false, true);
+    await started;
+
+    expect(auth.provider()).toBe('oidc');
+    expect([...auth.roles()].sort()).toEqual(['READ_ONLY', 'SUPER_ADMIN']);
+    expect(auth.isSuperAdmin()).toBe(true);
+  });
+
   it('projects the claims of a local token onto the session', async () => {
     const auth = TestBed.inject(AuthService);
     const started = auth.initialise();

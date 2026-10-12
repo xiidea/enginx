@@ -89,6 +89,7 @@ export interface LocalTokenClaims {
   name?: string;
   groups?: string[];
   realm_access?: { roles?: string[] };
+  resource_access?: Record<string, { roles?: string[] } | undefined>;
   must_change_password?: boolean;
 }
 

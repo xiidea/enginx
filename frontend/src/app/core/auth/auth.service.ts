@@ -76,7 +76,7 @@ export class AuthService {
   });
 
   /**
-   * Realm roles set a floor and a ceiling; the per-domain detail comes from the server. These
+   * Global roles set a floor and a ceiling; the per-domain detail comes from the server. These
    * only gate the parts of the console that are globally scoped, such as registering an NGINX
    * instance.
    */
@@ -210,9 +210,15 @@ export class AuthService {
     this.username.set(claims.preferred_username ?? claims.name ?? null);
     this.groups.set(claims.groups ?? []);
 
+    // Same two sources the server's token converter reads: realm roles, and the client roles of
+    // the console's own client. Any other client's roles grant nothing there, so none here either.
     const known: Role[] = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'READ_ONLY'];
     const roles = new Set<Role>();
-    for (const role of claims.realm_access?.roles ?? []) {
+    const granted = [
+      ...(claims.realm_access?.roles ?? []),
+      ...(claims.resource_access?.[environment.oidcClientId]?.roles ?? []),
+    ];
+    for (const role of granted) {
       if ((known as string[]).includes(role)) {
         roles.add(role as Role);
       }
