@@ -24,16 +24,23 @@ const LOCAL_TOKEN = tokenWith({
 });
 
 describe('AuthService', () => {
-  let oidc: { checkAuth: ReturnType<typeof vi.fn>; getAccessToken: ReturnType<typeof vi.fn>; authorize: ReturnType<typeof vi.fn> };
+  let oidc: {
+    checkAuth: ReturnType<typeof vi.fn>;
+    getAccessToken: ReturnType<typeof vi.fn>;
+    authorize: ReturnType<typeof vi.fn>;
+    logoff: ReturnType<typeof vi.fn>;
+  };
   let router: { navigateByUrl: ReturnType<typeof vi.fn> };
   let http: HttpTestingController;
 
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     oidc = {
       checkAuth: vi.fn(() => of({ isAuthenticated: false, accessToken: '' })),
       getAccessToken: vi.fn(() => of('')),
       authorize: vi.fn(),
+      logoff: vi.fn(() => of(null)),
     };
     router = { navigateByUrl: vi.fn(() => Promise.resolve(true)) };
 
@@ -207,7 +214,8 @@ describe('AuthService', () => {
       .toBe(false);
   });
 
-  it('restores a stored session, and discards an expired one', async () => {
+  /** A reload, or a new tab, must not ask a local user for their password again. */
+  it('restores a stored local session, and discards an expired one', async () => {
     localStorage.setItem('enginx.local.token', LOCAL_TOKEN);
     const auth = TestBed.inject(AuthService);
     const started = auth.initialise();
@@ -219,6 +227,80 @@ describe('AuthService', () => {
 
     localStorage.setItem('enginx.local.token', tokenWith({ sub: 'local:x', exp: 1 }));
     TestBed.resetTestingModule();
+  });
+
+  describe('an OIDC session after a reload', () => {
+    const OIDC_TOKEN = tokenWith({ sub: 'user-1', preferred_username: 'console-admin' });
+
+    /** Resolves to whether the promise settled within a tick, without waiting on one that never does. */
+    async function settles(promise: Promise<void>): Promise<boolean> {
+      return Promise.race([
+        promise.then(() => true),
+        new Promise<boolean>((r) => setTimeout(() => r(false), 20)),
+      ]);
+    }
+
+    it('marks the browser as signed in, without storing the token', async () => {
+      oidc.checkAuth.mockReturnValue(of({ isAuthenticated: true, accessToken: OIDC_TOKEN }));
+      const auth = TestBed.inject(AuthService);
+      const started = auth.initialise();
+      answerMethods(false, true);
+      await started;
+
+      expect(auth.provider()).toBe('oidc');
+      expect(localStorage.getItem('enginx.oidc.signedIn')).toBe('1');
+      expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(OIDC_TOKEN);
+    });
+
+    it('asks the provider for its session silently when the browser was signed in', async () => {
+      localStorage.setItem('enginx.oidc.signedIn', '1');
+      const auth = TestBed.inject(AuthService);
+      const started = auth.initialise();
+      answerMethods(false, true);
+
+      // The page is navigating away, so start-up must not settle and render the sign-in screen.
+      expect(await settles(started)).toBe(false);
+      expect(oidc.authorize).toHaveBeenCalledWith(undefined, { customParams: { prompt: 'none' } });
+      expect(sessionStorage.getItem('enginx.oidc.silentAttempt')).toBe('1');
+    });
+
+    it('does not bounce through the provider for a browser that never signed in with it', async () => {
+      const auth = TestBed.inject(AuthService);
+      const started = auth.initialise();
+      answerMethods(true, true);
+      await started;
+
+      expect(oidc.authorize).not.toHaveBeenCalled();
+      expect(auth.authenticated()).toBe(false);
+    });
+
+    /** login_required comes back when the provider's session is gone. One try, then the sign-in page. */
+    it('falls back to the sign-in page, once, when the provider has no session', async () => {
+      localStorage.setItem('enginx.oidc.signedIn', '1');
+      sessionStorage.setItem('enginx.oidc.silentAttempt', '1');
+      const auth = TestBed.inject(AuthService);
+      const started = auth.initialise();
+      answerMethods(false, true);
+      await started;
+
+      expect(oidc.authorize).not.toHaveBeenCalled();
+      expect(auth.authenticated()).toBe(false);
+      expect(localStorage.getItem('enginx.oidc.signedIn')).toBeNull();
+      expect(sessionStorage.getItem('enginx.oidc.silentAttempt')).toBeNull();
+    });
+
+    it('forgets the browser was signed in on sign-out', async () => {
+      oidc.checkAuth.mockReturnValue(of({ isAuthenticated: true, accessToken: OIDC_TOKEN }));
+      const auth = TestBed.inject(AuthService);
+      const started = auth.initialise();
+      answerMethods(false, true);
+      await started;
+
+      auth.logout();
+
+      expect(oidc.logoff).toHaveBeenCalled();
+      expect(localStorage.getItem('enginx.oidc.signedIn')).toBeNull();
+    });
   });
 
   it('signs out of a local session without redirecting anywhere', async () => {

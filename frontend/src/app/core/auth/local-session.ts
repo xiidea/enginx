@@ -6,8 +6,10 @@ import { environment } from '../../../environments/environment';
 /**
  * A session backed by a platform-issued token rather than an identity provider.
  *
- * The token is held in `localStorage` so a refresh does not sign the user out. That is a deliberate
- * trade and worth naming: `localStorage` is readable by any script running on this origin, so a
+ * The token is held in `localStorage` so a refresh or a new tab does not sign the user out. Only
+ * this session is persisted: an identity-provider session keeps its tokens in memory and is
+ * re-established from the provider's own session instead (see AuthService). Persisting it is
+ * a deliberate trade and worth naming: `localStorage` is readable by any script running on this origin, so a
  * cross-site scripting bug becomes a stolen session. The alternative — a cookie the API sets —
  * needs CSRF protection on every mutating request, and the API is deliberately cookie-free so it
  * has no CSRF surface at all. The console's own content security policy is what keeps the first

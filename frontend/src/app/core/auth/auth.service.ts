@@ -34,6 +34,19 @@ export class AuthService {
   private readonly router = inject(Router);
 
   /**
+   * Set while an OIDC session is live, so a reload or a new tab knows to ask the identity
+   * provider for it again. A marker, not a credential: the tokens themselves are held in memory
+   * only, and this alone gets nobody anything the provider would not hand over anyway.
+   */
+  private static readonly OIDC_SIGNED_IN_KEY = 'enginx.oidc.signedIn';
+
+  /** Set across the silent round trip, so a failed one is not retried in a loop. */
+  private static readonly SILENT_ATTEMPT_KEY = 'enginx.oidc.silentAttempt';
+
+  /** Where to put the user back once the redirect through the provider returns. */
+  private static readonly RETURN_PATH_KEY = 'enginx.oidc.returnTo';
+
+  /**
    * Where a turned-away visitor was headed, set by the route guard. A local sign-in resumes here
    * so a deep link survives the round trip through the sign-in screen; null means the dashboard.
    */
@@ -107,11 +120,34 @@ export class AuthService {
     if (!this.methods().oidcEnabled) {
       return;
     }
+
+    const returningFromSilentAttempt = this.takeFlag(
+      AuthService.SILENT_ATTEMPT_KEY,
+      sessionStorage,
+    );
     await this.establishOidcSession();
+
+    if (this.authenticated()) {
+      this.resumeReturnPath();
+      return;
+    }
+    if (returningFromSilentAttempt) {
+      // The provider has no session for this browser any more; this is the sign-in page's turn.
+      // The flag goes too, so the next page load does not bounce through the provider again.
+      this.removeItem(AuthService.OIDC_SIGNED_IN_KEY, localStorage);
+      this.resumeReturnPath();
+      return;
+    }
+    if (this.readItem(AuthService.OIDC_SIGNED_IN_KEY, localStorage)) {
+      this.signInSilently();
+      // The page is navigating away; never settle, so the console does not flash a sign-in screen.
+      return new Promise<void>(() => undefined);
+    }
   }
 
   /** Redirects to the identity provider. */
   login(): void {
+    this.rememberReturnPath(this.intendedUrl);
     this.oidc.authorize();
   }
 
@@ -143,6 +179,7 @@ export class AuthService {
   logout(): void {
     const provider = this.provider();
     this.clearSession();
+    this.removeItem(AuthService.OIDC_SIGNED_IN_KEY, localStorage);
     if (provider === 'oidc') {
       // Ends the session at the provider too, so the next sign-in is a real one rather than a
       // silent redirect straight back in.
@@ -182,6 +219,78 @@ export class AuthService {
     return settled;
   }
 
+  /**
+   * Asks the identity provider for its existing session without showing it to the user.
+   *
+   * A top-level redirect with `prompt=none` rather than a hidden iframe: browsers that block
+   * third-party cookies would make an iframe fail whenever the provider is on another site. The
+   * provider answers with a code when its session is alive and `login_required` when it is not;
+   * either way it never asks for a password.
+   */
+  private signInSilently(): void {
+    this.rememberReturnPath(
+      window.location.pathname + window.location.search + window.location.hash,
+    );
+    this.writeItem(AuthService.SILENT_ATTEMPT_KEY, '1', sessionStorage);
+    this.oidc.authorize(undefined, { customParams: { prompt: 'none' } });
+  }
+
+  private rememberReturnPath(path: string | null): void {
+    if (path && path !== '/') {
+      this.writeItem(AuthService.RETURN_PATH_KEY, path, sessionStorage);
+    }
+  }
+
+  /**
+   * Puts the address bar back where the user was before the provider round trip.
+   *
+   * Runs before the router's initial navigation, so rewriting the URL is enough: the router
+   * starts from it. A failed silent attempt also leaves the provider's error in the query
+   * string, which this replaces.
+   */
+  private resumeReturnPath(): void {
+    const path = this.readItem(AuthService.RETURN_PATH_KEY, sessionStorage);
+    this.removeItem(AuthService.RETURN_PATH_KEY, sessionStorage);
+    const params = new URLSearchParams(window.location.search);
+    if (path) {
+      // Signed out, the guard records this as the place to resume after signing in.
+      window.history.replaceState(null, '', path);
+    } else if (params.has('error') || params.has('code')) {
+      window.history.replaceState(null, '', '/');
+    }
+  }
+
+  private takeFlag(key: string, storage: Storage): boolean {
+    const set = this.readItem(key, storage) !== null;
+    this.removeItem(key, storage);
+    return set;
+  }
+
+  // Storage can be disabled or full; none of these markers is worth failing sign-in over.
+  private readItem(key: string, storage: Storage): string | null {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeItem(key: string, value: string, storage: Storage): void {
+    try {
+      storage.setItem(key, value);
+    } catch {
+      // See readItem.
+    }
+  }
+
+  private removeItem(key: string, storage: Storage): void {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // See readItem.
+    }
+  }
+
   private clearSession(): void {
     this.local.clear();
     this.authenticated.set(false);
@@ -206,6 +315,9 @@ export class AuthService {
     }
     this.authenticated.set(true);
     this.provider.set(provider);
+    if (provider === 'oidc') {
+      this.writeItem(AuthService.OIDC_SIGNED_IN_KEY, '1', localStorage);
+    }
     this.subject.set(claims.sub ?? null);
     this.username.set(claims.preferred_username ?? claims.name ?? null);
     this.groups.set(claims.groups ?? []);

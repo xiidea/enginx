@@ -7,10 +7,11 @@ import {
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { authInterceptor, provideAuth } from 'angular-auth-oidc-client';
+import { AbstractSecurityStorage, authInterceptor, provideAuth } from 'angular-auth-oidc-client';
 import { localTokenInterceptor } from './core/auth/local-token.interceptor';
 import { routes } from './app.routes';
 import { authConfig } from './core/auth/auth.config';
+import { MemorySecurityStorage } from './core/auth/memory-security-storage';
 import { AuthService } from './core/auth/auth.service';
 
 export const appConfig: ApplicationConfig = {
@@ -23,6 +24,9 @@ export const appConfig: ApplicationConfig = {
     // The interceptor attaches the bearer token, and only to the routes named in authConfig.
     provideHttpClient(withInterceptors([localTokenInterceptor, authInterceptor()])),
     provideAuth(authConfig),
+    // Declared after provideAuth so it replaces the library's sessionStorage default: tokens are
+    // held in memory only.
+    { provide: AbstractSecurityStorage, useClass: MemorySecurityStorage },
     // Authentication resolves before the router navigates.
     //
     // Otherwise the first navigation races checkAuth: the guard samples isAuthenticated$ while it
