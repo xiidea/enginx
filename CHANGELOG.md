@@ -7,53 +7,86 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
-## Unreleased
+## 0.2.0
 
-- **Protected sites: basic authentication.** A site can require a username and password before
-  anything reaches its upstream, from a user list kept on the site. Passwords are write-only, stored
-  as SHA-512-crypt, and never returned; an update that leaves `protection` out keeps what the site
-  has. A protected site must use HTTPS with the redirect on. See
+Protected sites: a site can now require a sign-in before anything reaches its upstream, by basic
+authentication, by a code mailed to an allowed address, or at the platform's identity provider.
+The last two are served by `enginx-gate`, a new unprivileged process beside NGINX on each host, so a
+protected site never waits on the platform to check a visitor.
+
+### Highlights
+
+- **Protected sites: basic authentication.** A site can require a username and password from a user
+  list kept on the site. Passwords are write-only, stored as SHA-512-crypt, and never returned. See
   [protected sites](docs/admin/protected-sites.md).
-- **Bundle files carry their mode.** Secrets the NGINX workers read are written `0640`, group-owned
-  by `AGENT_NGINX_GROUP` (default `nginx`). Upgrade agents first: the platform refuses to render a
-  protected site for an agent older than 0.2.0, because an older agent writes the file `0600` and
-  NGINX then fails every request while `nginx -t` passes.
-
 - **Protected sites: email sign-in.** A site can admit only visitors who sign in with a code mailed
   to an allowed address or `*@domain`. Codes are mailed by the platform, so hosts hold no SMTP
-  credentials; sessions are checked on the host alone. The upstream receives the address as
-  `X-Enginx-Email`. Served by `enginx-gate`, a new unprivileged process the agent image runs beside
-  NGINX and the release ships as its own binary. Needs `GATE_RELAY_URL`, SMTP, and outbound HTTPS
-  from the host to the platform. **Sign everyone out** replaces a site's key.
+  credentials; sessions are checked on the host alone. **Sign everyone out** replaces a site's key.
+  Needs `GATE_RELAY_URL`, SMTP, and outbound HTTPS from the host to the platform.
 - **Protected sites: identity provider sign-in.** A site can admit visitors who sign in at the
   platform's identity provider: anyone who can, or only listed users (by email or username), realm
   roles and client roles. The gate runs the authorization code flow with PKCE directly with the
-  provider and verifies its tokens itself; the platform is not involved in a sign-in. Configured
-  once, with `GATE_OIDC_ISSUER_URI`, `GATE_OIDC_CLIENT_ID` and, when hosts reach the provider
-  differently from browsers, `GATE_OIDC_BACKCHANNEL_URI`. The upstream also receives
-  `X-Enginx-User`.
+  provider and verifies its tokens itself. Configured once, with `GATE_OIDC_ISSUER_URI`,
+  `GATE_OIDC_CLIENT_ID` and, when hosts reach the provider differently from browsers,
+  `GATE_OIDC_BACKCHANNEL_URI`.
+- **The upstream knows who signed in.** Gated sites pass `X-Enginx-Email` and `X-Enginx-User`, always
+  set by NGINX, so a client cannot send its own.
 - **VERIFY checks that protection is enforced.** A protected site is asked for `/` and a random path
-  as a visitor who has not signed in, and VERIFY fails if either is answered. This catches a `return`
-  in a host's custom file, a shadowing server block, unreadable files and a missing gate, none of
-  which `nginx -t` rejects.
+  as a visitor who has not signed in, and VERIFY fails if either is answered: a `return` in a host's
+  custom file, a shadowing server block, unreadable files or a missing gate, none of which
+  `nginx -t` rejects.
+- **A warning for directives that bypass sign-in.** Every validation reads the custom files a
+  protected site includes and reports each `return` or `rewrite` with its file and line, which also
+  covers paths VERIFY does not ask for.
+- **Unavailable protection is refused when a site is saved.** A gate mode whose platform settings are
+  missing is refused with the setting named, and the console disables it; previously it failed only
+  at the next deployment. `GET /proxy-sites/protection-modes` reports what is available.
+- **The deployment files carry the gate.** The Kubernetes ConfigMap and the production compose file
+  have the gate's settings and commented mail settings, and a NetworkPolicy lets agent pods reach
+  the API to have codes mailed.
+- **Bundle files carry their mode.** Secrets the NGINX workers read are written `0640`, group-owned
+  by `AGENT_NGINX_GROUP` (default `nginx`; `www-data` on Debian and Ubuntu packages).
+
+### Fixes
 
 - **Saving a site from the console no longer drops its custom locations.** The form never sent
   them, and the API read the omission as "just the root location", so every save reduced a site to
-  `location /`. The form now has a Locations card. **API change:** an update that leaves
-  `locations` out keeps the site's current ones, as `protection` already does; send an empty list
-  for the root location alone. Locations are now recorded in the audit trail.
+  `location /`. The form now has a Locations card, and locations are recorded in the audit trail.
 - **Secrets in stored bundles are sealed.** A rendered bundle is kept so redeploys and rollbacks
   resend exactly what was validated, and its sensitive files (certificate private keys, htpasswd
   files, gate files) were kept in the clear. They are now envelope-encrypted like every other
-  secret, and re-wrapped when the key rotates. Existing bundles are sealed when the platform first
-  starts on this release; the log says how many.
+  secret, and re-wrapped when the key rotates.
+- **A node with the scheduler turned off runs no scheduled jobs.** `SCHEDULER_ENABLED=false` removed
+  the node's job definitions but still started a scheduler against the shared job store, which went
+  on firing every job the other nodes had registered.
+
+### Breaking changes since 0.1.2
+
+- **An update that leaves `locations` out keeps the site's current ones.** It used to reset the site
+  to the root location. Send an empty list for the root location alone. `protection` behaves the
+  same way.
+- **`SCHEDULER_ENABLED=false` now means the node runs no scheduled jobs at all**, not only none of its
+  own. Keep at least one node with the scheduler on.
+- **`config_bundle_files.content` is null for sensitive files**, which are held in the new sealed
+  columns. Only a tool reading that table directly is affected; the API is unchanged.
+
+### Upgrading to 0.2.0
+
+1. **Upgrade agents first**, as for every release ([production guide §2.3](docs/admin/production.md)).
+   The platform refuses to render a protected site for an agent older than 0.2.0, because an older
+   agent writes its files where NGINX's workers cannot read them; existing sites are unaffected.
+2. **Start the management server.** Migration `003-site-protection` runs, and the first start then
+   seals the private keys of every stored bundle and logs how many.
+3. **Optionally, set up the gate:** `GATE_RELAY_URL` and SMTP for email sign-in, `GATE_OIDC_*` for
+   identity provider sign-in ([configuration](docs/admin/configuration.md)). Basic authentication
+   needs neither. On a host whose service manager runs NGINX, run `enginx-gate` as a service too.
 
 Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, `gate_session_ttl_s` and
 `oidc_any_user`; the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails`,
 `proxy_site_oidc_users`, `proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and
 `config_bundle_files.file_mode` plus sealed-content columns, with `content` now null for sensitive
-files. API: `protection` on the site request and response, `POST
-/proxy-sites/{id}/sign-out-everyone`, and `POST /agents/gate/otp-mail` for gates.
+files. API: `protection` on the site request and response, `GET /proxy-sites/protection-modes`,
+`POST /proxy-sites/{id}/sign-out-everyone`, and `POST /agents/gate/otp-mail` for gates.
 
 ## 0.1.2
 
