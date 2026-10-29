@@ -29,6 +29,10 @@ spring:
 
   quartz:
     job-store-type: jdbc
+    # Follows enginx.scheduler.enabled. Turning the scheduler off removes this node's job
+    # definitions, but the job store is shared: a scheduler still started here would go on firing
+    # every job the other nodes registered. Off has to mean this node runs none of them.
+    auto-startup: ${enginx.scheduler.enabled:true}
     jdbc:
       # Liquibase owns the QRTZ_* tables. Quartz's own script starts by dropping every one of
       # them, so running it at startup would discard the scheduler's state — triggers, misfire
