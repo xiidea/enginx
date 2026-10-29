@@ -310,6 +310,19 @@
             @if (canManage()) {
               <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
             }
+          } @else if (site.protection.oidc; as oidc) {
+            <div class="facts">
+              <div><span class="key">Access</span><span>identity provider sign-in</span></div>
+              <div>
+                <span class="key">Who</span>
+                <span class="mono small">{{ oidc.anyUser ? 'anyone who signs in' : oidcWho(oidc) }}</span>
+              </div>
+              <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(oidc.sessionTtlSeconds) }}</span></div>
+              <div><span class="key">Redirect URI</span><span class="mono small">{{ oidc.redirectUri }}</span></div>
+            </div>
+            @if (canManage()) {
+              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+            }
           } @else {
             <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
           }

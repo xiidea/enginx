@@ -5,6 +5,7 @@ import net.xiidea.enginx.application.gate.GateKeys;
 import net.xiidea.enginx.domain.certificate.EncryptedSecret;
 import net.xiidea.enginx.domain.certificate.SecretEncryption;
 import net.xiidea.enginx.domain.deployment.GateMaterialProvider;
+import net.xiidea.enginx.domain.deployment.GateOidcProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -38,11 +39,17 @@ public class GateKeyStore implements GateKeys, GateMaterialProvider, SecretRewra
     private final JdbcTemplate jdbc;
     private final SecretEncryption encryption;
     private final String relayUrl;
+    private final GateOidcProvider oidcProvider;
     private final SecureRandom random = new SecureRandom();
     private final Map<UUID, Revealed> revealed = new ConcurrentHashMap<>();
 
     public GateKeyStore(JdbcTemplate jdbc, SecretEncryption encryption,
-                        @Value("${enginx.gate.relay-url:}") String relayUrl) {
+                        @Value("${enginx.gate.relay-url:}") String relayUrl,
+                        @Value("${enginx.gate.oidc.issuer-uri:}") String oidcIssuer,
+                        @Value("${enginx.gate.oidc.backchannel-uri:}") String oidcBackchannel,
+                        @Value("${enginx.gate.oidc.client-id:}") String oidcClientId,
+                        @Value("${enginx.gate.oidc.client-secret:}") String oidcClientSecret,
+                        @Value("${enginx.gate.oidc.scopes:}") String oidcScopes) {
         this.jdbc = jdbc;
         this.encryption = encryption;
         this.relayUrl = relayUrl == null ? "" : relayUrl.trim();
@@ -52,6 +59,9 @@ public class GateKeyStore implements GateKeys, GateMaterialProvider, SecretRewra
             throw new IllegalStateException("enginx.gate.relay-url must be a plain http(s) URL with no query, got "
                     + this.relayUrl);
         }
+        // Validated at startup for the same reason: it is written into every OIDC site's file.
+        this.oidcProvider = oidcIssuer == null || oidcIssuer.isBlank() ? null
+                : new GateOidcProvider(oidcIssuer.trim(), oidcBackchannel, oidcClientId, oidcClientSecret, oidcScopes);
     }
 
     @Override
@@ -109,6 +119,11 @@ public class GateKeyStore implements GateKeys, GateMaterialProvider, SecretRewra
     @Override
     public Optional<String> relayUrl() {
         return relayUrl.isEmpty() ? Optional.empty() : Optional.of(relayUrl);
+    }
+
+    @Override
+    public Optional<GateOidcProvider> oidcProvider() {
+        return Optional.ofNullable(oidcProvider);
     }
 
     @Override

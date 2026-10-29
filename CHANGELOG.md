@@ -25,14 +25,22 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   `X-Enginx-Email`. Served by `enginx-gate`, a new unprivileged process the agent image runs beside
   NGINX and the release ships as its own binary. Needs `GATE_RELAY_URL`, SMTP, and outbound HTTPS
   from the host to the platform. **Sign everyone out** replaces a site's key.
+- **Protected sites: identity provider sign-in.** A site can admit visitors who sign in at the
+  platform's identity provider: anyone who can, or only listed users (by email or username), realm
+  roles and client roles. The gate runs the authorization code flow with PKCE directly with the
+  provider and verifies its tokens itself; the platform is not involved in a sign-in. Configured
+  once, with `GATE_OIDC_ISSUER_URI`, `GATE_OIDC_CLIENT_ID` and, when hosts reach the provider
+  differently from browsers, `GATE_OIDC_BACKCHANNEL_URI`. The upstream also receives
+  `X-Enginx-User`.
 - **VERIFY checks that protection is enforced.** A protected site is asked for `/` and a random path
   as a visitor who has not signed in, and VERIFY fails if either is answered. This catches a `return`
   in a host's custom file, a shadowing server block, unreadable files and a missing gate, none of
   which `nginx -t` rejects.
 
-Schema: migrations `003-site-protection` and `004-gate` add `proxy_sites.protection_mode` and
-`gate_session_ttl_s`, the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails` and
-`proxy_site_gate_secrets` tables, and `config_bundle_files.file_mode`. API: `protection` on the site
+Schema: migrations `003-site-protection`, `004-gate` and `005-gate-oidc` add
+`proxy_sites.protection_mode`, `gate_session_ttl_s` and `oidc_any_user`; the
+`proxy_site_basic_auth_users`, `proxy_site_allowed_emails`, `proxy_site_oidc_users`,
+`proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and `config_bundle_files.file_mode`. API: `protection` on the site
 request and response, `POST /proxy-sites/{id}/sign-out-everyone`, and
 `POST /agents/gate/otp-mail` for gates.
 

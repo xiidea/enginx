@@ -304,7 +304,11 @@ public final class NginxConfigRenderer {
         if (mode == ProtectionMode.NONE || target.supportsWorkerReadableFiles()) {
             return;
         }
-        String what = mode == ProtectionMode.BASIC ? "basic authentication" : "email sign-in";
+        String what = switch (mode) {
+            case BASIC -> "basic authentication";
+            case EMAIL_OTP -> "email sign-in";
+            default -> "identity provider sign-in";
+        };
         throw new ValidationException("protection.mode",
                 site.domain().value() + " uses " + what + ", which needs agent "
                         + "0.2.0 or later on its host; the host reports "
@@ -316,7 +320,7 @@ public final class NginxConfigRenderer {
         return switch (site.spec().protection().mode()) {
             case NONE -> List.of();
             case BASIC -> List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
-            case EMAIL_OTP -> List.of(BundleFile.workerReadable(gateFilePath(site), gateFile(site, gates)));
+            case EMAIL_OTP, OIDC -> List.of(BundleFile.workerReadable(gateFilePath(site), gateFile(site, gates)));
         };
     }
 
@@ -332,6 +336,15 @@ public final class NginxConfigRenderer {
      * control character. The two values that come from outside a value object, the key and the
      * relay address, are checked here against patterns just as strict.
      */
+    private static boolean gateMaterialAvailable(ProxySite site, GateMaterialProvider gates) {
+        if (gates.keyFor(site.id()).isEmpty()) {
+            return false;
+        }
+        return site.spec().protection().mode() == ProtectionMode.OIDC
+                ? gates.oidcProvider().isPresent()
+                : gates.relayUrl().isPresent();
+    }
+
     private static String gateFile(ProxySite site, GateMaterialProvider gates) {
         ProxySiteSpec spec = site.spec();
         String key = gates.keyFor(site.id())
@@ -339,29 +352,88 @@ public final class NginxConfigRenderer {
                 .orElseThrow(() -> new ValidationException("protection.mode",
                         "No gate key is available for " + site.domain().value()
                                 + ". Save the site again to issue one."));
-        String relayUrl = gates.relayUrl()
-                .filter(value -> RELAY_URL.matcher(value).matches())
-                .orElseThrow(() -> new ValidationException("protection.mode",
-                        site.domain().value() + " uses email sign-in, which needs enginx.gate.relay-url: "
-                                + "the address hosts reach this platform at, to have codes mailed."));
 
-        StringBuilder out = new StringBuilder(512);
+        StringBuilder out = new StringBuilder(768);
         out.append("{\n");
         out.append("  \"version\": 1,\n");
         out.append("  \"siteId\": \"").append(site.id()).append("\",\n");
         out.append("  \"domain\": \"").append(spec.domain().value()).append("\",\n");
         out.append("  \"mode\": \"").append(spec.protection().mode().name()).append("\",\n");
         out.append("  \"key\": \"").append(key).append("\",\n");
-        out.append("  \"sessionTtlSeconds\": ").append(spec.protection().emailOtp().sessionTtl().toSeconds()).append(",\n");
-        out.append("  \"allowedEmails\": [");
-        List<net.xiidea.enginx.domain.proxy.AllowedEmail> emails = spec.protection().emailOtp().allowedEmails();
-        for (int i = 0; i < emails.size(); i++) {
-            out.append(i == 0 ? "\n" : ",\n").append("    \"").append(emails.get(i).value()).append('"');
+        out.append("  \"sessionTtlSeconds\": ").append(spec.protection().sessionTtl().toSeconds()).append(",\n");
+        if (spec.protection().mode() == ProtectionMode.OIDC) {
+            appendOidc(out, site, gates);
+        } else {
+            appendEmailOtp(out, site, gates);
         }
-        out.append("\n  ],\n");
-        out.append("  \"relayUrl\": \"").append(relayUrl).append("\"\n");
         out.append("}\n");
         return out.toString();
+    }
+
+    private static void appendEmailOtp(StringBuilder out, ProxySite site, GateMaterialProvider gates) {
+        String relayUrl = gates.relayUrl()
+                .filter(value -> RELAY_URL.matcher(value).matches())
+                .orElseThrow(() -> new ValidationException("protection.mode",
+                        site.domain().value() + " uses email sign-in, which needs enginx.gate.relay-url: "
+                                + "the address hosts reach this platform at, to have codes mailed."));
+        out.append("  \"allowedEmails\": ");
+        appendStrings(out, site.spec().protection().emailOtp().allowedEmails().stream()
+                .map(net.xiidea.enginx.domain.proxy.AllowedEmail::value).toList(), "  ");
+        out.append(",\n");
+        out.append("  \"relayUrl\": \"").append(relayUrl).append("\"\n");
+    }
+
+    /**
+     * The provider and the site's access policy. The values were all checked by the value objects
+     * that hold them ({@link GateOidcProvider}, {@link net.xiidea.enginx.domain.proxy.OidcAccessPolicy}),
+     * which admit no quote, backslash or whitespace.
+     */
+    private static void appendOidc(StringBuilder out, ProxySite site, GateMaterialProvider gates) {
+        GateOidcProvider provider = gates.oidcProvider()
+                .orElseThrow(() -> new ValidationException("protection.mode",
+                        site.domain().value() + " uses identity provider sign-in, which needs the platform's "
+                                + "provider configured: enginx.gate.oidc.issuer-uri and client-id."));
+        net.xiidea.enginx.domain.proxy.OidcAccessPolicy policy = site.spec().protection().oidc();
+
+        out.append("  \"oidc\": {\n");
+        out.append("    \"issuer\": \"").append(provider.issuer()).append("\",\n");
+        if (provider.backchannel() != null) {
+            out.append("    \"backchannel\": \"").append(provider.backchannel()).append("\",\n");
+        }
+        out.append("    \"clientId\": \"").append(provider.clientId()).append("\",\n");
+        if (provider.clientSecret() != null) {
+            out.append("    \"clientSecret\": \"").append(provider.clientSecret()).append("\",\n");
+        }
+        out.append("    \"scopes\": \"").append(provider.scopes()).append("\",\n");
+        out.append("    \"anyUser\": ").append(policy.anyUser()).append(",\n");
+        out.append("    \"users\": ");
+        appendStrings(out, policy.users(), "    ");
+        out.append(",\n");
+        out.append("    \"realmRoles\": ");
+        appendStrings(out, policy.roles().stream().filter(role -> !role.isClientRole())
+                .map(net.xiidea.enginx.domain.proxy.OidcRole::role).toList(), "    ");
+        out.append(",\n");
+        out.append("    \"clientRoles\": [");
+        List<net.xiidea.enginx.domain.proxy.OidcRole> clientRoles = policy.roles().stream()
+                .filter(net.xiidea.enginx.domain.proxy.OidcRole::isClientRole).toList();
+        for (int i = 0; i < clientRoles.size(); i++) {
+            out.append(i == 0 ? "\n" : ",\n").append("      {\"client\": \"").append(clientRoles.get(i).client())
+                    .append("\", \"role\": \"").append(clientRoles.get(i).role()).append("\"}");
+        }
+        out.append(clientRoles.isEmpty() ? "]\n" : "\n    ]\n");
+        out.append("  }\n");
+    }
+
+    private static void appendStrings(StringBuilder out, List<String> values, String indent) {
+        if (values.isEmpty()) {
+            out.append("[]");
+            return;
+        }
+        out.append('[');
+        for (int i = 0; i < values.size(); i++) {
+            out.append(i == 0 ? "\n" : ",\n").append(indent).append("  \"").append(values.get(i)).append('"');
+        }
+        out.append('\n').append(indent).append(']');
     }
 
     private static String htpasswdPath(ProxySite site) {
@@ -432,9 +504,7 @@ public final class NginxConfigRenderer {
         String protectionDigest = switch (spec.protection().mode()) {
             case NONE -> "";
             case BASIC -> BundleFile.digest(spec.protection().htpasswd());
-            case EMAIL_OTP -> gates.keyFor(site.id()).isPresent() && gates.relayUrl().isPresent()
-                    ? BundleFile.digest(gateFile(site, gates))
-                    : "";
+            case EMAIL_OTP, OIDC -> gateMaterialAvailable(site, gates) ? BundleFile.digest(gateFile(site, gates)) : "";
         };
 
         String withPlaceholder = out.toString();
@@ -667,6 +737,7 @@ public final class NginxConfigRenderer {
         String socket = "http://unix:" + GATE_SOCKET + ":";
         out.append("    auth_request ").append(GATE_PATH).append("check;\n");
         out.append("    auth_request_set $enginx_email $upstream_http_x_enginx_email;\n");
+        out.append("    auth_request_set $enginx_user $upstream_http_x_enginx_user;\n");
         out.append("    error_page 401 = @enginx_sign_in;\n\n");
 
         out.append("    location = ").append(GATE_PATH).append("check {\n");
@@ -682,6 +753,9 @@ public final class NginxConfigRenderer {
         out.append("        proxy_pass ").append(socket).append(";\n");
         out.append("        proxy_set_header Host       $host;\n");
         out.append("        proxy_set_header X-Real-IP  $remote_addr;\n");
+        // The host as the browser sent it, port included: an identity provider's redirect back
+        // must reach the same origin, which $host, having no port, does not name behind a mapping.
+        out.append("        proxy_set_header X-Forwarded-Host $http_host;\n");
         out.append("        proxy_set_header X-Enginx-Site ").append(site.id()).append(";\n");
         out.append("    }\n\n");
 
@@ -735,6 +809,7 @@ public final class NginxConfigRenderer {
         if (spec.protection().mode().usesGate()) {
             // Always set, so the upstream can trust it: a client sending its own is overwritten.
             out.append("        proxy_set_header X-Enginx-Email    $enginx_email;\n");
+            out.append("        proxy_set_header X-Enginx-User     $enginx_user;\n");
         }
 
         out.append('\n');

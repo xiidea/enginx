@@ -11,9 +11,22 @@ import java.util.List;
         requiredProperties = {"mode"})
 public record ProtectionRequest(
         @NotBlank(message = "Protection mode is required")
-        @Schema(description = "NONE, BASIC or EMAIL_OTP", example = "BASIC") String mode,
+        @Schema(description = "NONE, BASIC, EMAIL_OTP or OIDC", example = "BASIC") String mode,
         @Valid @Size(max = 64) List<BasicAuthUserRequest> basicUsers,
-        @Valid EmailOtpRequest emailOtp) {
+        @Valid EmailOtpRequest emailOtp,
+        @Valid OidcRequest oidc) {
+
+    @Schema(name = "OidcAccessRequest",
+            description = "Who, among the platform identity provider's users, may enter. Required when the mode is OIDC. "
+                    + "Either anyUser, or at least one user or role; a visitor matching any entry is let in.")
+    public record OidcRequest(
+            @Schema(description = "Admit everyone who can sign in at the provider") Boolean anyUser,
+            @Schema(description = "Matched against the token's email and preferred_username")
+            @Size(max = 256) List<String> users,
+            @Valid @Size(max = 256) List<OidcRoleDto> roles,
+            @Schema(description = "How long a sign-in lasts, 300 to 2592000. Defaults to 86400.")
+            Integer sessionTtlSeconds) {
+    }
 
     @Schema(name = "EmailOtpRequest", requiredProperties = {"allowedEmails"},
             description = "Who may sign in with a code sent by email. Required when the mode is EMAIL_OTP.")

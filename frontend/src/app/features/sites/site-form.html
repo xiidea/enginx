@@ -226,6 +226,7 @@
           <option value="NONE">Anyone (public)</option>
           <option value="BASIC">Basic authentication</option>
           <option value="EMAIL_OTP">Email one-time code</option>
+          <option value="OIDC">Identity provider sign-in</option>
         </select>
       </div>
 
@@ -277,6 +278,37 @@
         <p class="hint">
           Visitors enter their address and get a code by email, sent by this platform's mail
           server. The host needs to reach this platform to send one, but never to check a sign-in.
+        </p>
+      } @else if (protectionMode() === 'OIDC') {
+        <div class="check">
+          <input id="oidc-any" type="checkbox" [ngModel]="oidcAnyUser()" (ngModelChange)="oidcAnyUser.set($event)" />
+          <label for="oidc-any">Anyone who can sign in at the identity provider</label>
+        </div>
+        @if (!oidcAnyUser()) {
+          <div class="grid-2">
+            <div>
+              <label for="oidc-users">Users</label>
+              <textarea id="oidc-users" class="mono" rows="4" placeholder="alice&#10;bob&#64;example.com"
+                [ngModel]="oidcUsers()" (ngModelChange)="oidcUsers.set($event)"></textarea>
+              <p class="hint">One per line, by username or email.</p>
+            </div>
+            <div>
+              <label for="oidc-roles">Roles</label>
+              <textarea id="oidc-roles" class="mono" rows="4" placeholder="auditor&#10;reports-app:viewer"
+                [ngModel]="oidcRoles()" (ngModelChange)="oidcRoles.set($event)"></textarea>
+              <p class="hint">One per line: <code>role</code> for a realm role, <code>client:role</code> for a client role.</p>
+            </div>
+          </div>
+          <p class="hint">A visitor matching any user or role is let in. Roles are read when they sign in.</p>
+        }
+        <div>
+          <label for="oidc-session">Sign-in lasts (hours)</label>
+          <input id="oidc-session" type="number" min="1" max="720"
+            [ngModel]="sessionHours()" (ngModelChange)="sessionHours.set(+$event)" />
+        </div>
+        <p class="hint">
+          Visitors sign in at the platform's identity provider. It must allow
+          <code>https://{{ domain() || 'your-domain' }}/.enginx/auth/callback</code> as a redirect URI.
         </p>
       } @else {
         <p class="hint">Anyone who can reach the host can reach the site.</p>

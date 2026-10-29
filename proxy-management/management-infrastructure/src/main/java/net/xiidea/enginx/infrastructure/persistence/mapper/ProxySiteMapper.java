@@ -4,6 +4,9 @@ import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
 import net.xiidea.enginx.domain.proxy.LocationRule;
+import net.xiidea.enginx.domain.proxy.OidcAccessPolicy;
+import net.xiidea.enginx.domain.proxy.OidcRole;
+import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
@@ -17,6 +20,8 @@ import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteBasicAuthUse
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteHeaderEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteLocationEntity;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteOidcRoleEntity;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteOidcUserEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteUpstreamEntity;
 import org.springframework.stereotype.Component;
 
@@ -47,14 +52,21 @@ public class ProxySiteMapper {
                 .map(l -> new LocationRule(l.getPathPattern(), l.getMatchType(), l.getSortOrder()))
                 .toList();
 
-        EmailOtpPolicy emailOtp = entity.getGateSessionTtlSeconds() == null ? null : new EmailOtpPolicy(
-                entity.allowedEmails().stream().map(e -> new AllowedEmail(e.getEmail())).toList(),
-                java.time.Duration.ofSeconds(entity.getGateSessionTtlSeconds()));
+        java.time.Duration sessionTtl = entity.getGateSessionTtlSeconds() == null ? null
+                : java.time.Duration.ofSeconds(entity.getGateSessionTtlSeconds());
+        EmailOtpPolicy emailOtp = entity.getProtectionMode() != ProtectionMode.EMAIL_OTP ? null : new EmailOtpPolicy(
+                entity.allowedEmails().stream().map(e -> new AllowedEmail(e.getEmail())).toList(), sessionTtl);
+        OidcAccessPolicy oidc = entity.getProtectionMode() != ProtectionMode.OIDC ? null : new OidcAccessPolicy(
+                Boolean.TRUE.equals(entity.getOidcAnyUser()),
+                entity.oidcUsers().stream().map(ProxySiteOidcUserEntity::getUsername).toList(),
+                entity.oidcRoles().stream().map(r -> new OidcRole(r.getClientId(), r.getRoleName())).toList(),
+                sessionTtl);
         SiteProtection protection = new SiteProtection(entity.getProtectionMode(),
                 entity.basicAuthUsers().stream()
                         .map(u -> new BasicAuthUser(u.getUsername(), u.getPasswordHash()))
                         .toList(),
-                emailOtp);
+                emailOtp,
+                oidc);
 
         ProxySiteSpec spec = new ProxySiteSpec(
                 entity.getName(),
@@ -98,7 +110,10 @@ public class ProxySiteMapper {
         entity.setLbMethod(spec.loadBalancingMethod());
         entity.setProtectionMode(spec.protection().mode());
         EmailOtpPolicy emailOtp = spec.protection().emailOtp();
-        entity.setGateSessionTtlSeconds(emailOtp == null ? null : (int) emailOtp.sessionTtl().toSeconds());
+        OidcAccessPolicy oidc = spec.protection().oidc();
+        java.time.Duration sessionTtl = spec.protection().sessionTtl();
+        entity.setGateSessionTtlSeconds(sessionTtl == null ? null : (int) sessionTtl.toSeconds());
+        entity.setOidcAnyUser(oidc == null ? null : oidc.anyUser());
         entity.setConnectTimeoutSeconds(spec.timeouts().connectSeconds());
         entity.setReadTimeoutSeconds(spec.timeouts().readSeconds());
         entity.setSendTimeoutSeconds(spec.timeouts().sendSeconds());
@@ -113,6 +128,8 @@ public class ProxySiteMapper {
         mergeLocations(entity, spec.locations());
         mergeBasicAuthUsers(entity, spec.protection().basicUsers());
         mergeAllowedEmails(entity, emailOtp == null ? List.of() : emailOtp.allowedEmails());
+        mergeOidcUsers(entity, oidc == null ? List.of() : oidc.users());
+        mergeOidcRoles(entity, oidc == null ? List.of() : oidc.roles());
     }
 
     /**
@@ -207,6 +224,30 @@ public class ProxySiteMapper {
             }
         }
         entity.allowedEmails().removeAll(existing.values());
+    }
+
+    private void mergeOidcUsers(ProxySiteEntity entity, List<String> desired) {
+        Map<String, ProxySiteOidcUserEntity> existing = index(entity.oidcUsers(), ProxySiteOidcUserEntity::naturalKey);
+        for (String user : desired) {
+            if (existing.remove(user) == null) {
+                ProxySiteOidcUserEntity row = new ProxySiteOidcUserEntity(UUID.randomUUID(), user);
+                entity.attach(row);
+                entity.oidcUsers().add(row);
+            }
+        }
+        entity.oidcUsers().removeAll(existing.values());
+    }
+
+    private void mergeOidcRoles(ProxySiteEntity entity, List<OidcRole> desired) {
+        Map<String, ProxySiteOidcRoleEntity> existing = index(entity.oidcRoles(), ProxySiteOidcRoleEntity::naturalKey);
+        for (OidcRole role : desired) {
+            if (existing.remove(ProxySiteOidcRoleEntity.naturalKey(role.client(), role.role())) == null) {
+                ProxySiteOidcRoleEntity row = new ProxySiteOidcRoleEntity(UUID.randomUUID(), role.client(), role.role());
+                entity.attach(row);
+                entity.oidcRoles().add(row);
+            }
+        }
+        entity.oidcRoles().removeAll(existing.values());
     }
 
     private static <E> Map<String, E> index(List<E> rows, Function<E, String> keyOf) {

@@ -40,6 +40,13 @@ final class ProxySiteSnapshot {
                     .toList());
             map.put("sessionTtlSeconds", emailOtp.sessionTtl().toSeconds());
         }
+        net.xiidea.enginx.domain.proxy.OidcAccessPolicy oidc = site.spec().protection().oidc();
+        if (oidc != null) {
+            map.put("oidcAnyUser", oidc.anyUser());
+            map.put("oidcUsers", oidc.users());
+            map.put("oidcRoles", oidc.roles().stream().map(net.xiidea.enginx.domain.proxy.OidcRole::display).toList());
+            map.put("sessionTtlSeconds", oidc.sessionTtl().toSeconds());
+        }
         return Map.copyOf(map);
     }
 

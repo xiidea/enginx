@@ -296,9 +296,10 @@ every rendered server block includes `/etc/nginx/enginx/custom/` hooks by wildca
 host, every site, or one site ([agent guide](admin/agent.md#custom-directives)). Writing one takes
 root on the host, not a grant in this platform, so the boundary above still holds for everything
 reachable through the API. The next step is more structured options for the common reasons people
-reach for raw directives — access lists, basic auth, rate limits — not an editor. Basic
-authentication and email sign-in are the first of them ([protected sites](admin/protected-sites.md)).
-OIDC sign-in is planned on the same model: served by the host-local gate NGINX consults with
-`auth_request`, so a protected site never depends on the management plane per request.
+reach for raw directives — access lists, basic auth, rate limits — not an editor. Site protection
+is the first of them ([protected sites](admin/protected-sites.md)): basic authentication, email
+sign-in, and sign-in at the platform's identity provider. The last two are served by a host-local
+gate NGINX consults with `auth_request`, so a protected site never depends on the management plane
+per request.
 
 **Auto-remediation of drift.** Named here so it is a decision rather than an omission — see 9.3.

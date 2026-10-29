@@ -1639,6 +1639,33 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /** @description Who, among the platform identity provider's users, may enter. Required when the mode is OIDC. Either anyUser, or at least one user or role; a visitor matching any entry is let in. */
+        OidcAccessRequest: {
+            /** @description Admit everyone who can sign in at the provider */
+            anyUser?: boolean;
+            roles?: components["schemas"]["OidcRoleDto"][];
+            /**
+             * Format: int32
+             * @description How long a sign-in lasts, 300 to 2592000. Defaults to 86400.
+             */
+            sessionTtlSeconds?: number;
+            /** @description Matched against the token's email and preferred_username */
+            users?: string[];
+        };
+        OidcAccessResponse: {
+            anyUser: boolean;
+            redirectUri: string;
+            roles: components["schemas"]["OidcRoleDto"][];
+            /** Format: int64 */
+            sessionTtlSeconds: number;
+            users: string[];
+        };
+        /** @description A realm role when client is absent, otherwise a role on that client. */
+        OidcRoleDto: {
+            /** @description The client the role belongs to; absent for a realm role */
+            client?: string;
+            role: string;
+        };
         PageResponseAuditResponse: {
             content?: components["schemas"]["AuditResponse"][];
             /** Format: int32 */
@@ -1721,15 +1748,17 @@ export interface components {
             basicUsers?: components["schemas"]["BasicAuthUserRequest"][];
             emailOtp?: components["schemas"]["EmailOtpRequest"];
             /**
-             * @description NONE, BASIC or EMAIL_OTP
+             * @description NONE, BASIC, EMAIL_OTP or OIDC
              * @example BASIC
              */
             mode: string;
+            oidc?: components["schemas"]["OidcAccessRequest"];
         };
         ProtectionResponse: {
             basicUsers: components["schemas"]["BasicAuthUserResponse"][];
             emailOtp?: components["schemas"]["EmailOtpResponse"];
             mode: string;
+            oidc?: components["schemas"]["OidcAccessResponse"];
         };
         ProxySiteRequest: {
             /** Format: date-time */

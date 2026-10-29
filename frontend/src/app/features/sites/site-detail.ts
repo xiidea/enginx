@@ -270,6 +270,11 @@ export class SiteDetail implements OnInit {
     });
   }
 
+  oidcWho(oidc: { users: string[]; roles: { client?: string | null; role: string }[] }): string {
+    const roles = oidc.roles.map((role) => (role.client ? `${role.client}:${role.role}` : role.role));
+    return [...oidc.users, ...roles].join(', ');
+  }
+
   sessionLength(seconds: number): string {
     const hours = seconds / 3600;
     return hours >= 24 && hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? '' : 's'}` : `${hours} hours`;

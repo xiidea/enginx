@@ -239,6 +239,67 @@ class NginxConfigRendererTest {
     }
 
     @Nested
+    @DisplayName("identity provider sign-in through the gate")
+    class Oidc {
+
+        private final ProxySite site = spec("private.example.com").ssl(true, false)
+                .oidc(new net.xiidea.enginx.domain.proxy.OidcAccessPolicy(false,
+                        List.of("Alice@Example.com", "bob"),
+                        List.of(net.xiidea.enginx.domain.proxy.OidcRole.realm("auditor"),
+                                new net.xiidea.enginx.domain.proxy.OidcRole("reports", "viewer")),
+                        null))
+                .site(SITE_ID);
+
+        @Test
+        @DisplayName("the gate's file carries the provider and the access policy, with no secret for a public client")
+        void gateFileCarriesProviderAndPolicy() {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(site), TEST_CERTIFICATE,
+                    TEST_GATE, "ada", NOW);
+            String gate = fileContent(bundle, "gate/sites/private.example.com.json");
+
+            assertThat(gate)
+                    .contains("\"mode\": \"OIDC\"")
+                    .contains("\"issuer\": \"https://id.example.com/realms/staff\"")
+                    .contains("\"backchannel\": \"http://keycloak:8080/realms/staff\"")
+                    .contains("\"clientId\": \"enginx-sites\"")
+                    .contains("\"anyUser\": false")
+                    .contains("\"alice@example.com\"")
+                    .contains("\"realmRoles\": [\n      \"auditor\"\n    ]")
+                    .contains("{\"client\": \"reports\", \"role\": \"viewer\"}")
+                    .doesNotContain("clientSecret")
+                    .doesNotContain("relayUrl");
+        }
+
+        @Test
+        @DisplayName("the same NGINX configuration as email sign-in: the gate decides, NGINX asks")
+        void rendersTheGate() {
+            String config = renderer.renderSitePreview(site, TEST_CERTIFICATE, TEST_GATE, MODERN);
+            assertThat(config).contains("auth_request /.enginx/auth/check;")
+                    .contains("proxy_set_header X-Forwarded-Host $http_host;");
+        }
+
+        @Test
+        @DisplayName("without the platform's provider the render fails, saying what to configure")
+        void missingProviderFailsTheRender() {
+            GateMaterialProvider keyOnly = new GateMaterialProvider() {
+                @Override
+                public java.util.Optional<String> keyFor(UUID siteId) {
+                    return java.util.Optional.of(RenderFixtures.GATE_KEY);
+                }
+
+                @Override
+                public java.util.Optional<String> relayUrl() {
+                    return java.util.Optional.empty();
+                }
+            };
+            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(site), TEST_CERTIFICATE,
+                    keyOnly, "ada", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("enginx.gate.oidc.issuer-uri");
+        }
+    }
+
+    @Nested
     @DisplayName("bundle assembly")
     class Bundle {
 

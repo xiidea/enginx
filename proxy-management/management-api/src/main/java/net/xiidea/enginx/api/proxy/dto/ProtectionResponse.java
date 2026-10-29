@@ -6,7 +6,18 @@ import java.util.List;
 
 /** Who may reach a site. Usernames only: a password hash is never returned. */
 @Schema(name = "ProtectionResponse", requiredProperties = {"mode", "basicUsers"})
-public record ProtectionResponse(String mode, List<BasicAuthUserResponse> basicUsers, EmailOtpResponse emailOtp) {
+public record ProtectionResponse(String mode, List<BasicAuthUserResponse> basicUsers, EmailOtpResponse emailOtp,
+                                 OidcResponse oidc) {
+
+    /**
+     * Present only when the mode is OIDC.
+     *
+     * @param redirectUri where the identity provider must be allowed to send visitors back to
+     */
+    @Schema(name = "OidcAccessResponse", requiredProperties = {"anyUser", "users", "roles", "sessionTtlSeconds", "redirectUri"})
+    public record OidcResponse(boolean anyUser, List<String> users, List<OidcRoleDto> roles, long sessionTtlSeconds,
+                               String redirectUri) {
+    }
 
     /** Present only when the mode is EMAIL_OTP. */
     @Schema(name = "EmailOtpResponse", requiredProperties = {"allowedEmails", "sessionTtlSeconds"})

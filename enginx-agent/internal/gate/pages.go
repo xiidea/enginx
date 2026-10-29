@@ -41,6 +41,12 @@ button{margin-top:1rem;width:100%;padding:.6rem;font-size:1rem;border:0;border-r
 <button type="submit">Sign in</button>
 </form>
 <p><a href="/.enginx/auth/login?rd={{.Redirect}}">Use a different address</a></p>
+{{else if eq .Step "denied"}}
+<p>You are signed in as <strong>{{.Email}}</strong>, but that account may not enter this site.</p>
+<p><a href="/.enginx/auth/login?switch=1">Use another account</a></p>
+{{else if eq .Step "retry"}}
+<p class="note">{{.Note}}</p>
+<p><a href="/.enginx/auth/login">Sign in</a></p>
 {{else if eq .Step "signed-out"}}
 <p>You are signed out.</p>
 <p><a href="/.enginx/auth/login">Sign in again</a></p>

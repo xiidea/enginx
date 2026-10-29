@@ -51,6 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 	server := gate.NewServer(gate.HTTPRelay{Client: client})
+	server.SetProviderClient(client)
 
 	listener, err := listen(socket)
 	if err != nil {

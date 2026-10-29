@@ -79,6 +79,9 @@ public class ProxySiteEntity {
     @Column(name = "gate_session_ttl_s")
     private Integer gateSessionTtlSeconds;
 
+    @Column(name = "oidc_any_user")
+    private Boolean oidcAnyUser;
+
     @Column(name = "connect_timeout_s", nullable = false)
     private int connectTimeoutSeconds;
 
@@ -127,6 +130,14 @@ public class ProxySiteEntity {
     @BatchSize(size = 64)
     private List<ProxySiteAllowedEmailEntity> allowedEmails = new ArrayList<>();
 
+    @OneToMany(mappedBy = "site", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 64)
+    private List<ProxySiteOidcUserEntity> oidcUsers = new ArrayList<>();
+
+    @OneToMany(mappedBy = "site", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 64)
+    private List<ProxySiteOidcRoleEntity> oidcRoles = new ArrayList<>();
+
     protected ProxySiteEntity() {
     }
 
@@ -160,6 +171,14 @@ public class ProxySiteEntity {
         return allowedEmails;
     }
 
+    public List<ProxySiteOidcUserEntity> oidcUsers() {
+        return oidcUsers;
+    }
+
+    public List<ProxySiteOidcRoleEntity> oidcRoles() {
+        return oidcRoles;
+    }
+
     public void attach(ProxySiteUpstreamEntity child) {
         child.setSite(this);
     }
@@ -177,6 +196,14 @@ public class ProxySiteEntity {
     }
 
     public void attach(ProxySiteAllowedEmailEntity child) {
+        child.setSite(this);
+    }
+
+    public void attach(ProxySiteOidcUserEntity child) {
+        child.setSite(this);
+    }
+
+    public void attach(ProxySiteOidcRoleEntity child) {
         child.setSite(this);
     }
 
@@ -314,6 +341,14 @@ public class ProxySiteEntity {
 
     public void setGateSessionTtlSeconds(Integer gateSessionTtlSeconds) {
         this.gateSessionTtlSeconds = gateSessionTtlSeconds;
+    }
+
+    public Boolean getOidcAnyUser() {
+        return oidcAnyUser;
+    }
+
+    public void setOidcAnyUser(Boolean oidcAnyUser) {
+        this.oidcAnyUser = oidcAnyUser;
     }
 
     public int getConnectTimeoutSeconds() {

@@ -60,6 +60,11 @@ export class SiteForm implements OnInit {
   /** One address or *@domain per line. */
   readonly allowedEmails = signal('');
   readonly sessionHours = signal(24);
+  readonly oidcAnyUser = signal(true);
+  /** One email or username per line. */
+  readonly oidcUsers = signal('');
+  /** One per line: `role` for a realm role, `client:role` for a client role. */
+  readonly oidcRoles = signal('');
 
   /** Mirrors the server's rule: credentials are only ever asked for over HTTPS. */
   readonly canProtect = computed(() => this.sslEnabled() && this.forceHttps());
@@ -132,6 +137,13 @@ export class SiteForm implements OnInit {
     if (site.protection.emailOtp) {
       this.allowedEmails.set(site.protection.emailOtp.allowedEmails.join('\n'));
       this.sessionHours.set(Math.max(1, Math.round(site.protection.emailOtp.sessionTtlSeconds / 3600)));
+    }
+    if (site.protection.oidc) {
+      const oidc = site.protection.oidc;
+      this.oidcAnyUser.set(oidc.anyUser);
+      this.oidcUsers.set(oidc.users.join('\n'));
+      this.oidcRoles.set(oidc.roles.map((role) => (role.client ? `${role.client}:${role.role}` : role.role)).join('\n'));
+      this.sessionHours.set(Math.max(1, Math.round(oidc.sessionTtlSeconds / 3600)));
     }
   }
 
@@ -232,6 +244,23 @@ export class SiteForm implements OnInit {
                 sessionTtlSeconds: this.sessionHours() * 3600,
               }
             : undefined,
+        oidc:
+          this.protectionMode() === 'OIDC'
+            ? {
+                anyUser: this.oidcAnyUser(),
+                users: this.oidcAnyUser() ? [] : lines(this.oidcUsers()),
+                roles: this.oidcAnyUser()
+                  ? []
+                  : lines(this.oidcRoles()).map((entry) => {
+                      // Role names cannot contain a colon, so the first one separates the client.
+                      const colon = entry.indexOf(':');
+                      return colon < 0
+                        ? { role: entry }
+                        : { client: entry.slice(0, colon), role: entry.slice(colon + 1) };
+                    }),
+                sessionTtlSeconds: this.sessionHours() * 3600,
+              }
+            : undefined,
       },
     };
 
@@ -262,6 +291,14 @@ interface BasicUserRow {
   username: string;
   password: string;
   existing: boolean;
+}
+
+/** Non-empty trimmed lines. */
+function lines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line);
 }
 
 function toLocalInput(iso: string | null): string {

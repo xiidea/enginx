@@ -11,6 +11,8 @@ import net.xiidea.enginx.domain.permission.PermissionLevel;
 import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
+import net.xiidea.enginx.domain.proxy.OidcAccessPolicy;
+import net.xiidea.enginx.domain.proxy.OidcRole;
 import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteQuery;
@@ -157,7 +159,7 @@ public class ProxySiteService {
         permissions.requireSiteAccess(site, PermissionLevel.MANAGE);
         if (!site.spec().protection().mode().usesGate()) {
             throw new ValidationException("protection.mode",
-                    "Only a site with email sign-in has sessions to end");
+                    "Only a site with email or identity provider sign-in has sessions to end");
         }
         gateKeys.rotate(site.id());
         audit.success(AuditAction.PROXY_SITE_SESSIONS_REVOKED, RESOURCE_TYPE, site.id(), null,
@@ -238,6 +240,15 @@ public class ProxySiteService {
         }
         if (input.mode() == ProtectionMode.NONE) {
             return SiteProtection.none();
+        }
+        if (input.mode() == ProtectionMode.OIDC) {
+            if (input.oidc() == null) {
+                throw new ValidationException("protection.oidc", "Identity provider sign-in needs to say who may enter");
+            }
+            Integer ttl = input.oidc().sessionTtlSeconds();
+            return SiteProtection.oidc(new OidcAccessPolicy(input.oidc().anyUser(), input.oidc().users(),
+                    input.oidc().roles().stream().map(role -> new OidcRole(role.client(), role.role())).toList(),
+                    ttl == null ? null : java.time.Duration.ofSeconds(ttl)));
         }
         if (input.mode() == ProtectionMode.EMAIL_OTP) {
             if (input.emailOtp() == null) {

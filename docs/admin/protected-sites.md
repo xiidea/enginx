@@ -13,7 +13,7 @@ needs them: ACME HTTP-01 challenges, so the site's certificate can still renew, 
 | `NONE` | Nothing; the site is public | available |
 | `BASIC` | Enters a username and password from the site's own user list | available |
 | `EMAIL_OTP` | Enters an allowed email address, then the code mailed to it | available |
-| OIDC | Signs in at an identity provider | planned |
+| `OIDC` | Signs in at the platform's identity provider, and is let in if the site allows them | available |
 
 ## Requirements
 
@@ -102,8 +102,8 @@ them in for the session length set on the site, after which they are asked again
 
 - `*@example.com` admits every address at exactly that domain, not its subdomains.
 - A sign-in lasts from 5 minutes to 30 days; 24 hours if unset.
-- The upstream receives the signed-in address as `X-Enginx-Email`. NGINX always sets it, so a
-  client cannot send its own, and the application can trust it.
+- The upstream receives the signed-in address as `X-Enginx-Email`, and as `X-Enginx-User`. NGINX
+  always sets both, so a client cannot send its own, and the application can trust them.
 - **Sign everyone out** (on the site page, or `POST /proxy-sites/{id}/sign-out-everyone`) replaces
   the site's key; the console then deploys, and every existing session stops working.
 
@@ -162,6 +162,70 @@ visitor ──▶ NGINX ──auth_request──▶ gate: valid session cookie?
 
 Rate limits are per gate and per platform replica, held in memory.
 
+## Identity provider sign-in
+
+The platform has one identity provider for its sites, and each site decides who among its users may
+enter. A visitor without a session is sent to sign in there, then comes back to the page they asked
+for, or to a page saying their account may not enter.
+
+```json
+"protection": {
+  "mode": "OIDC",
+  "oidc": {
+    "anyUser": false,
+    "users": ["alice", "bob@example.com"],
+    "roles": [{"role": "auditor"}, {"client": "reports", "role": "viewer"}],
+    "sessionTtlSeconds": 28800
+  }
+}
+```
+
+- **`anyUser: true`** admits everyone who can sign in at the provider. Otherwise a visitor is let
+  in if they match **any** entry:
+  - **a user**, matched against the token's `email` and its `preferred_username`
+  - **a realm role** (`{"role": "auditor"}`), read from `realm_access.roles`
+  - **a client role** (`{"client": "reports", "role": "viewer"}`), read from
+    `resource_access.reports.roles`. A role of that name on another client, or in the realm, does
+    not count.
+- In the console, roles are one per line: `auditor` for a realm role, `reports:viewer` for a client
+  role. Role and client names may not contain a colon.
+- The upstream receives `X-Enginx-Email` and `X-Enginx-User` (`preferred_username`), both always
+  set by NGINX.
+- **Roles are read when the visitor signs in.** A role taken away takes effect at their next
+  sign-in. To take effect at once, **sign everyone out**.
+
+### What it needs
+
+- **The provider, configured on the platform:** `GATE_OIDC_ISSUER_URI` and `GATE_OIDC_CLIENT_ID`,
+  plus `GATE_OIDC_BACKCHANNEL_URI` when hosts reach the provider at a different address than
+  browsers do (see [configuration](configuration.md)). Without them a site with OIDC sign-in does
+  not render, and says why.
+- **A client for the gates.** It should be public with PKCE (S256), so no secret is copied to every
+  host. Every OIDC site's redirect URI must be allowed on it: `https://<domain>/.enginx/auth/callback`,
+  shown on the site page.
+- **Outbound HTTPS from the host to the provider**, to exchange the code and fetch signing keys. The
+  platform is not involved in a sign-in at all.
+- **Roles in the tokens.** Keycloak puts realm and client roles in the access token by default; the
+  gate reads them there, falling back to the ID token. Another provider must put Keycloak-shaped
+  `realm_access` / `resource_access` claims in one of them for role rules to match. User rules and
+  `anyUser` need nothing beyond `email` or `preferred_username`.
+
+### How it works
+
+- **The authorization code flow with PKCE, state and nonce.** The state is bound to the browser by
+  the flow cookie, so a callback link opened anywhere else is refused. The code is exchanged by the
+  gate, directly with the provider.
+- **The ID token is verified**: an RS256 or ES256 signature against the provider's published keys,
+  the issuer, an audience of this client, the authorized party, expiry with a minute of skew, and
+  the nonce of this sign-in. `none` and HMAC algorithms never verify. The access token is used for
+  roles only when it verifies the same way and was issued to this client for the same subject.
+- **Keys and discovery are cached** for an hour. An unknown key id fetches the keys again, at most
+  every 30 seconds, which is how a provider's key rotation is picked up.
+- **Then the same session as email sign-in:** the same cookie, signed with the site's key, so
+  checking a visitor never leaves the host, and *sign everyone out* works the same way.
+- **The redirect back keeps the port the browser used**, from `X-Forwarded-Host`, trusted only when
+  it names the site itself.
+
 ## Verification
 
 After each deployment, VERIFY asks the host, as a visitor who has not signed in, for `/` and for a
@@ -177,6 +241,8 @@ This is what catches the ways protection can be lost that `nginx -t` accepts. NG
 and `rewrite` before it checks credentials, so a `return` in one of the host's
 [custom files](agent.md#custom-directives) answers without asking. Other causes are another server
 block claiming the same name, files the workers cannot open, and a gate that is not running.
+
+For both gate modes, the expected refusal is a redirect to `/.enginx/auth/login` on the site.
 
 It cannot see a bypass confined to one specific path that it does not ask for. Directives in custom
 files remain root's responsibility on the host, as they always were. VERIFY runs on push hosts;

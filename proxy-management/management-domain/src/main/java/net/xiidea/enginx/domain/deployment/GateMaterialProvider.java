@@ -25,6 +25,11 @@ public interface GateMaterialProvider {
         }
     };
 
+    /** The platform's identity provider, for sites with OIDC sign-in; empty when not configured. */
+    default Optional<GateOidcProvider> oidcProvider() {
+        return Optional.empty();
+    }
+
     /** The site's 32-byte gate key, base64-encoded, or empty when none has been issued. */
     Optional<String> keyFor(UUID siteId);
 

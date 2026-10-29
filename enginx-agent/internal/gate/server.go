@@ -26,6 +26,9 @@ type Server struct {
 	byIP    *limiter
 	byEmail *limiter
 
+	providers *providers
+	oidcFlows *oidcFlows
+
 	// background tracks codes still being handed to the platform, so a shutdown, or a test, can
 	// wait for them.
 	background sync.WaitGroup
@@ -44,7 +47,16 @@ func NewServer(relay Relay) *Server {
 		codes:   newCodeStore(),
 		byIP:    newLimiter(10, 15*time.Minute),
 		byEmail: newLimiter(5, 15*time.Minute),
+
+		providers: newProviders(nil),
+		oidcFlows: newOIDCFlows(),
 	}
+}
+
+// SetProviderClient sets the client used to reach identity providers: the same trust as the
+// relay, so a provider behind a private CA works with GATE_RELAY_CA.
+func (s *Server) SetProviderClient(client *http.Client) {
+	s.providers = newProviders(client)
 }
 
 // SetSites replaces the protected sites. Sessions are unaffected: they carry everything needed
@@ -67,6 +79,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /.enginx/auth/login", s.handleLoginForm)
 	mux.HandleFunc("POST /.enginx/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /.enginx/auth/verify", s.handleVerify)
+	mux.HandleFunc("GET /.enginx/auth/callback", s.handleCallback)
 	mux.HandleFunc("GET /.enginx/auth/logout", s.handleLogout)
 	return mux
 }
@@ -84,12 +97,13 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	email, err := verifySession(site, cookie.Value, s.now())
+	who, err := verifySession(site, cookie.Value, s.now())
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	w.Header().Set("X-Enginx-Email", email)
+	w.Header().Set("X-Enginx-Email", who.Email)
+	w.Header().Set("X-Enginx-User", who.User)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -104,12 +118,16 @@ func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 		s.unavailable(w)
 		return
 	}
+	if site.Mode == ModeOIDC {
+		s.startOIDC(w, r, site)
+		return
+	}
 	render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: redirectFromQuery(r.URL.RawQuery)})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	site := s.site(r)
-	if site == nil {
+	if site == nil || site.Mode != ModeEmailOTP {
 		s.unavailable(w)
 		return
 	}
@@ -168,7 +186,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	site := s.site(r)
-	if site == nil {
+	if site == nil || site.Mode != ModeEmailOTP {
 		s.unavailable(w)
 		return
 	}
@@ -190,7 +208,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	value, expires := issueSession(site, flow.email, now)
+	value, expires := issueSession(site, identity{Email: flow.email, User: flow.email}, now)
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: value, Path: "/", Expires: expires,
 		MaxAge: int(site.SessionTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: FlowCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true})

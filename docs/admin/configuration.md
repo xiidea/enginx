@@ -19,6 +19,11 @@ Every setting the platform reads, and the schema behind it.
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | |
 | `GATE_RELAY_URL` | unset | Where hosts' gates ask for a sign-in code to be mailed: this API as the NGINX hosts reach it, ending in `/api/v1/agents/gate/otp-mail`. Required for [email sign-in](protected-sites.md#email-sign-in) |
 | `GATE_MAIL_FROM` | `NOTIFICATION_FROM` | Sender of sign-in codes |
+| `GATE_OIDC_ISSUER_URI` | unset | The identity provider sites sign visitors in at, for [identity provider sign-in](protected-sites.md#identity-provider-sign-in). Must match the `iss` of its tokens |
+| `GATE_OIDC_BACKCHANNEL_URI` | unset | The provider as the NGINX hosts reach it, when that differs from the issuer (the same split as `OIDC_JWK_SET_URI`) |
+| `GATE_OIDC_CLIENT_ID` | unset | The client the gates sign in with. A public client with PKCE is recommended |
+| `GATE_OIDC_CLIENT_SECRET` | unset | Only for a confidential client. Copied to every host with an OIDC site, so prefer a public one |
+| `GATE_OIDC_SCOPES` | `openid email profile` | Must include `openid` |
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` / `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | unset | SMTP, for notifications and sign-in codes alike |
 
 ### Choosing an authentication method
@@ -67,6 +72,7 @@ db/changelog/changes/001-baseline.sql        the platform's own schema
 db/changelog/changes/002-quartz.sql          Quartz's vendor DDL, copied verbatim
 db/changelog/changes/003-site-protection.sql basic authentication, and bundle file modes
 db/changelog/changes/004-gate.sql            email sign-in: allow-lists, session length, gate keys
+db/changelog/changes/005-gate-oidc.sql       identity provider sign-in: access policies
 ```
 
 The incremental changelogs that built this up were squashed before the first production

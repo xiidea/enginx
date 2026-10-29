@@ -26,28 +26,81 @@ const (
 	sessionLabel = "enginx-gate session v1"
 )
 
+// Modes the gate serves.
+const (
+	ModeEmailOTP = "EMAIL_OTP"
+	ModeOIDC     = "OIDC"
+)
+
 // Site is one protected site, as the platform rendered it into the bundle.
 type Site struct {
 	ID         string
 	Domain     string
 	Mode       string
 	SessionTTL time.Duration
-	Allowed    []string
-	RelayURL   string
+	// Email sign-in.
+	Allowed  []string
+	RelayURL string
+	// Identity provider sign-in.
+	OIDC *OIDCConfig
 
 	sessionKey []byte
 	relayKey   []byte
 }
 
 type siteFile struct {
-	Version           int      `json:"version"`
-	SiteID            string   `json:"siteId"`
-	Domain            string   `json:"domain"`
-	Mode              string   `json:"mode"`
-	Key               string   `json:"key"`
-	SessionTTLSeconds int64    `json:"sessionTtlSeconds"`
-	AllowedEmails     []string `json:"allowedEmails"`
-	RelayURL          string   `json:"relayUrl"`
+	Version           int         `json:"version"`
+	SiteID            string      `json:"siteId"`
+	Domain            string      `json:"domain"`
+	Mode              string      `json:"mode"`
+	Key               string      `json:"key"`
+	SessionTTLSeconds int64       `json:"sessionTtlSeconds"`
+	AllowedEmails     []string    `json:"allowedEmails"`
+	RelayURL          string      `json:"relayUrl"`
+	OIDC              *OIDCConfig `json:"oidc"`
+}
+
+// OIDCConfig is the platform's identity provider, and who among its users may enter this site.
+type OIDCConfig struct {
+	Issuer       string       `json:"issuer"`
+	Backchannel  string       `json:"backchannel"`
+	ClientID     string       `json:"clientId"`
+	ClientSecret string       `json:"clientSecret"`
+	Scopes       string       `json:"scopes"`
+	AnyUser      bool         `json:"anyUser"`
+	Users        []string     `json:"users"`
+	RealmRoles   []string     `json:"realmRoles"`
+	ClientRoles  []ClientRole `json:"clientRoles"`
+}
+
+// ClientRole is a role on one client: resource_access.<client>.roles.
+type ClientRole struct {
+	Client string `json:"client"`
+	Role   string `json:"role"`
+}
+
+// admits applies the site's policy to a signed-in identity: anyone, or a match on any entry.
+func (c *OIDCConfig) admits(email, username string, realm map[string]bool, clients map[string]map[string]bool) bool {
+	if c.AnyUser {
+		return true
+	}
+	email, username = normaliseEmail(email), strings.ToLower(username)
+	for _, user := range c.Users {
+		if (email != "" && user == email) || (username != "" && user == username) {
+			return true
+		}
+	}
+	for _, role := range c.RealmRoles {
+		if realm[role] {
+			return true
+		}
+	}
+	for _, role := range c.ClientRoles {
+		if clients[role.Client][role.Role] {
+			return true
+		}
+	}
+	return false
 }
 
 func derive(key []byte, label string) []byte {
@@ -64,15 +117,27 @@ func parseSite(data []byte) (*Site, error) {
 	if f.Version != 1 {
 		return nil, fmt.Errorf("unsupported version %d", f.Version)
 	}
-	if f.Mode != "EMAIL_OTP" {
+	switch f.Mode {
+	case ModeEmailOTP:
+		if f.RelayURL == "" {
+			return nil, fmt.Errorf("relayUrl is required for email sign-in")
+		}
+	case ModeOIDC:
+		if f.OIDC == nil || f.OIDC.Issuer == "" || f.OIDC.ClientID == "" {
+			return nil, fmt.Errorf("oidc.issuer and oidc.clientId are required for identity provider sign-in")
+		}
+		if f.OIDC.Scopes == "" {
+			f.OIDC.Scopes = "openid email profile"
+		}
+	default:
 		return nil, fmt.Errorf("unsupported mode %q", f.Mode)
 	}
 	key, err := base64.StdEncoding.DecodeString(f.Key)
 	if err != nil || len(key) != 32 {
 		return nil, fmt.Errorf("the key is not 32 bytes of base64")
 	}
-	if f.SiteID == "" || f.Domain == "" || f.RelayURL == "" || f.SessionTTLSeconds <= 0 {
-		return nil, fmt.Errorf("siteId, domain, relayUrl and sessionTtlSeconds are required")
+	if f.SiteID == "" || f.Domain == "" || f.SessionTTLSeconds <= 0 {
+		return nil, fmt.Errorf("siteId, domain and sessionTtlSeconds are required")
 	}
 	return &Site{
 		ID:         f.SiteID,
@@ -81,6 +146,7 @@ func parseSite(data []byte) (*Site, error) {
 		SessionTTL: time.Duration(f.SessionTTLSeconds) * time.Second,
 		Allowed:    f.AllowedEmails,
 		RelayURL:   f.RelayURL,
+		OIDC:       f.OIDC,
 		sessionKey: derive(key, sessionLabel),
 		relayKey:   derive(key, relayLabel),
 	}, nil

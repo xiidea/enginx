@@ -109,4 +109,32 @@ class SiteProtectionTest {
         assertThatThrownBy(() -> new SiteProtection(ProtectionMode.NONE, List.of(), policy))
                 .isInstanceOf(ValidationException.class);
     }
+
+    @Test
+    @DisplayName("an OIDC policy is either anyone who signs in, or at least one named user or role")
+    void oidcPolicyShape() {
+        assertThatThrownBy(() -> new OidcAccessPolicy(false, List.of(), List.of(), null))
+                .isInstanceOf(ValidationException.class);
+        assertThatThrownBy(() -> new OidcAccessPolicy(true, List.of("alice"), List.of(), null))
+                .isInstanceOf(ValidationException.class);
+        assertThat(OidcAccessPolicy.anyone(null).anyUser()).isTrue();
+        assertThat(new OidcAccessPolicy(false, List.of(" Alice@Example.com "), List.of(), null).users())
+                .containsExactly("alice@example.com");
+    }
+
+    @ParameterizedTest
+    @DisplayName("role and client names that could break the gate file or the client:role notation are refused")
+    @ValueSource(strings = {"a b", "a:b", "a\"b", "a\\b", ""})
+    void unsafeRoleNamesAreRefused(String name) {
+        assertThatThrownBy(() -> OidcRole.realm(name)).isInstanceOf(ValidationException.class);
+        assertThatThrownBy(() -> new OidcRole(name.isEmpty() ? "x y" : name, "viewer"))
+                .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    void duplicateRolesAreRefused() {
+        assertThatThrownBy(() -> new OidcAccessPolicy(false, List.of(),
+                List.of(new OidcRole("reports", "viewer"), new OidcRole("reports", "viewer")), null))
+                .isInstanceOf(ValidationException.class);
+    }
 }

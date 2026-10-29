@@ -17,41 +17,48 @@ const SessionCookie = "__Host-enginx_session"
 type sessionClaims struct {
 	Site    string `json:"s"`
 	Email   string `json:"e"`
+	User    string `json:"u,omitempty"`
 	Expires int64  `json:"x"`
+}
+
+// identity is who a session belongs to.
+type identity struct {
+	Email string
+	User  string
 }
 
 var errInvalidSession = errors.New("invalid session")
 
 // issueSession signs a session for one site. Stateless: the gate keeps nothing, so a restart
 // signs nobody out, and rotating the site's key on the platform signs out everyone.
-func issueSession(site *Site, email string, now time.Time) (string, time.Time) {
+func issueSession(site *Site, who identity, now time.Time) (string, time.Time) {
 	expires := now.Add(site.SessionTTL)
-	payload, _ := json.Marshal(sessionClaims{Site: site.ID, Email: email, Expires: expires.Unix()})
+	payload, _ := json.Marshal(sessionClaims{Site: site.ID, Email: who.Email, User: who.User, Expires: expires.Unix()})
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
 	return encoded + "." + sign(site.sessionKey, encoded), expires
 }
 
-// verifySession returns the signed-in address, or an error for anything not issued for this site
-// by a holder of its current key and still in date.
-func verifySession(site *Site, value string, now time.Time) (string, error) {
+// verifySession returns who is signed in, or an error for anything not issued for this site by a
+// holder of its current key and still in date.
+func verifySession(site *Site, value string, now time.Time) (identity, error) {
 	encoded, signature, found := strings.Cut(value, ".")
 	if !found || !hmac.Equal([]byte(signature), []byte(sign(site.sessionKey, encoded))) {
-		return "", errInvalidSession
+		return identity{}, errInvalidSession
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", errInvalidSession
+		return identity{}, errInvalidSession
 	}
 	var claims sessionClaims
 	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", errInvalidSession
+		return identity{}, errInvalidSession
 	}
 	// The site is checked as well as the signature, though keys are per site already: it costs
 	// nothing, and keeps a session from moving if two sites ever came to share a key.
-	if claims.Site != site.ID || now.Unix() >= claims.Expires || claims.Email == "" {
-		return "", errInvalidSession
+	if claims.Site != site.ID || now.Unix() >= claims.Expires || (claims.Email == "" && claims.User == "") {
+		return identity{}, errInvalidSession
 	}
-	return claims.Email, nil
+	return identity{Email: claims.Email, User: claims.User}, nil
 }
 
 func sign(key []byte, message string) string {

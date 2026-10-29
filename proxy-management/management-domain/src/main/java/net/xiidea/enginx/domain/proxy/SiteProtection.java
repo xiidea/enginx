@@ -14,11 +14,12 @@ import java.util.Set;
  * from them is the same bytes for the same set however they were entered, and an unchanged list
  * redeploys as a no-op.
  */
-public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp) {
+public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp,
+                             OidcAccessPolicy oidc) {
 
     public static final int MAX_BASIC_USERS = 64;
 
-    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of(), null);
+    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of(), null, null);
 
     public SiteProtection {
         if (mode == null) {
@@ -59,10 +60,30 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
             throw new ValidationException("protection.emailOtp",
                     "An email allow-list can only be set when the mode is EMAIL_OTP");
         }
+        if (mode == ProtectionMode.OIDC && oidc == null) {
+            throw new ValidationException("protection.oidc",
+                    "Identity provider sign-in needs to say who may enter");
+        }
+        if (mode != ProtectionMode.OIDC && oidc != null) {
+            throw new ValidationException("protection.oidc",
+                    "An identity provider access policy can only be set when the mode is OIDC");
+        }
     }
 
     public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers) {
-        this(mode, basicUsers, null);
+        this(mode, basicUsers, null, null);
+    }
+
+    public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp) {
+        this(mode, basicUsers, emailOtp, null);
+    }
+
+    /** How long a gate sign-in lasts, for either gate mode. */
+    public java.time.Duration sessionTtl() {
+        if (emailOtp != null) {
+            return emailOtp.sessionTtl();
+        }
+        return oidc == null ? null : oidc.sessionTtl();
     }
 
     public static SiteProtection none() {
@@ -74,7 +95,11 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
     }
 
     public static SiteProtection emailOtp(EmailOtpPolicy policy) {
-        return new SiteProtection(ProtectionMode.EMAIL_OTP, List.of(), policy);
+        return new SiteProtection(ProtectionMode.EMAIL_OTP, List.of(), policy, null);
+    }
+
+    public static SiteProtection oidc(OidcAccessPolicy policy) {
+        return new SiteProtection(ProtectionMode.OIDC, List.of(), null, policy);
     }
 
     public boolean isProtected() {

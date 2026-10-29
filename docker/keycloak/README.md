@@ -27,6 +27,12 @@ the tokens a client requests, so the mapper has to sit on the client doing the r
 rather than `production`, so the domain-group grants added in Phase 3 can distinguish two
 similarly named groups under different parents.
 
+**`enginx-sites` signs visitors in to protected sites.** A public client with PKCE, used by each
+host's gate for [identity provider sign-in](../../docs/admin/protected-sites.md#identity-provider-sign-in):
+public, so no secret is copied to any host. Its redirect URIs are `*` here, so any site works in
+development; in a real realm, list each site's `https://<domain>/.enginx/auth/callback`. It carries
+one client role, `site-viewer`, given to `viewer`, so a site can be tried with a client-role rule.
+
 ## Users
 
 All passwords are development-only.
@@ -36,7 +42,7 @@ All passwords are development-only.
 | `admin` | `admin123` | `SUPER_ADMIN` (realm) |
 | `manager` | `manager123` | `ADMIN` (realm) |
 | `operator` | `operator123` | `OPERATOR` (realm) |
-| `viewer` | `viewer123` | `READ_ONLY` (realm) |
+| `viewer` | `viewer123` | `READ_ONLY` (realm), `site-viewer` (client role on `enginx-sites`) |
 | `console-admin` | `console123` | `SUPER_ADMIN` (client role on `enginx-frontend`, no realm role) |
 
 ## Re-importing after a change

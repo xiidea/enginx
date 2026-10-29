@@ -120,6 +120,11 @@ services:
       NOTIFICATION_ROUTE_LOG: ${NOTIFICATION_ROUTE_LOG:-}
       # Email sign-in. Codes are mailed only once SPRING_MAIL_HOST points at an SMTP server.
       GATE_RELAY_URL: ${GATE_RELAY_URL:-http://proxy-management:8080/api/v1/agents/gate/otp-mail}
+      # Identity provider sign-in for protected sites: the oidc profile's Keycloak, reached by hosts
+      # on the compose network while browsers and tokens name it localhost:8081.
+      GATE_OIDC_ISSUER_URI: ${GATE_OIDC_ISSUER_URI:-http://localhost:8081/realms/enginx}
+      GATE_OIDC_BACKCHANNEL_URI: ${GATE_OIDC_BACKCHANNEL_URI:-http://keycloak:8081/realms/enginx}
+      GATE_OIDC_CLIENT_ID: ${GATE_OIDC_CLIENT_ID:-enginx-sites}
     volumes:
       # The management client identity for mutual TLS with the agents.
       - ./pki/out:/etc/enginx/pki:ro

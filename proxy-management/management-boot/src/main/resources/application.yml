@@ -270,6 +270,19 @@ enginx:
     relay-url: ${GATE_RELAY_URL:}
     # The sender of sign-in codes. Mail goes through spring.mail.*, like notifications.
     mail-from: ${GATE_MAIL_FROM:${enginx.notifications.from:enginx@localhost}}
+    # The platform's identity provider, for sites that sign visitors in there. One for the whole
+    # platform; each site only says who among its users may enter. Unset, a site with OIDC sign-in
+    # cannot be rendered, and says so.
+    oidc:
+      issuer-uri: ${GATE_OIDC_ISSUER_URI:}
+      # The provider's origin as the NGINX hosts reach it, when that differs from the issuer —
+      # the same split as OIDC_JWK_SET_URI, and for the same reason.
+      backchannel-uri: ${GATE_OIDC_BACKCHANNEL_URI:}
+      client-id: ${GATE_OIDC_CLIENT_ID:}
+      # Leave unset for a public client, which is recommended: PKCE protects the code exchange, and
+      # a secret here would be copied to every gated host.
+      client-secret: ${GATE_OIDC_CLIENT_SECRET:}
+      scopes: ${GATE_OIDC_SCOPES:openid email profile}
 
   observability:
     # One database read serves every gauge on a scrape and every health probe within this window.

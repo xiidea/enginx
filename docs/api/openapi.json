@@ -1372,6 +1372,89 @@
         ],
         "type": "object"
       },
+      "OidcAccessRequest": {
+        "description": "Who, among the platform identity provider's users, may enter. Required when the mode is OIDC. Either anyUser, or at least one user or role; a visitor matching any entry is let in.",
+        "properties": {
+          "anyUser": {
+            "description": "Admit everyone who can sign in at the provider",
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OidcRoleDto"
+            },
+            "maxItems": 256,
+            "minItems": 0,
+            "type": "array"
+          },
+          "sessionTtlSeconds": {
+            "description": "How long a sign-in lasts, 300 to 2592000. Defaults to 86400.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "users": {
+            "description": "Matched against the token's email and preferred_username",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 256,
+            "minItems": 0,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OidcAccessResponse": {
+        "properties": {
+          "anyUser": {
+            "type": "boolean"
+          },
+          "redirectUri": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OidcRoleDto"
+            },
+            "type": "array"
+          },
+          "sessionTtlSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "users": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "anyUser",
+          "redirectUri",
+          "roles",
+          "sessionTtlSeconds",
+          "users"
+        ],
+        "type": "object"
+      },
+      "OidcRoleDto": {
+        "description": "A realm role when client is absent, otherwise a role on that client.",
+        "properties": {
+          "client": {
+            "description": "The client the role belongs to; absent for a realm role",
+            "type": "string"
+          },
+          "role": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "type": "object"
+      },
       "PageResponseAuditResponse": {
         "properties": {
           "content": {
@@ -1579,10 +1662,13 @@
             "$ref": "#/components/schemas/EmailOtpRequest"
           },
           "mode": {
-            "description": "NONE, BASIC or EMAIL_OTP",
+            "description": "NONE, BASIC, EMAIL_OTP or OIDC",
             "example": "BASIC",
             "minLength": 1,
             "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcAccessRequest"
           }
         },
         "required": [
@@ -1603,6 +1689,9 @@
           },
           "mode": {
             "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcAccessResponse"
           }
         },
         "required": [

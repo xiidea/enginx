@@ -48,6 +48,12 @@ final class RenderFixtures {
         public Optional<String> relayUrl() {
             return Optional.of("https://enginx.example.com/api/v1/agents/gate/otp-mail");
         }
+
+        @Override
+        public Optional<GateOidcProvider> oidcProvider() {
+            return Optional.of(new GateOidcProvider("https://id.example.com/realms/staff",
+                    "http://keycloak:8080/realms/staff", "enginx-sites", null, null));
+        }
     };
 
     private RenderFixtures() {
@@ -132,6 +138,11 @@ final class RenderFixtures {
         Builder emailOtp(String... allowed) {
             this.protection = net.xiidea.enginx.domain.proxy.SiteProtection.emailOtp(new EmailOtpPolicy(
                     java.util.Arrays.stream(allowed).map(AllowedEmail::new).toList(), null));
+            return this;
+        }
+
+        Builder oidc(net.xiidea.enginx.domain.proxy.OidcAccessPolicy policy) {
+            this.protection = net.xiidea.enginx.domain.proxy.SiteProtection.oidc(policy);
             return this;
         }
 

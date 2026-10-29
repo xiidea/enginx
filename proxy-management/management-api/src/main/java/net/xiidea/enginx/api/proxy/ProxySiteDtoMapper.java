@@ -112,7 +112,15 @@ public class ProxySiteDtoMapper {
                 .toList();
         ProtectionInput.EmailOtp emailOtp = request.emailOtp() == null ? null
                 : new ProtectionInput.EmailOtp(request.emailOtp().allowedEmails(), request.emailOtp().sessionTtlSeconds());
-        return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users, emailOtp);
+        ProtectionInput.Oidc oidc = request.oidc() == null ? null : new ProtectionInput.Oidc(
+                Boolean.TRUE.equals(request.oidc().anyUser()),
+                request.oidc().users(),
+                request.oidc().roles() == null ? List.of() : request.oidc().roles().stream()
+                        .map(r -> new ProtectionInput.Oidc.Role(r.client(), r.role()))
+                        .toList(),
+                request.oidc().sessionTtlSeconds());
+        return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users,
+                emailOtp, oidc);
     }
 
     public AdminState toAdminState(Boolean enabled) {
@@ -159,7 +167,15 @@ public class ProxySiteDtoMapper {
                                 spec.protection().emailOtp().allowedEmails().stream()
                                         .map(net.xiidea.enginx.domain.proxy.AllowedEmail::value)
                                         .toList(),
-                                spec.protection().emailOtp().sessionTtl().toSeconds())),
+                                spec.protection().emailOtp().sessionTtl().toSeconds()),
+                        spec.protection().oidc() == null ? null : new ProtectionResponse.OidcResponse(
+                                spec.protection().oidc().anyUser(),
+                                spec.protection().oidc().users(),
+                                spec.protection().oidc().roles().stream()
+                                        .map(r -> new net.xiidea.enginx.api.proxy.dto.OidcRoleDto(r.client(), r.role()))
+                                        .toList(),
+                                spec.protection().oidc().sessionTtl().toSeconds(),
+                                "https://" + spec.domain().value() + "/.enginx/auth/callback")),
                 site.createdBy(),
                 site.createdAt(),
                 site.updatedBy(),

@@ -56,6 +56,12 @@
           "description": "Read access only. Explicit grants above READ are clamped down to READ.",
           "clientRole": true
         }
+      ],
+      "enginx-sites": [
+        {
+          "name": "site-viewer",
+          "description": "Example client role a protected site can admit"
+        }
       ]
     }
   },
@@ -138,6 +144,22 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "enginx-sites",
+      "name": "Protected sites",
+      "description": "Signs visitors in to sites protected with OIDC sign-in, through each host's gate. Public with PKCE, so no secret is copied to hosts. Development only: the wildcard redirect admits any site; list each site's https://<domain>/.enginx/auth/callback in a real realm.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     }
   ],
   "users": [
@@ -223,7 +245,12 @@
       ],
       "groups": [
         "/platform/testing"
-      ]
+      ],
+      "clientRoles": {
+        "enginx-sites": [
+          "site-viewer"
+        ]
+      }
     },
     {
       "username": "console-admin",

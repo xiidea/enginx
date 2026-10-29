@@ -70,10 +70,10 @@ func TestAllowList(t *testing.T) {
 func TestSessions(t *testing.T) {
 	site := testSite(t)
 	now := time.Unix(1700000000, 0)
-	value, _ := issueSession(site, "bob@example.com", now)
+	value, _ := issueSession(site, identity{Email: "bob@example.com", User: "bob"}, now)
 
-	if email, err := verifySession(site, value, now.Add(time.Minute)); err != nil || email != "bob@example.com" {
-		t.Fatalf("a fresh session: %q %v", email, err)
+	if who, err := verifySession(site, value, now.Add(time.Minute)); err != nil || who.Email != "bob@example.com" || who.User != "bob" {
+		t.Fatalf("a fresh session: %+v %v", who, err)
 	}
 	if _, err := verifySession(site, value, now.Add(site.SessionTTL)); err == nil {
 		t.Fatal("an expired session was accepted")

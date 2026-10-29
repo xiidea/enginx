@@ -42,6 +42,9 @@ public record ProxySiteSpec(
     /** The header a gated site passes upstream with the signed-in visitor's address. */
     public static final String GATE_EMAIL_HEADER = "X-Enginx-Email";
 
+    /** The header a gated site passes upstream with the signed-in visitor's username. */
+    public static final String GATE_USER_HEADER = "X-Enginx-User";
+
     public ProxySiteSpec {
         if (name == null || name.isBlank()) {
             throw new ValidationException("name", "Name must not be blank");
@@ -120,9 +123,10 @@ public record ProxySiteSpec(
         if (protection.mode().usesGate()) {
             for (ProxySiteHeader header : headers) {
                 if (header.direction() == HeaderDirection.REQUEST
-                        && header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)) {
+                        && (header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)
+                            || header.name().equalsIgnoreCase(GATE_USER_HEADER))) {
                     throw new ValidationException("headers",
-                            GATE_EMAIL_HEADER + " is set by the gate on a protected site and cannot be overridden");
+                            header.name() + " is set by the gate on a protected site and cannot be overridden");
                 }
             }
         }
