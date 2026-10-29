@@ -52,7 +52,8 @@
  * bordered block instead of collapsing into one column of unlabelled inputs.
  */
 .upstream,
-.header-row {
+.header-row,
+.user-row {
   display: grid;
   gap: 0.5rem 0.75rem;
   align-items: end;
@@ -64,6 +65,7 @@
 
 .upstream { grid-template-columns: 7rem minmax(8rem, 2fr) 6rem 6rem auto auto; }
 .header-row { grid-template-columns: 10rem minmax(8rem, 1fr) minmax(8rem, 1.4fr) auto; }
+.user-row { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) auto; }
 
 /*
  * Narrower: two controls per line, flowing in order, so nothing spans and no cell is left empty
@@ -81,7 +83,11 @@
 
 @media (max-width: 34rem) {
   .upstream,
-  .header-row { grid-template-columns: 1fr; }
+  .header-row,
+  .user-row { grid-template-columns: 1fr; }
   /* Stacked, the button is the last thing in a tall block; full width makes it a clear target. */
   .field > .btn { align-self: stretch; }
 }
+
+/* A hint that something must change before the form can save. */
+.hint.warn { color: var(--warn); }

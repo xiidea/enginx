@@ -34,15 +34,20 @@ public class ConfigBundleFileEntity {
     @Column(name = "sensitive", nullable = false)
     private boolean sensitive;
 
+    @Column(name = "file_mode", nullable = false, length = 4)
+    private String fileMode;
+
     protected ConfigBundleFileEntity() {
     }
 
-    public ConfigBundleFileEntity(UUID id, String relativePath, String content, String sha256, boolean sensitive) {
+    public ConfigBundleFileEntity(UUID id, String relativePath, String content, String sha256,
+                                  boolean sensitive, String fileMode) {
         this.id = id;
         this.relativePath = relativePath;
         this.content = content;
         this.sha256 = sha256;
         this.sensitive = sensitive;
+        this.fileMode = fileMode;
     }
 
     void setBundle(ConfigBundleEntity bundle) {
@@ -63,5 +68,9 @@ public class ConfigBundleFileEntity {
 
     public boolean isSensitive() {
         return sensitive;
+    }
+
+    public String getFileMode() {
+        return fileMode;
     }
 }

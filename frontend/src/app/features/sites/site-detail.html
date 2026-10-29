@@ -291,6 +291,23 @@
       </section>
 
       <section class="card">
+        <div class="card-head"><h2>Protection</h2></div>
+        <div class="card-body">
+          @if (site.protection.mode === 'BASIC') {
+            <div class="facts">
+              <div><span class="key">Access</span><span>basic authentication</span></div>
+              <div>
+                <span class="key">Users</span>
+                <span class="mono small">{{ basicAuthUsernames() }}</span>
+              </div>
+            </div>
+          } @else {
+            <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
+          }
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>Recent deployments</h2><a class="small" routerLink="/deployments">All</a></div>
         @if (deployments().length) {
           <div class="table-wrap">

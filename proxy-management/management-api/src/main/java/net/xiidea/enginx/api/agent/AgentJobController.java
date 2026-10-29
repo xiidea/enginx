@@ -189,7 +189,7 @@ public class AgentJobController {
         return new BundleResponse(bundle.id(), bundle.sequence(), bundle.contentHash(),
                 bundle.files().stream()
                         .map(file -> new BundleFileResponse(file.path(), file.content(), file.sha256(),
-                                file.sensitive(), file.sensitive() ? "0600" : null))
+                                file.sensitive(), file.sensitive() ? file.mode() : null))
                         .toList());
     }
 
@@ -238,7 +238,10 @@ public class AgentJobController {
                                  List<BundleFileResponse> files) {
     }
 
-    /** @param mode 0600 for key material, so it is never written world-readable on the host */
+    /**
+     * @param mode 0600 for key material, so it is never written world-readable on the host; 0640
+     *             for secrets the NGINX workers read, group-owned by the worker group
+     */
     @Schema(name = "AgentBundleFileResponse", requiredProperties = {"path", "content", "sha256"})
     public record BundleFileResponse(String path, String content, String sha256, boolean sensitive,
                                      String mode) {

@@ -1,6 +1,7 @@
 # Managing proxy sites
 
-Creating sites, deploying them, and knowing whether a deployment actually took effect.
+Creating sites, deploying them, and knowing whether a deployment actually took effect. To put a
+sign-in in front of a site, see [Protected sites](protected-sites.md).
 
 ## Deployment
 

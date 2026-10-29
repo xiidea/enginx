@@ -7,6 +7,7 @@ import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
+import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.ValidationException;
 
@@ -67,6 +68,12 @@ public final class NginxConfigRenderer {
      */
     private static final String CUSTOM_ROOT = "/etc/nginx/enginx/custom/";
 
+    /**
+     * Fixed, never taken from the site: the realm is a quoted string in the directive, and a value
+     * nobody can set is a value nobody can use to break out of it.
+     */
+    private static final String BASIC_AUTH_REALM = "Restricted";
+
     private static final String DEFAULT_TLS_CERT = "/etc/nginx/enginx/default-tls/default.crt";
     private static final String DEFAULT_TLS_KEY = "/etc/nginx/enginx/default-tls/default.key";
 
@@ -118,6 +125,7 @@ public final class NginxConfigRenderer {
             siteIds.add(site.id());
             files.add(BundleFile.of(siteFilePath(site), renderSite(site, certificates, target)));
             files.addAll(renderCertificateFiles(site, certificates));
+            files.addAll(renderProtectionFiles(site, target));
         }
 
         String contentHash = hashOf(files);
@@ -251,6 +259,24 @@ public final class NginxConfigRenderer {
                 BundleFile.sensitive(directory + "privkey.pem", material.privateKeyPem()));
     }
 
+    private List<BundleFile> renderProtectionFiles(ProxySite site, RenderTarget target) {
+        if (site.spec().protection().mode() != ProtectionMode.BASIC) {
+            return List.of();
+        }
+        if (!target.supportsWorkerReadableFiles()) {
+            throw new ValidationException("protection.mode",
+                    site.domain().value() + " uses basic authentication, which needs agent "
+                            + "0.2.0 or later on its host; the host reports "
+                            + (target.agentVersion() == null ? "no agent version yet" : target.agentVersion())
+                            + ". Upgrade the agent before deploying.");
+        }
+        return List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
+    }
+
+    private static String htpasswdPath(ProxySite site) {
+        return "auth/" + site.domain().value() + "/htpasswd";
+    }
+
     private RenderedCertificate requireCertificate(ProxySite site, CertificateMaterialProvider certificates) {
         UUID certificateId = site.spec().sslCertificateId();
         return certificates.materialFor(certificateId)
@@ -308,8 +334,15 @@ public final class NginxConfigRenderer {
             appendServer(out, site, false, null, target);
         }
 
+        // The user list too: a password change touches only the htpasswd file, and VERIFY must
+        // still be able to tell whether it is live.
+        String protectionDigest = spec.protection().mode() == ProtectionMode.BASIC
+                ? BundleFile.digest(spec.protection().htpasswd())
+                : "";
+
         String withPlaceholder = out.toString();
-        String fingerprint = BundleFile.digest(withPlaceholder + "\n" + certificateDigest)
+        String fingerprint = BundleFile.digest(withPlaceholder + "\n" + certificateDigest
+                        + (protectionDigest.isEmpty() ? "" : "\n" + protectionDigest))
                 .substring(0, FINGERPRINT_LENGTH);
         return withPlaceholder.replace(MARKER_PLACEHOLDER, site.id() + " v" + site.version() + " " + fingerprint);
     }
@@ -459,6 +492,15 @@ public final class NginxConfigRenderer {
         }
 
         appendResponseHeaders(out, spec);
+
+        // Only on the TLS server. Protection requires forceHttps, so the plain-HTTP server for a
+        // protected site is the redirect server, which keeps answering ACME challenges and the
+        // probe without credentials — and never asks for a password in cleartext.
+        if (ssl && spec.protection().mode() == ProtectionMode.BASIC) {
+            out.append("    auth_basic \"").append(BASIC_AUTH_REALM).append("\";\n");
+            out.append("    auth_basic_user_file /etc/nginx/enginx/current/")
+                    .append(htpasswdPath(site)).append(";\n\n");
+        }
 
         List<LocationRule> locations = spec.locations();
         for (int i = 0; i < locations.size(); i++) {

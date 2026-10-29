@@ -28,6 +28,11 @@ final class ProxySiteSnapshot {
                 .map(u -> u.scheme() + "://" + u.authority())
                 .toList());
         map.put("upstreamCount", site.spec().upstreams().size());
+        // Who may sign in, never how: hashes stay out of the audit trail.
+        map.put("protectionMode", site.spec().protection().mode().name());
+        map.put("basicAuthUsers", site.spec().protection().basicUsers().stream()
+                .map(net.xiidea.enginx.domain.proxy.BasicAuthUser::username)
+                .toList());
         return Map.copyOf(map);
     }
 

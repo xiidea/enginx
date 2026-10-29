@@ -48,7 +48,7 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
         if (entity.getFiles().isEmpty()) {
             for (BundleFile file : bundle.files()) {
                 entity.attach(new ConfigBundleFileEntity(UUID.randomUUID(), file.path(),
-                        file.content(), file.sha256(), file.sensitive()));
+                        file.content(), file.sha256(), file.sensitive(), file.mode()));
             }
         }
 
@@ -103,10 +103,19 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
         repository.updateStatus(bundleId, status);
     }
 
+    private static BundleFile.Access accessOf(String mode) {
+        for (BundleFile.Access access : BundleFile.Access.values()) {
+            if (access.mode().equals(mode)) {
+                return access;
+            }
+        }
+        throw new IllegalStateException("Unknown bundle file mode " + mode);
+    }
+
     private static ConfigBundle toDomain(ConfigBundleEntity entity) {
         List<BundleFile> files = entity.getFiles().stream()
                 .map(file -> new BundleFile(file.getRelativePath(), file.getContent(),
-                        file.getSha256(), file.isSensitive()))
+                        file.getSha256(), accessOf(file.getFileMode())))
                 .toList();
 
         Set<UUID> siteIds = new LinkedHashSet<>();

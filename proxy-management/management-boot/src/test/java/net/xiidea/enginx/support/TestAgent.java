@@ -143,7 +143,7 @@ public class TestAgent implements NginxAgentPort {
 
     @Override
     public AgentStatus status(NginxInstance instance) {
-        return new AgentStatus("test", "1.27.5", true, reportedActiveBundleId, true, "ok", List.of());
+        return new AgentStatus("dev", "1.27.5", true, reportedActiveBundleId, true, "ok", List.of());
     }
 
     @Override

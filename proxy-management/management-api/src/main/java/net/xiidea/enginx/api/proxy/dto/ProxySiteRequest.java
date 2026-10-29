@@ -36,5 +36,6 @@ public record ProxySiteRequest(
         Long maxBodySizeBytes,
         @NotEmpty(message = "At least one upstream is required") @Valid List<UpstreamDto> upstreams,
         @Valid List<HeaderDto> headers,
-        @Valid List<LocationDto> locations) {
+        @Valid List<LocationDto> locations,
+        @Valid ProtectionRequest protection) {
 }

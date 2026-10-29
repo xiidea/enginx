@@ -1271,6 +1271,17 @@ export interface components {
             oidcIssuer?: string;
             serverVersion?: string;
         };
+        BasicAuthUserRequest: {
+            /**
+             * Format: password
+             * @description The new password. Omit to keep the user's current one; required for a new user.
+             */
+            password?: string;
+            username: string;
+        };
+        BasicAuthUserResponse: {
+            username: string;
+        };
         BundleFileResponse: {
             content?: string;
             path?: string;
@@ -1641,6 +1652,19 @@ export interface components {
             /** Format: uri */
             type?: string;
         };
+        /** @description Who may reach the site. Omit on update to keep the current protection. */
+        ProtectionRequest: {
+            basicUsers?: components["schemas"]["BasicAuthUserRequest"][];
+            /**
+             * @description NONE or BASIC
+             * @example BASIC
+             */
+            mode: string;
+        };
+        ProtectionResponse: {
+            basicUsers: components["schemas"]["BasicAuthUserResponse"][];
+            mode: string;
+        };
         ProxySiteRequest: {
             /** Format: date-time */
             activeFrom?: string;
@@ -1660,6 +1684,7 @@ export interface components {
             name: string;
             /** Format: uuid */
             nginxInstanceId: string;
+            protection?: components["schemas"]["ProtectionRequest"];
             /** Format: int32 */
             readTimeoutSeconds?: number;
             /** Format: int32 */
@@ -1695,6 +1720,7 @@ export interface components {
             name: string;
             /** Format: uuid */
             nginxInstanceId: string;
+            protection: components["schemas"]["ProtectionResponse"];
             /** Format: int32 */
             readTimeoutSeconds: number;
             /** Format: int64 */

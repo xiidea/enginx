@@ -4,6 +4,7 @@ import net.xiidea.enginx.application.shared.AuditRecorder;
 import net.xiidea.enginx.domain.audit.AuditAction;
 import net.xiidea.enginx.domain.deployment.AgentException;
 import net.xiidea.enginx.domain.deployment.AgentActivation;
+import net.xiidea.enginx.domain.deployment.AgentStatus;
 import net.xiidea.enginx.domain.deployment.AgentValidationFailedException;
 import net.xiidea.enginx.domain.deployment.BundleStatus;
 import net.xiidea.enginx.domain.deployment.CertificateMaterialProvider;
@@ -143,7 +144,7 @@ public class DeploymentDispatcher {
             return bundles.findById(deployment.configBundleId()).orElseThrow();
         }
 
-        learnNginxVersion(instance, now);
+        learnVersions(instance, now);
         List<ProxySite> deployable = sites.findDeployableForInstance(instance.id(), now);
         ConfigBundle rendered = renderer.render(UUID.randomUUID(), instance.id(), RenderTarget.of(instance),
                 bundles.nextSequence(instance.id()), deployable, certificates,
@@ -257,22 +258,37 @@ public class DeploymentDispatcher {
     }
 
     /**
-     * Asks a dialled host which NGINX it runs, when that is not yet known.
+     * Asks a dialled host which NGINX and which agent it runs, when either is not yet known.
      *
      * <p>The grammar is version-dependent, so rendering blind would produce the conservative form
      * now and the modern one at the next deployment — a change of bytes with no change of intent,
-     * which turns the first redeploy of an untouched host into a real one. A pull host reports
-     * its version when it first calls in, before any work reaches it. Failing to ask is not
+     * which turns the first redeploy of an untouched host into a real one. The agent's version is
+     * learned in the same call: it decides whether a protected site can be rendered at all. A pull
+     * host reports both when it first calls in, before any work reaches it. Failing to ask is not
      * fatal: the conservative form is valid on every version.
      */
-    private void learnNginxVersion(NginxInstance instance, Instant now) {
-        if (instance.nginxVersion() != null || instance.connectivityMode().isPull()) {
+    private void learnVersions(NginxInstance instance, Instant now) {
+        if ((instance.nginxVersion() != null && instance.agentVersion() != null)
+                || instance.connectivityMode().isPull()) {
             return;
         }
         try {
-            String version = agent.status(instance).nginxVersion();
-            if (version != null && !version.isBlank()) {
-                instance.observed(instance.status(), version, instance.agentVersion(), now);
+            AgentStatus status = agent.status(instance);
+            String version = status.nginxVersion();
+            String agentVersion = status.agentVersion();
+            boolean learned = false;
+            if (instance.nginxVersion() == null && version != null && !version.isBlank()) {
+                learned = true;
+            } else {
+                version = instance.nginxVersion();
+            }
+            if (instance.agentVersion() == null && agentVersion != null && !agentVersion.isBlank()) {
+                learned = true;
+            } else {
+                agentVersion = instance.agentVersion();
+            }
+            if (learned) {
+                instance.observed(instance.status(), version, agentVersion, now);
             }
         } catch (RuntimeException e) {
             // The deployment will reach the host or fail on its own terms; this was only a question.

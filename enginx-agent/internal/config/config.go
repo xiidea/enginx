@@ -63,6 +63,11 @@ type Config struct {
 	// NginxPIDFile is where the running NGINX master records its pid. Read to tell whether NGINX
 	// is up when it is external, and to refuse to start a second master when it is managed.
 	NginxPIDFile string
+	// NginxGroup is the group NGINX's worker processes run as: the group of nginx.conf's
+	// `user` directive. Secrets the workers read on each request, such as an htpasswd file,
+	// are written 0640 owned by it. "nginx" on the official image and most distributions,
+	// "www-data" on Debian and Ubuntu packages.
+	NginxGroup string
 
 	CommandTimeout time.Duration
 	AgentVersion   string
@@ -116,6 +121,7 @@ func Load() (Config, error) {
 		NginxBinary:       env("AGENT_NGINX_BINARY", "/usr/sbin/nginx"),
 		NginxConf:         env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
 		NginxPIDFile:      env("AGENT_NGINX_PID_FILE", "/run/nginx.pid"),
+		NginxGroup:        strings.TrimSpace(env("AGENT_NGINX_GROUP", "nginx")),
 		CommandTimeout:    30 * time.Second,
 		AgentVersion:      env("AGENT_VERSION", version.Version),
 

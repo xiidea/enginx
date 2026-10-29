@@ -25,6 +25,27 @@ class ProxySiteSpecTest {
     }
 
     @Test
+    @DisplayName("protection is refused unless every request arrives over HTTPS")
+    void protectionRequiresForcedHttps() {
+        SiteProtection basic = SiteProtection.basic(List.of(new BasicAuthUser("alice",
+                "$6$fixturesalt0001$nTLkJQUNn08kFVHCPBxOSfCbqF3lA60ZVOdyzJeqdQv4MeAjTOPRztNt1OcbBALrB.AcE2mRt.mh8cHpEl2UD1")));
+        UUID certificate = UUID.randomUUID();
+
+        assertThatThrownBy(() -> spec().build().withProtection(basic))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("requires SSL");
+        assertThatThrownBy(() -> spec().ssl(true, certificate).build().withProtection(basic))
+                .isInstanceOf(ValidationException.class);
+        assertThat(spec().ssl(true, certificate).forceHttps(true).build().withProtection(basic).protection())
+                .isEqualTo(basic);
+    }
+
+    @Test
+    void defaultsToUnprotected() {
+        assertThat(spec().build().protection()).isEqualTo(SiteProtection.none());
+    }
+
+    @Test
     void requiresAtLeastOneUpstream() {
         assertThatThrownBy(() -> spec().upstreams(List.of()).build())
                 .isInstanceOf(ValidationException.class)

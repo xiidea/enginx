@@ -68,6 +68,11 @@ export type Site = Wire<Schemas['ProxySiteResponse']>;
 
 export type SiteRequest = Schemas['ProxySiteRequest'];
 
+/** Who may reach a site. Mirrors the server's ProtectionMode. */
+export type ProtectionMode = 'NONE' | 'BASIC';
+
+export type BasicAuthUserRequest = Schemas['BasicAuthUserRequest'];
+
 export type NginxInstance = Wire<Schemas['NginxInstanceResponse']>;
 
 export interface DeploymentEvent {

@@ -357,6 +357,35 @@
         ],
         "type": "object"
       },
+      "BasicAuthUserRequest": {
+        "properties": {
+          "password": {
+            "description": "The new password. Omit to keep the user's current one; required for a new user.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true
+          },
+          "username": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "type": "object"
+      },
+      "BasicAuthUserResponse": {
+        "properties": {
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "type": "object"
+      },
       "BundleFileResponse": {
         "properties": {
           "content": {
@@ -1458,6 +1487,47 @@
         },
         "type": "object"
       },
+      "ProtectionRequest": {
+        "description": "Who may reach the site. Omit on update to keep the current protection.",
+        "properties": {
+          "basicUsers": {
+            "items": {
+              "$ref": "#/components/schemas/BasicAuthUserRequest"
+            },
+            "maxItems": 64,
+            "minItems": 0,
+            "type": "array"
+          },
+          "mode": {
+            "description": "NONE or BASIC",
+            "example": "BASIC",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "ProtectionResponse": {
+        "properties": {
+          "basicUsers": {
+            "items": {
+              "$ref": "#/components/schemas/BasicAuthUserResponse"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "basicUsers",
+          "mode"
+        ],
+        "type": "object"
+      },
       "ProxySiteRequest": {
         "properties": {
           "activeFrom": {
@@ -1513,6 +1583,9 @@
           "nginxInstanceId": {
             "format": "uuid",
             "type": "string"
+          },
+          "protection": {
+            "$ref": "#/components/schemas/ProtectionRequest"
           },
           "readTimeoutSeconds": {
             "format": "int32",
@@ -1612,6 +1685,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "protection": {
+            "$ref": "#/components/schemas/ProtectionResponse"
+          },
           "readTimeoutSeconds": {
             "format": "int32",
             "type": "integer"
@@ -1670,6 +1746,7 @@
           "maxBodySizeBytes",
           "name",
           "nginxInstanceId",
+          "protection",
           "readTimeoutSeconds",
           "sendTimeoutSeconds",
           "sslEnabled",

@@ -31,7 +31,8 @@ public record ProxySiteSpec(
         ProxyTimeouts timeouts,
         List<UpstreamTarget> upstreams,
         List<ProxySiteHeader> headers,
-        List<LocationRule> locations) {
+        List<LocationRule> locations,
+        SiteProtection protection) {
 
     private static final int MAX_NAME_LENGTH = 128;
     private static final int MAX_UPSTREAMS = 32;
@@ -105,17 +106,40 @@ public record ProxySiteSpec(
         if (!sslEnabled && hstsEnabled) {
             throw new ValidationException("hstsEnabled", "HSTS requires SSL to be enabled");
         }
+
+        protection = protection == null ? SiteProtection.none() : protection;
+        // Credentials must never cross plain HTTP. With forceHttps the port-80 server only
+        // redirects, so the only server that ever asks for them is the TLS one.
+        if (protection.isProtected() && !(sslEnabled && forceHttps)) {
+            throw new ValidationException("protection.mode",
+                    "Protecting a site requires SSL with the HTTP to HTTPS redirect enabled");
+        }
+    }
+
+    /** An unprotected site: what every site was before protection existed. */
+    public ProxySiteSpec(String name, DomainName domain, UUID nginxInstanceId, TimeWindow window,
+                         boolean sslEnabled, boolean forceHttps, boolean hstsEnabled, boolean websocketEnabled,
+                         UUID sslCertificateId, LoadBalancingMethod loadBalancingMethod, ProxyTimeouts timeouts,
+                         List<UpstreamTarget> upstreams, List<ProxySiteHeader> headers, List<LocationRule> locations) {
+        this(name, domain, nginxInstanceId, window, sslEnabled, forceHttps, hstsEnabled, websocketEnabled,
+                sslCertificateId, loadBalancingMethod, timeouts, upstreams, headers, locations, null);
     }
 
     public ProxySiteSpec withIdentity(String newName, DomainName newDomain) {
         return new ProxySiteSpec(newName, newDomain, nginxInstanceId, window, sslEnabled, forceHttps,
                 hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,
-                upstreams, headers, locations);
+                upstreams, headers, locations, protection);
     }
 
     public ProxySiteSpec withWindow(TimeWindow newWindow) {
         return new ProxySiteSpec(name, domain, nginxInstanceId, newWindow, sslEnabled, forceHttps,
                 hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,
-                upstreams, headers, locations);
+                upstreams, headers, locations, protection);
+    }
+
+    public ProxySiteSpec withProtection(SiteProtection newProtection) {
+        return new ProxySiteSpec(name, domain, nginxInstanceId, window, sslEnabled, forceHttps,
+                hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,
+                upstreams, headers, locations, newProtection);
     }
 }

@@ -71,6 +71,11 @@ public class ProxySiteEntity {
     @Column(name = "lb_method", nullable = false, length = 24)
     private net.xiidea.enginx.domain.proxy.LoadBalancingMethod lbMethod;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "protection_mode", nullable = false, length = 16)
+    private net.xiidea.enginx.domain.proxy.ProtectionMode protectionMode =
+            net.xiidea.enginx.domain.proxy.ProtectionMode.NONE;
+
     @Column(name = "connect_timeout_s", nullable = false)
     private int connectTimeoutSeconds;
 
@@ -111,6 +116,10 @@ public class ProxySiteEntity {
     @BatchSize(size = 64)
     private List<ProxySiteLocationEntity> locations = new ArrayList<>();
 
+    @OneToMany(mappedBy = "site", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 64)
+    private List<ProxySiteBasicAuthUserEntity> basicAuthUsers = new ArrayList<>();
+
     protected ProxySiteEntity() {
     }
 
@@ -136,6 +145,10 @@ public class ProxySiteEntity {
         return locations;
     }
 
+    public List<ProxySiteBasicAuthUserEntity> basicAuthUsers() {
+        return basicAuthUsers;
+    }
+
     public void attach(ProxySiteUpstreamEntity child) {
         child.setSite(this);
     }
@@ -145,6 +158,10 @@ public class ProxySiteEntity {
     }
 
     public void attach(ProxySiteLocationEntity child) {
+        child.setSite(this);
+    }
+
+    public void attach(ProxySiteBasicAuthUserEntity child) {
         child.setSite(this);
     }
 
@@ -266,6 +283,14 @@ public class ProxySiteEntity {
 
     public void setLbMethod(net.xiidea.enginx.domain.proxy.LoadBalancingMethod lbMethod) {
         this.lbMethod = lbMethod;
+    }
+
+    public net.xiidea.enginx.domain.proxy.ProtectionMode getProtectionMode() {
+        return protectionMode;
+    }
+
+    public void setProtectionMode(net.xiidea.enginx.domain.proxy.ProtectionMode protectionMode) {
+        this.protectionMode = protectionMode;
     }
 
     public int getConnectTimeoutSeconds() {

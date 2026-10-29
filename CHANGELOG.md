@@ -7,6 +7,22 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## Unreleased
+
+- **Protected sites: basic authentication.** A site can require a username and password before
+  anything reaches its upstream, from a user list kept on the site. Passwords are write-only, stored
+  as SHA-512-crypt, and never returned; an update that leaves `protection` out keeps what the site
+  has. A protected site must use HTTPS with the redirect on. See
+  [protected sites](docs/admin/protected-sites.md).
+- **Bundle files carry their mode.** Secrets the NGINX workers read are written `0640`, group-owned
+  by `AGENT_NGINX_GROUP` (default `nginx`). Upgrade agents first: the platform refuses to render a
+  protected site for an agent older than 0.2.0, because an older agent writes the file `0600` and
+  NGINX then fails every request while `nginx -t` passes.
+
+Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, the
+`proxy_site_basic_auth_users` table and `config_bundle_files.file_mode`. API: `protection` on the
+site request and response.
+
 ## 0.1.2
 
 - **Client roles show in the console.** A user whose role is a client role on the console's client

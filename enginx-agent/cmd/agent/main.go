@@ -12,7 +12,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"os/user"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -104,7 +106,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	server := api.NewServer(cfg, controller, bundle.NewStore(cfg.ReleasesDir))
+	store := bundle.NewStore(cfg.ReleasesDir)
+	if gid, err := lookupGroup(cfg.NginxGroup); err == nil {
+		store.SetWorkerGroup(gid)
+	} else {
+		// Not fatal: only a protected site needs it, and staging one refuses with this same
+		// reason rather than writing a file the workers cannot read.
+		slog.Warn("the NGINX worker group could not be resolved; sites with basic authentication "+
+			"cannot be deployed until AGENT_NGINX_GROUP names the group nginx's workers run as",
+			"group", cfg.NginxGroup, "error", err)
+	}
+	server := api.NewServer(cfg, controller, store)
 
 	// Said at startup rather than discovered at the first deployment, which refuses on this too.
 	// On a host that already ran NGINX this is the one line that usually needs adding.
@@ -170,4 +182,19 @@ func shutdown(controller *nginx.Controller) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	controller.Stop(ctx)
+}
+
+// lookupGroup resolves a group name, or a numeric id, to a gid.
+func lookupGroup(name string) (int, error) {
+	if name == "" {
+		return -1, fmt.Errorf("no group configured")
+	}
+	if gid, err := strconv.Atoi(name); err == nil && gid >= 0 {
+		return gid, nil
+	}
+	group, err := user.LookupGroup(name)
+	if err != nil {
+		return -1, err
+	}
+	return strconv.Atoi(group.Gid)
 }

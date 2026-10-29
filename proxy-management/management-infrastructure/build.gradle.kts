@@ -20,6 +20,9 @@ dependencies {
     // ACME (RFC 8555). One implementation of the CertificateProvider port, not the only
     // possible one: a private CA can be added behind the same interface.
     implementation(libs.acme4j.client)
+    // SHA-512-crypt for basic authentication users: the htpasswd format NGINX verifies through the
+    // system crypt(). Version managed by the Spring Boot BOM.
+    implementation("commons-codec:commons-codec")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation(platform(libs.spring.boot.bom))

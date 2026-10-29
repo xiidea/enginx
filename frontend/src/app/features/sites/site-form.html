@@ -214,6 +214,58 @@
 
   <section class="card span">
     <div class="card-head">
+      <h2>Protection</h2>
+      @if (protectionMode() === 'BASIC') {
+        <button class="btn btn-sm" type="button" (click)="addBasicUser()">Add user</button>
+      }
+    </div>
+    <div class="card-body stack">
+      <div>
+        <label for="protection">Who may reach the site</label>
+        <select id="protection" [ngModel]="protectionMode()" (ngModelChange)="onProtectionModeChange($event)">
+          <option value="NONE">Anyone (public)</option>
+          <option value="BASIC">Basic authentication</option>
+        </select>
+      </div>
+
+      @if (protectionMode() !== 'NONE' && !canProtect()) {
+        <p class="hint warn">
+          Protection needs HTTPS with the HTTP to HTTPS redirect on, so a password is never sent
+          in cleartext. Enable both under TLS.
+        </p>
+      }
+
+      @if (protectionMode() === 'BASIC') {
+        @for (user of basicUsers(); track $index) {
+          <div class="user-row">
+            <div class="field">
+              <label [for]="'bu-name-' + $index">Username</label>
+              <input [id]="'bu-name-' + $index" class="mono" autocomplete="off" placeholder="alice"
+                [ngModel]="user.username" (ngModelChange)="updateBasicUser($index, { username: $event })" />
+            </div>
+            <div class="field">
+              <label [for]="'bu-pass-' + $index">Password</label>
+              <input [id]="'bu-pass-' + $index" type="password" autocomplete="new-password"
+                [placeholder]="user.existing ? 'Unchanged' : 'At least 8 characters'"
+                [ngModel]="user.password" (ngModelChange)="updateBasicUser($index, { password: $event })" />
+            </div>
+            <div class="field">
+              <button class="btn btn-sm" type="button" (click)="removeBasicUser($index)">Remove</button>
+            </div>
+          </div>
+        }
+        <p class="hint">
+          Visitors are asked for one of these before anything reaches the upstream. Passwords are
+          stored hashed and never shown again; leave one empty to keep it.
+        </p>
+      } @else {
+        <p class="hint">Anyone who can reach the host can reach the site.</p>
+      }
+    </div>
+  </section>
+
+  <section class="card span">
+    <div class="card-head">
       <h2>Custom headers</h2>
       <button class="btn btn-sm" type="button" (click)="addHeader()">Add header</button>
     </div>

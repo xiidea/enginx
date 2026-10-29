@@ -67,7 +67,7 @@ public class HttpNginxAgentClient implements NginxAgentPort {
             node.put("sha256", file.sha256());
             if (file.sensitive()) {
                 node.put("sensitive", true);
-                node.put("mode", "0600");
+                node.put("mode", file.mode());
             }
         }
 

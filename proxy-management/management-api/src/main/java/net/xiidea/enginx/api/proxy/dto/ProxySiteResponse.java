@@ -8,7 +8,7 @@ import java.util.UUID;
 @Schema(name = "ProxySiteResponse", description = "One proxy site in full.",
         // Required means always present and non-null. Nullable fields are left optional
         // on purpose: that is what tells a generated client it must handle their absence.
-        requiredProperties = {"id", "name", "domain", "nginxInstanceId", "status", "enabled", "sslEnabled", "forceHttps", "hstsEnabled", "websocketEnabled", "loadBalancingMethod", "connectTimeoutSeconds", "readTimeoutSeconds", "sendTimeoutSeconds", "maxBodySizeBytes", "upstreams", "headers", "locations", "createdBy", "createdAt", "updatedBy", "updatedAt", "version"})
+        requiredProperties = {"id", "name", "domain", "nginxInstanceId", "status", "enabled", "sslEnabled", "forceHttps", "hstsEnabled", "websocketEnabled", "loadBalancingMethod", "connectTimeoutSeconds", "readTimeoutSeconds", "sendTimeoutSeconds", "maxBodySizeBytes", "upstreams", "headers", "locations", "protection", "createdBy", "createdAt", "updatedBy", "updatedAt", "version"})
 public record ProxySiteResponse(
         UUID id,
         String name,
@@ -32,6 +32,7 @@ public record ProxySiteResponse(
         List<UpstreamDto> upstreams,
         List<HeaderDto> headers,
         List<LocationDto> locations,
+        ProtectionResponse protection,
         String createdBy,
         Instant createdAt,
         String updatedBy,

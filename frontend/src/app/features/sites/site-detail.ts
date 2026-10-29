@@ -73,6 +73,10 @@ export class SiteDetail implements OnInit {
   readonly canOperate = computed(() => this.permission()?.canOperate ?? false);
   readonly canManage = computed(() => this.permission()?.canManage ?? false);
 
+  readonly basicAuthUsernames = computed(() =>
+    (this.site()?.protection.basicUsers ?? []).map((user) => user.username).join(', '),
+  );
+
   readonly renewUntil = signal('');
 
   ngOnInit(): void {

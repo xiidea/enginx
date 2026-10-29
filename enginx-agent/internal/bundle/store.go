@@ -24,9 +24,18 @@ const (
 	stagingSuffix = ".staging"
 	defaultRetain = 10
 	sensitiveMode = os.FileMode(0o600)
+	// workerMode is for secrets NGINX worker processes read on each request, such as an
+	// htpasswd file. Workers run unprivileged, so a 0600 root-owned file would pass nginx -t,
+	// which the root master runs, and then fail every request.
+	workerMode    = os.FileMode(0o640)
 	regularMode   = os.FileMode(0o644)
 	directoryMode = os.FileMode(0o755)
 )
+
+// ErrNoWorkerGroup means a bundle asked for a worker-readable file on a host whose NGINX worker
+// group could not be resolved. Refused at staging, before anything is activated, rather than
+// written in a way the workers cannot read.
+var ErrNoWorkerGroup = errors.New("a worker-readable file needs the NGINX worker group (AGENT_NGINX_GROUP), which could not be resolved")
 
 // File is one member of a bundle as it arrives over the wire.
 type File struct {
@@ -49,6 +58,8 @@ type Bundle struct {
 type Store struct {
 	root   string
 	retain int
+	// workerGID owns 0640 files so the NGINX workers can read them. -1 when unknown.
+	workerGID int
 
 	// Activation mutates a shared symlink, so it is serialised within this process. Two agents
 	// on one host would be a deployment error, not a case to coordinate against.
@@ -56,7 +67,13 @@ type Store struct {
 }
 
 func NewStore(root string) *Store {
-	return &Store{root: root, retain: defaultRetain}
+	return &Store{root: root, retain: defaultRetain, workerGID: -1}
+}
+
+// SetWorkerGroup sets the group that owns worker-readable files: the group NGINX's worker
+// processes run as.
+func (s *Store) SetWorkerGroup(gid int) {
+	s.workerGID = gid
 }
 
 var (
@@ -99,7 +116,7 @@ func (s *Store) Stage(b Bundle) error {
 		return fmt.Errorf("creating staging directory: %w", err)
 	}
 
-	if err := writeFiles(staging, b.Files); err != nil {
+	if err := writeFiles(staging, b.Files, s.workerGID); err != nil {
 		_ = os.RemoveAll(staging)
 		return err
 	}
@@ -115,8 +132,39 @@ func (s *Store) Stage(b Bundle) error {
 	return nil
 }
 
-func writeFiles(root string, files []File) error {
+// fileMode decides how a file is written. The mode is checked against the few this agent knows,
+// so a value it does not understand is refused rather than guessed at.
+func fileMode(file File) (os.FileMode, error) {
+	switch file.Mode {
+	case "":
+		if file.Sensitive {
+			return sensitiveMode, nil
+		}
+		return regularMode, nil
+	case "0600":
+		return sensitiveMode, nil
+	case "0640":
+		return workerMode, nil
+	case "0644":
+		if file.Sensitive {
+			return 0, fmt.Errorf("%s is sensitive and cannot be written world-readable", file.Path)
+		}
+		return regularMode, nil
+	default:
+		return 0, fmt.Errorf("%s asks for mode %q, which this agent does not support", file.Path, file.Mode)
+	}
+}
+
+func writeFiles(root string, files []File, workerGID int) error {
 	for _, file := range files {
+		mode, err := fileMode(file)
+		if err != nil {
+			return err
+		}
+		if mode == workerMode && workerGID < 0 {
+			return fmt.Errorf("%s: %w", file.Path, ErrNoWorkerGroup)
+		}
+
 		clean, err := safeJoin(root, file.Path)
 		if err != nil {
 			return err
@@ -132,16 +180,18 @@ func writeFiles(root string, files []File) error {
 			return fmt.Errorf("checksum mismatch for %s", file.Path)
 		}
 
-		mode := regularMode
-		if file.Sensitive || file.Mode == "0600" {
-			mode = sensitiveMode
-		}
 		if err := os.WriteFile(clean, []byte(file.Content), mode); err != nil {
 			return fmt.Errorf("writing %s: %w", file.Path, err)
 		}
 		// WriteFile honours the mode only when it creates the file, so set it explicitly.
 		if err := os.Chmod(clean, mode); err != nil {
 			return fmt.Errorf("setting permissions on %s: %w", file.Path, err)
+		}
+		if mode == workerMode {
+			// The owner stays whoever the agent runs as; only the group changes.
+			if err := os.Chown(clean, -1, workerGID); err != nil {
+				return fmt.Errorf("giving %s to the NGINX worker group: %w", file.Path, err)
+			}
 		}
 	}
 	return nil

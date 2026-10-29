@@ -1,13 +1,16 @@
 package net.xiidea.enginx.infrastructure.persistence.mapper;
 
+import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
 import net.xiidea.enginx.domain.proxy.ProxyTimeouts;
+import net.xiidea.enginx.domain.proxy.SiteProtection;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.TimeWindow;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteBasicAuthUserEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteHeaderEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteLocationEntity;
@@ -41,6 +44,11 @@ public class ProxySiteMapper {
                 .map(l -> new LocationRule(l.getPathPattern(), l.getMatchType(), l.getSortOrder()))
                 .toList();
 
+        SiteProtection protection = new SiteProtection(entity.getProtectionMode(),
+                entity.basicAuthUsers().stream()
+                        .map(u -> new BasicAuthUser(u.getUsername(), u.getPasswordHash()))
+                        .toList());
+
         ProxySiteSpec spec = new ProxySiteSpec(
                 entity.getName(),
                 DomainName.of(entity.getDomain()),
@@ -56,7 +64,8 @@ public class ProxySiteMapper {
                         entity.getSendTimeoutSeconds(), entity.getMaxBodySizeBytes()),
                 upstreams,
                 headers,
-                locations);
+                locations,
+                protection);
 
         return ProxySite.rehydrate(entity.getId(), spec, entity.getAdminState(), entity.getStatus(),
                 entity.getCreatedBy(), entity.getCreatedAt(), entity.getUpdatedBy(), entity.getUpdatedAt(),
@@ -80,6 +89,7 @@ public class ProxySiteMapper {
         entity.setWebsocketEnabled(spec.websocketEnabled());
         entity.setSslCertificateId(spec.sslCertificateId());
         entity.setLbMethod(spec.loadBalancingMethod());
+        entity.setProtectionMode(spec.protection().mode());
         entity.setConnectTimeoutSeconds(spec.timeouts().connectSeconds());
         entity.setReadTimeoutSeconds(spec.timeouts().readSeconds());
         entity.setSendTimeoutSeconds(spec.timeouts().sendSeconds());
@@ -92,6 +102,7 @@ public class ProxySiteMapper {
         mergeUpstreams(entity, spec.upstreams());
         mergeHeaders(entity, spec.headers());
         mergeLocations(entity, spec.locations());
+        mergeBasicAuthUsers(entity, spec.protection().basicUsers());
     }
 
     /**
@@ -155,6 +166,23 @@ public class ProxySiteMapper {
             }
         }
         entity.locations().removeAll(existing.values());
+    }
+
+    private void mergeBasicAuthUsers(ProxySiteEntity entity, List<BasicAuthUser> desired) {
+        Map<String, ProxySiteBasicAuthUserEntity> existing =
+                index(entity.basicAuthUsers(), ProxySiteBasicAuthUserEntity::naturalKey);
+
+        for (BasicAuthUser user : desired) {
+            ProxySiteBasicAuthUserEntity row = existing.remove(user.username());
+            if (row == null) {
+                row = new ProxySiteBasicAuthUserEntity(UUID.randomUUID(), user.username(), user.passwordHash());
+                entity.attach(row);
+                entity.basicAuthUsers().add(row);
+            } else {
+                row.update(user.passwordHash());
+            }
+        }
+        entity.basicAuthUsers().removeAll(existing.values());
     }
 
     private static <E> Map<String, E> index(List<E> rows, Function<E, String> keyOf) {

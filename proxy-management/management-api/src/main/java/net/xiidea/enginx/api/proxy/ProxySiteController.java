@@ -151,7 +151,8 @@ public class ProxySiteController {
     public ResponseEntity<ProxySiteResponse> create(@Valid @RequestBody ProxySiteRequest request,
                                                     UriComponentsBuilder uriBuilder) {
         ProxySite created = service.create(new ProxySiteCommands.Create(
-                mapper.toSpec(request), mapper.toAdminState(request.enabled())));
+                mapper.toSpec(request), mapper.toAdminState(request.enabled()),
+                mapper.toProtectionInput(request.protection())));
 
         URI location = uriBuilder.path("/api/v1/proxy-sites/{id}").buildAndExpand(created.id()).toUri();
         return ResponseEntity.created(location)
@@ -168,7 +169,8 @@ public class ProxySiteController {
             @Valid @RequestBody ProxySiteRequest request) {
 
         return ok(service.update(new ProxySiteCommands.Update(
-                id, mapper.toSpec(request), EntityVersion.parseIfMatch(ifMatch))));
+                id, mapper.toSpec(request), EntityVersion.parseIfMatch(ifMatch),
+                mapper.toProtectionInput(request.protection()))));
     }
 
     @DeleteMapping("/{id}")

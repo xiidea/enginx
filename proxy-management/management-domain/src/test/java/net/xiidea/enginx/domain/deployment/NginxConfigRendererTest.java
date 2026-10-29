@@ -1,5 +1,6 @@
 package net.xiidea.enginx.domain.deployment;
 
+import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.LoadBalancingMethod;
 import net.xiidea.enginx.domain.proxy.LocationMatchType;
 import net.xiidea.enginx.domain.proxy.ProxySite;
@@ -20,6 +21,8 @@ import static net.xiidea.enginx.domain.deployment.RenderFixtures.BUNDLE;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.INSTANCE;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.NOW;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.NO_CERTIFICATES;
+import static net.xiidea.enginx.domain.deployment.RenderFixtures.OTHER_HASH;
+import static net.xiidea.enginx.domain.deployment.RenderFixtures.SECRET_HASH;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.TEST_CERTIFICATE;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.location;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.requestHeader;
@@ -41,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class NginxConfigRendererTest {
 
     /** A current NGINX that has the platform supply its catch-all. */
-    private static final RenderTarget MODERN = new RenderTarget("1.27.5", true);
+    private static final RenderTarget MODERN = new RenderTarget("1.27.5", true, "0.2.0");
 
     private static final String SITE_ID = "aaaaaaaa-0000-0000-0000-000000000001";
     private final NginxConfigRenderer renderer = new NginxConfigRenderer();
@@ -92,6 +95,78 @@ class NginxConfigRendererTest {
                     .timeouts(new ProxyTimeouts(5, 120, 30, 52_428_800L))
                     .site(SITE_ID);
             assertMatchesGolden("websocket-headers.conf", renderer.renderSitePreview(site, NO_CERTIFICATES, MODERN));
+        }
+
+        @Test
+        void basicAuthOnTheTlsServerOnly() {
+            ProxySite site = spec("private.example.com").ssl(true, false)
+                    .basicAuth(new BasicAuthUser("bob", OTHER_HASH), new BasicAuthUser("alice", SECRET_HASH))
+                    .site(SITE_ID);
+            assertMatchesGolden("basic-auth.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN));
+        }
+    }
+
+    @Nested
+    @DisplayName("basic authentication")
+    class BasicAuth {
+
+        private final ProxySite protectedSite = spec("private.example.com").ssl(true, false)
+                .basicAuth(new BasicAuthUser("bob", OTHER_HASH), new BasicAuthUser("alice", SECRET_HASH))
+                .site(SITE_ID);
+
+        @Test
+        @DisplayName("the htpasswd file is sorted, worker-readable, and never in the readable file list")
+        void htpasswdIsWorkerReadableAndHidden() {
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(protectedSite),
+                    TEST_CERTIFICATE, "ada", NOW);
+
+            BundleFile htpasswd = bundle.files().stream()
+                    .filter(file -> file.path().equals("auth/private.example.com/htpasswd"))
+                    .findFirst().orElseThrow();
+            assertThat(htpasswd.content()).isEqualTo("alice:" + SECRET_HASH + "\nbob:" + OTHER_HASH + "\n");
+            assertThat(htpasswd.access()).isEqualTo(BundleFile.Access.WORKER_READABLE);
+            assertThat(htpasswd.mode()).isEqualTo("0640");
+            assertThat(bundle.publicFiles()).extracting(BundleFile::path)
+                    .doesNotContain("auth/private.example.com/htpasswd");
+        }
+
+        @Test
+        @DisplayName("the redirect server, which answers ACME and the probe, asks for no credentials")
+        void redirectServerIsNotProtected() {
+            String config = renderer.renderSitePreview(protectedSite, TEST_CERTIFICATE, MODERN);
+            String redirectServer = config.substring(config.indexOf("listen 80;"), config.indexOf("listen 443"));
+
+            assertThat(redirectServer).doesNotContain("auth_basic");
+            assertThat(config.split("auth_basic \"", -1)).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("a host whose agent cannot write worker-readable files is refused before deployment")
+        void olderAgentIsRefused() {
+            RenderTarget old = new RenderTarget("1.27.5", true, "0.1.2");
+
+            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, old, 1, List.of(protectedSite),
+                    TEST_CERTIFICATE, "ada", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("agent 0.2.0 or later")
+                    .hasMessageContaining("0.1.2");
+        }
+
+        @Test
+        @DisplayName("a password change alone changes the bundle hash and the site's fingerprint")
+        void passwordChangeIsDetectable() {
+            ProxySite changed = spec("private.example.com").ssl(true, false)
+                    .basicAuth(new BasicAuthUser("bob", OTHER_HASH), new BasicAuthUser("alice", OTHER_HASH))
+                    .site(SITE_ID);
+
+            ConfigBundle before = renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(protectedSite),
+                    TEST_CERTIFICATE, "ada", NOW);
+            ConfigBundle after = renderer.render(BUNDLE, INSTANCE, MODERN, 2, List.of(changed),
+                    TEST_CERTIFICATE, "ada", NOW);
+
+            assertThat(after.contentHash()).isNotEqualTo(before.contentHash());
+            assertThat(NginxConfigRenderer.siteMarkers(after))
+                    .isNotEqualTo(NginxConfigRenderer.siteMarkers(before));
         }
     }
 

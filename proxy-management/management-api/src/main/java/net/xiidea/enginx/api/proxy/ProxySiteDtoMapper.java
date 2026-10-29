@@ -2,15 +2,19 @@ package net.xiidea.enginx.api.proxy;
 
 import net.xiidea.enginx.api.proxy.dto.HeaderDto;
 import net.xiidea.enginx.api.proxy.dto.LocationDto;
+import net.xiidea.enginx.api.proxy.dto.ProtectionRequest;
+import net.xiidea.enginx.api.proxy.dto.ProtectionResponse;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteRequest;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteResponse;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteSummaryResponse;
 import net.xiidea.enginx.api.proxy.dto.UpstreamDto;
+import net.xiidea.enginx.application.proxy.ProtectionInput;
 import net.xiidea.enginx.domain.proxy.AdminState;
 import net.xiidea.enginx.domain.proxy.HeaderDirection;
 import net.xiidea.enginx.domain.proxy.LoadBalancingMethod;
 import net.xiidea.enginx.domain.proxy.LocationMatchType;
 import net.xiidea.enginx.domain.proxy.LocationRule;
+import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
@@ -95,6 +99,20 @@ public class ProxySiteDtoMapper {
                 locations);
     }
 
+    /**
+     * The requested protection, passwords still in the clear for the service to hash; null when
+     * the request left it out, which on an update means "keep what the site has".
+     */
+    public ProtectionInput toProtectionInput(ProtectionRequest request) {
+        if (request == null) {
+            return null;
+        }
+        List<ProtectionInput.BasicUser> users = request.basicUsers() == null ? List.of() : request.basicUsers().stream()
+                .map(u -> new ProtectionInput.BasicUser(u.username(), u.password()))
+                .toList();
+        return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users);
+    }
+
     public AdminState toAdminState(Boolean enabled) {
         return Boolean.FALSE.equals(enabled) ? AdminState.DISABLED : AdminState.ENABLED;
     }
@@ -131,6 +149,10 @@ public class ProxySiteDtoMapper {
                 spec.locations().stream()
                         .map(l -> new LocationDto(l.pathPattern(), l.matchType().name()))
                         .toList(),
+                new ProtectionResponse(spec.protection().mode().name(),
+                        spec.protection().basicUsers().stream()
+                                .map(u -> new ProtectionResponse.BasicAuthUserResponse(u.username()))
+                                .toList()),
                 site.createdBy(),
                 site.createdAt(),
                 site.updatedBy(),

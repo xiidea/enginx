@@ -7,19 +7,27 @@ import net.xiidea.enginx.domain.audit.AuditAction;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.permission.AccessScope;
 import net.xiidea.enginx.domain.permission.PermissionLevel;
+import net.xiidea.enginx.domain.proxy.BasicAuthUser;
+import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteQuery;
 import net.xiidea.enginx.domain.proxy.ProxySiteRepository;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
+import net.xiidea.enginx.domain.proxy.SiteProtection;
 import net.xiidea.enginx.domain.shared.ConflictException;
 import net.xiidea.enginx.domain.shared.NotFoundException;
 import net.xiidea.enginx.domain.shared.PageResult;
+import net.xiidea.enginx.domain.shared.ValidationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 /**
@@ -41,11 +49,17 @@ public class ProxySiteService {
 
     static final String RESOURCE_TYPE = "PROXY_SITE";
 
+    static final int MIN_PASSWORD_LENGTH = 8;
+    // Bounded because hashing is: SHA-512-crypt's cost grows with the password, and this runs on
+    // the request thread.
+    static final int MAX_PASSWORD_LENGTH = 128;
+
     private final ProxySiteRepository sites;
     private final NginxInstanceRepository instances;
     private final SitePermissionService permissions;
     private final AuditRecorder audit;
     private final ActorProvider actorProvider;
+    private final HtpasswdHasher htpasswdHasher;
     private final Clock clock;
 
     public ProxySiteService(ProxySiteRepository sites,
@@ -53,12 +67,14 @@ public class ProxySiteService {
                             SitePermissionService permissions,
                             AuditRecorder audit,
                             ActorProvider actorProvider,
+                            HtpasswdHasher htpasswdHasher,
                             Clock clock) {
         this.sites = sites;
         this.instances = instances;
         this.permissions = permissions;
         this.audit = audit;
         this.actorProvider = actorProvider;
+        this.htpasswdHasher = htpasswdHasher;
         this.clock = clock;
     }
 
@@ -82,7 +98,9 @@ public class ProxySiteService {
 
     @Transactional
     public ProxySite create(ProxySiteCommands.Create command) {
-        ProxySiteSpec spec = command.spec();
+        ProxySiteSpec spec = command.protection() == null
+                ? command.spec()
+                : command.spec().withProtection(resolveProtection(command.protection(), SiteProtection.none()));
         permissions.requireCreatePermission(spec.domain());
         requireInstanceExists(spec.nginxInstanceId());
         requireDomainAvailable(spec, null);
@@ -102,15 +120,19 @@ public class ProxySiteService {
 
         Map<String, Object> before = ProxySiteSnapshot.of(site);
         requireVersion(site, command.expectedVersion());
-        requireDomainAvailable(command.spec(), site.id());
+        SiteProtection current = site.spec().protection();
+        ProxySiteSpec spec = command.spec().withProtection(command.protection() == null
+                ? current
+                : resolveProtection(command.protection(), current));
+        requireDomainAvailable(spec, site.id());
 
         // Renaming a site onto a different domain is a move across namespaces, so it needs the
         // same authority that creating it there would have needed.
-        if (!command.spec().domain().equals(site.domain())) {
-            permissions.requireCreatePermission(command.spec().domain());
+        if (!spec.domain().equals(site.domain())) {
+            permissions.requireCreatePermission(spec.domain());
         }
 
-        site.update(command.spec(), actor(), clock.instant());
+        site.update(spec, actor(), clock.instant());
         ProxySite saved = sites.save(site);
 
         audit.success(AuditAction.PROXY_SITE_UPDATED, RESOURCE_TYPE, saved.id(), before, ProxySiteSnapshot.of(saved));
@@ -175,6 +197,44 @@ public class ProxySiteService {
         Map<String, Object> before = ProxySiteSnapshot.of(site);
         sites.deleteById(id);
         audit.success(AuditAction.PROXY_SITE_DELETED, RESOURCE_TYPE, id, before, null);
+    }
+
+    /**
+     * Turns requested protection into stored protection: new passwords hashed, and a user sent
+     * without one keeping the hash it already has. A user who is new and has no password is an
+     * error rather than an account nobody can sign in to.
+     */
+    private SiteProtection resolveProtection(ProtectionInput input, SiteProtection current) {
+        if (input.mode() == null) {
+            throw new ValidationException("protection.mode", "Protection mode is required");
+        }
+        if (input.mode() == ProtectionMode.NONE) {
+            return SiteProtection.none();
+        }
+        Map<String, BasicAuthUser> existing = current.basicUsers().stream()
+                .collect(Collectors.toMap(BasicAuthUser::username, Function.identity()));
+
+        List<BasicAuthUser> users = new ArrayList<>();
+        for (ProtectionInput.BasicUser requested : input.basicUsers()) {
+            String username = BasicAuthUser.requireValidUsername(requested.username());
+            String password = requested.password();
+            if (password == null || password.isEmpty()) {
+                BasicAuthUser kept = existing.get(username);
+                if (kept == null) {
+                    throw new ValidationException("protection.basicUsers.password",
+                            "A password is required for the new user '" + username + "'");
+                }
+                users.add(kept);
+                continue;
+            }
+            if (password.length() < MIN_PASSWORD_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
+                throw new ValidationException("protection.basicUsers.password",
+                        "The password for '" + username + "' must be " + MIN_PASSWORD_LENGTH + " to "
+                                + MAX_PASSWORD_LENGTH + " characters");
+            }
+            users.add(new BasicAuthUser(username, htpasswdHasher.hash(password)));
+        }
+        return new SiteProtection(input.mode(), users);
     }
 
     /** Loads without an access check. Private, so every public path must decide for itself. */

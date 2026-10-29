@@ -2,7 +2,15 @@ import { Component, OnInit, computed, inject, input, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { CertificatesApi, InstancesApi, SitesApi } from '../../core/api/resources';
-import { Certificate, HeaderRule, NginxInstance, Site, SiteRequest, Upstream } from '../../core/api/models';
+import {
+  Certificate,
+  HeaderRule,
+  NginxInstance,
+  ProtectionMode,
+  Site,
+  SiteRequest,
+  Upstream,
+} from '../../core/api/models';
 import { Notifications } from '../../shared/notifications';
 import { PageHeader } from '../../shared/page';
 
@@ -47,6 +55,11 @@ export class SiteForm implements OnInit {
   readonly maxBodySizeMb = signal(1);
   readonly upstreams = signal<Upstream[]>([{ scheme: 'http', host: '', port: 8080 }]);
   readonly headers = signal<HeaderRule[]>([]);
+  readonly protectionMode = signal<ProtectionMode>('NONE');
+  readonly basicUsers = signal<BasicUserRow[]>([]);
+
+  /** Mirrors the server's rule: credentials are only ever asked for over HTTPS. */
+  readonly canProtect = computed(() => this.sslEnabled() && this.forceHttps());
 
   /**
    * Certificates that actually cover the domain being configured.
@@ -109,6 +122,10 @@ export class SiteForm implements OnInit {
     this.maxBodySizeMb.set(Math.max(1, Math.round(site.maxBodySizeBytes / 1048576)));
     this.upstreams.set(site.upstreams.length ? [...site.upstreams] : [{ scheme: 'http', host: '', port: 8080 }]);
     this.headers.set([...site.headers]);
+    this.protectionMode.set(site.protection.mode as ProtectionMode);
+    // The server never returns a password or its hash, so an existing user starts with an empty
+    // password field, which saving sends as "keep the current one".
+    this.basicUsers.set(site.protection.basicUsers.map((user) => ({ username: user.username, password: '', existing: true })));
   }
 
   addUpstream(): void {
@@ -133,6 +150,25 @@ export class SiteForm implements OnInit {
 
   updateHeader(index: number, patch: Partial<HeaderRule>): void {
     this.headers.update((all) => all.map((header, i) => (i === index ? { ...header, ...patch } : header)));
+  }
+
+  onProtectionModeChange(mode: ProtectionMode): void {
+    this.protectionMode.set(mode);
+    if (mode === 'BASIC' && !this.basicUsers().length) {
+      this.addBasicUser();
+    }
+  }
+
+  addBasicUser(): void {
+    this.basicUsers.update((all) => [...all, { username: '', password: '', existing: false }]);
+  }
+
+  removeBasicUser(index: number): void {
+    this.basicUsers.update((all) => all.filter((_, i) => i !== index));
+  }
+
+  updateBasicUser(index: number, patch: Partial<BasicUserRow>): void {
+    this.basicUsers.update((all) => all.map((user, i) => (i === index ? { ...user, ...patch } : user)));
   }
 
   /** Mirrors the server's rule so the impossible combination cannot be submitted. */
@@ -170,6 +206,16 @@ export class SiteForm implements OnInit {
       maxBodySizeBytes: this.maxBodySizeMb() * 1048576,
       upstreams: this.upstreams().filter((upstream) => upstream.host.trim()),
       headers: this.headers().filter((header) => header.name.trim()),
+      protection: {
+        mode: this.protectionMode(),
+        basicUsers:
+          this.protectionMode() === 'BASIC'
+            ? this.basicUsers()
+                .filter((user) => user.username.trim())
+                // An empty password is omitted, which the server reads as "keep the current one".
+                .map((user) => ({ username: user.username.trim(), password: user.password || undefined }))
+            : [],
+      },
     };
 
     this.saving.set(true);
@@ -192,6 +238,13 @@ export class SiteForm implements OnInit {
       },
     });
   }
+}
+
+/** One basic authentication user as edited; existing users have a password the form never sees. */
+interface BasicUserRow {
+  username: string;
+  password: string;
+  existing: boolean;
 }
 
 function toLocalInput(iso: string | null): string {
