@@ -37,10 +37,23 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   in a host's custom file, a shadowing server block, unreadable files and a missing gate, none of
   which `nginx -t` rejects.
 
-Schema: migrations `003-site-protection`, `004-gate` and `005-gate-oidc` add
+- **Saving a site from the console no longer drops its custom locations.** The form never sent
+  them, and the API read the omission as "just the root location", so every save reduced a site to
+  `location /`. The form now has a Locations card. **API change:** an update that leaves
+  `locations` out keeps the site's current ones, as `protection` already does; send an empty list
+  for the root location alone. Locations are now recorded in the audit trail.
+- **Secrets in stored bundles are sealed.** A rendered bundle is kept so redeploys and rollbacks
+  resend exactly what was validated, and its sensitive files (certificate private keys, htpasswd
+  files, gate files) were kept in the clear. They are now envelope-encrypted like every other
+  secret, and re-wrapped when the key rotates. Existing bundles are sealed when the platform first
+  starts on this release; the log says how many.
+
+Schema: migrations `003-site-protection`, `004-gate`, `005-gate-oidc` and `006-sealed-bundle-files`
+add
 `proxy_sites.protection_mode`, `gate_session_ttl_s` and `oidc_any_user`; the
 `proxy_site_basic_auth_users`, `proxy_site_allowed_emails`, `proxy_site_oidc_users`,
-`proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and `config_bundle_files.file_mode`. API: `protection` on the site
+`proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and `config_bundle_files.file_mode`
+plus sealed-content columns, with `content` now null for sensitive files. API: `protection` on the site
 request and response, `POST /proxy-sites/{id}/sign-out-everyone`, and
 `POST /agents/gate/otp-mail` for gates.
 

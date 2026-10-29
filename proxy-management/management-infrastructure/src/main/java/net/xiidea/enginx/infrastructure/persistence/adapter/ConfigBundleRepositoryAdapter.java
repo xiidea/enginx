@@ -25,9 +25,11 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final ConfigBundleJpaRepository repository;
+    private final BundleFileSecrets secrets;
 
-    public ConfigBundleRepositoryAdapter(ConfigBundleJpaRepository repository) {
+    public ConfigBundleRepositoryAdapter(ConfigBundleJpaRepository repository, BundleFileSecrets secrets) {
         this.repository = repository;
+        this.secrets = secrets;
     }
 
     @Override
@@ -47,8 +49,12 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
 
         if (entity.getFiles().isEmpty()) {
             for (BundleFile file : bundle.files()) {
-                entity.attach(new ConfigBundleFileEntity(UUID.randomUUID(), file.path(),
-                        file.content(), file.sha256(), file.sensitive(), file.mode()));
+                ConfigBundleFileEntity row = new ConfigBundleFileEntity(UUID.randomUUID(), file.path(),
+                        file.content(), file.sha256(), file.sensitive(), file.mode());
+                if (file.sensitive()) {
+                    row.seal(secrets.seal(file.content()));
+                }
+                entity.attach(row);
             }
         }
 
@@ -58,21 +64,21 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
     @Override
     @Transactional(readOnly = true)
     public Optional<ConfigBundle> findById(UUID id) {
-        return repository.findByIdWithFiles(id).map(ConfigBundleRepositoryAdapter::toDomain);
+        return repository.findByIdWithFiles(id).map(this::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ConfigBundle> findByInstanceAndHash(UUID nginxInstanceId, String contentHash) {
         return repository.findByInstanceAndHashWithFiles(nginxInstanceId, contentHash)
-                .map(ConfigBundleRepositoryAdapter::toDomain);
+                .map(this::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ConfigBundle> findActiveForInstance(UUID nginxInstanceId) {
         return repository.findByInstanceAndStatusWithFiles(nginxInstanceId, BundleStatus.ACTIVE)
-                .map(ConfigBundleRepositoryAdapter::toDomain);
+                .map(this::toDomain);
     }
 
     @Override
@@ -84,7 +90,7 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
     @Transactional(readOnly = true)
     public List<ConfigBundle> findRecentForInstance(UUID nginxInstanceId, int limit) {
         return repository.findByNginxInstanceIdOrderBySequenceDesc(nginxInstanceId, Limit.of(limit)).stream()
-                .map(ConfigBundleRepositoryAdapter::toDomain)
+                .map(this::toDomain)
                 .toList();
     }
 
@@ -112,9 +118,15 @@ public class ConfigBundleRepositoryAdapter implements ConfigBundleRepository {
         throw new IllegalStateException("Unknown bundle file mode " + mode);
     }
 
-    private static ConfigBundle toDomain(ConfigBundleEntity entity) {
+    /** In the clear, or opened: a row stored before sealing existed may still be either. */
+    private String contentOf(ConfigBundleFileEntity file) {
+        var sealed = file.sealedContent();
+        return sealed == null ? file.getContent() : secrets.reveal(file.getId(), sealed);
+    }
+
+    private ConfigBundle toDomain(ConfigBundleEntity entity) {
         List<BundleFile> files = entity.getFiles().stream()
-                .map(file -> new BundleFile(file.getRelativePath(), file.getContent(),
+                .map(file -> new BundleFile(file.getRelativePath(), contentOf(file),
                         file.getSha256(), accessOf(file.getFileMode())))
                 .toList();
 

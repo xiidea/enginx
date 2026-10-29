@@ -73,7 +73,13 @@ db/changelog/changes/002-quartz.sql          Quartz's vendor DDL, copied verbati
 db/changelog/changes/003-site-protection.sql basic authentication, and bundle file modes
 db/changelog/changes/004-gate.sql            email sign-in: allow-lists, session length, gate keys
 db/changelog/changes/005-gate-oidc.sql       identity provider sign-in: access policies
+db/changelog/changes/006-sealed-bundle-files.sql sensitive files of stored bundles, sealed
 ```
+
+`006` cannot seal the rows already there, since the key is not the database's. The application
+seals them when it starts, logs how many, and then has PostgreSQL validate the constraint that holds
+every row to it. A database user that does not own the table cannot validate it; the constraint
+still binds every new and changed row, and the warning says so.
 
 The incremental changelogs that built this up were squashed before the first production
 deployment — no deployed database's history was worth preserving. Each squash was verified by

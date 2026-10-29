@@ -25,8 +25,24 @@ public class ConfigBundleFileEntity {
     @Column(name = "relative_path", nullable = false, length = 512)
     private String relativePath;
 
-    @Column(name = "content", nullable = false)
+    /** Null for a sensitive file, which is held sealed below instead. */
+    @Column(name = "content")
     private String content;
+
+    @Column(name = "content_ciphertext")
+    private byte[] contentCiphertext;
+
+    @Column(name = "content_wrapped_dek")
+    private byte[] contentWrappedDek;
+
+    @Column(name = "content_kek_id", length = 64)
+    private String contentKekId;
+
+    @Column(name = "content_cipher", length = 32)
+    private String contentCipher;
+
+    @Column(name = "content_iv")
+    private byte[] contentIv;
 
     @Column(name = "sha256", nullable = false, length = 64)
     private String sha256;
@@ -64,6 +80,26 @@ public class ConfigBundleFileEntity {
 
     public String getSha256() {
         return sha256;
+    }
+
+    /** Holds the content sealed rather than in the clear. */
+    public void seal(net.xiidea.enginx.domain.certificate.EncryptedSecret sealed) {
+        this.content = null;
+        this.contentCiphertext = sealed.ciphertext();
+        this.contentWrappedDek = sealed.wrappedDataKey();
+        this.contentKekId = sealed.kekId();
+        this.contentCipher = sealed.cipher();
+        this.contentIv = sealed.iv();
+    }
+
+    /** The sealed content, or null when it is held in the clear. */
+    public net.xiidea.enginx.domain.certificate.EncryptedSecret sealedContent() {
+        return contentCiphertext == null ? null : new net.xiidea.enginx.domain.certificate.EncryptedSecret(
+                contentCiphertext, contentWrappedDek, contentKekId, contentCipher, contentIv, null);
+    }
+
+    public UUID getId() {
+        return id;
     }
 
     public boolean isSensitive() {
