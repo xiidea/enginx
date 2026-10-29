@@ -121,6 +121,8 @@ them in for the session length set on the site, after which they are asked again
 ```
 
 - `*@example.com` admits every address at exactly that domain, not its subdomains.
+- Changing the list ends every session once deployed, so an address taken off it is out at once;
+  the others sign in again.
 - A sign-in lasts from 5 minutes to 30 days; 24 hours if unset.
 - The upstream receives the signed-in address as `X-Enginx-Email`, and as `X-Enginx-User`. NGINX
   always sets both, so a client cannot send its own, and the application can trust them.
@@ -217,8 +219,12 @@ for, or to a page saying their account may not enter.
   role. Role and client names may not contain a colon.
 - The upstream receives `X-Enginx-Email` and `X-Enginx-User` (`preferred_username`), both always
   set by NGINX.
-- **Roles are read when the visitor signs in.** A role taken away takes effect at their next
-  sign-in. To take effect at once, **sign everyone out**.
+- **Roles are read when the visitor signs in.** A role taken away at the provider takes effect at
+  their next sign-in; to take effect at once, **sign everyone out**. A change to the site's own
+  rules takes effect at once when the site is deployed: every session was issued under the rules
+  of its time, and a session issued under other rules sends its visitor to sign in again.
+- **Saving the site does not deploy it.** As for every site setting, a changed access rule reaches
+  the host with the next deployment.
 
 ### What it needs
 

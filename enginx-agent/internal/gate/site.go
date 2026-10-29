@@ -51,6 +51,9 @@ type Site struct {
 
 	sessionKey []byte
 	relayKey   []byte
+	// policy fingerprints who the site lets in. A session carries the fingerprint it was issued
+	// under, so changing the policy ends every session made under the old one.
+	policy string
 }
 
 type siteFile struct {
@@ -154,7 +157,7 @@ func parseSite(data []byte) (*Site, error) {
 	if f.SiteID == "" || f.Domain == "" || f.SessionTTLSeconds <= 0 {
 		return nil, fmt.Errorf("siteId, domain and sessionTtlSeconds are required")
 	}
-	return &Site{
+	site := &Site{
 		ID:         f.SiteID,
 		Domain:     f.Domain,
 		Mode:       f.Mode,
@@ -165,7 +168,31 @@ func parseSite(data []byte) (*Site, error) {
 		BasicUsers: basicUserMap(f.BasicUsers),
 		sessionKey: derive(key, sessionLabel),
 		relayKey:   derive(key, relayLabel),
-	}, nil
+	}
+	site.policy = policyFingerprint(site)
+	return site, nil
+}
+
+// policyFingerprint names a site's access policy, keyed by the site's session key. Basic
+// authentication has none: each of its sessions is bound to its own user's password instead,
+// which also ends it when that user is removed.
+func policyFingerprint(site *Site) string {
+	var policy any
+	switch site.Mode {
+	case ModeEmailOTP:
+		policy = site.Allowed
+	case ModeOIDC:
+		policy = struct {
+			AnyUser     bool
+			Users       []string
+			RealmRoles  []string
+			ClientRoles []ClientRole
+		}{site.OIDC.AnyUser, site.OIDC.Users, site.OIDC.RealmRoles, site.OIDC.ClientRoles}
+	default:
+		return ""
+	}
+	canonical, _ := json.Marshal(policy)
+	return sign(site.sessionKey, "policy\n"+string(canonical))[:22]
 }
 
 func basicUserMap(users []basicUser) map[string]string {

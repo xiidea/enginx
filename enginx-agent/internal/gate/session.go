@@ -19,6 +19,7 @@ type sessionClaims struct {
 	Email   string `json:"e"`
 	User    string `json:"u,omitempty"`
 	Proof   string `json:"p,omitempty"`
+	Policy  string `json:"a,omitempty"`
 	Expires int64  `json:"x"`
 }
 
@@ -37,7 +38,7 @@ var errInvalidSession = errors.New("invalid session")
 func issueSession(site *Site, who identity, now time.Time) (string, time.Time) {
 	expires := now.Add(site.SessionTTL)
 	payload, _ := json.Marshal(sessionClaims{Site: site.ID, Email: who.Email, User: who.User, Proof: who.Proof,
-		Expires: expires.Unix()})
+		Policy: site.policy, Expires: expires.Unix()})
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
 	return encoded + "." + sign(site.sessionKey, encoded), expires
 }
@@ -60,6 +61,11 @@ func verifySession(site *Site, value string, now time.Time) (identity, error) {
 	// The site is checked as well as the signature, though keys are per site already: it costs
 	// nothing, and keeps a session from moving if two sites ever came to share a key.
 	if claims.Site != site.ID || now.Unix() >= claims.Expires || (claims.Email == "" && claims.User == "") {
+		return identity{}, errInvalidSession
+	}
+	// Issued under another access policy: whoever it let in may not be let in now. They sign in
+	// again, and the policy in force decides.
+	if !hmac.Equal([]byte(claims.Policy), []byte(site.policy)) {
 		return identity{}, errInvalidSession
 	}
 	who := identity{Email: claims.Email, User: claims.User, Proof: claims.Proof}

@@ -345,3 +345,16 @@ func TestSignInPagesKeepTheOriginOnTheirOwnForms(t *testing.T) {
 		t.Errorf("Origin: null got %d, want 403", refused.Code)
 	}
 }
+
+func TestNarrowingTheAllowListEndsExistingSessions(t *testing.T) {
+	site := testSite(t)
+	value, _ := issueSession(site, identity{Email: "bob@example.com", User: "bob@example.com"}, time.Now())
+
+	narrowed, _ := parseSite([]byte(strings.Replace(testSiteFile, "    \"*@example.com\",\n", "", 1)))
+	if _, err := verifySession(narrowed, value, time.Now()); err == nil {
+		t.Fatal("a session survived its address being taken off the list")
+	}
+	if _, err := verifySession(testSite(t), value, time.Now()); err != nil {
+		t.Fatalf("a session did not survive an unchanged list: %v", err)
+	}
+}

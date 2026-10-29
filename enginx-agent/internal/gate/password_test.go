@@ -14,6 +14,7 @@ func basicServer(t *testing.T) (*Server, *Site) {
 	site := testSite(t)
 	site.Mode = ModeBasic
 	site.BasicUsers = map[string]string{"alice": aliceHash}
+	site.policy = policyFingerprint(site)
 	server := NewServer(&fakeRelay{sent: map[string]string{}})
 	server.SetSites(map[string]*Site{testSiteID: site})
 	return server, site

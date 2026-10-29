@@ -105,6 +105,7 @@ func (p *fakeProvider) site(policy OIDCConfig) *Site {
 	site := testSite(p.t)
 	site.Mode = ModeOIDC
 	site.OIDC = &policy
+	site.policy = policyFingerprint(site) // as parsing a real OIDC site file would
 	return site
 }
 
@@ -289,5 +290,34 @@ func TestOIDCStartsAreLimitedPerClient(t *testing.T) {
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("the 121st start from one client: %d", last)
+	}
+}
+
+// What happened on the QA realm: the site went from anyone to a client role, and a user who had
+// signed in under "anyone" kept their session. A changed policy now ends it.
+func TestChangingTheAccessPolicyEndsExistingSessions(t *testing.T) {
+	p := newFakeProvider(t)
+	p.claims = map[string]any{"preferred_username": "user"}
+	server := newOIDCServer(t, p, OIDCConfig{AnyUser: true})
+	session := cookie(signIn(t, server).Result(), SessionCookie)
+
+	check := func() int {
+		res := httptest.NewRecorder()
+		server.Handler().ServeHTTP(res, request("GET", "/check", nil, session))
+		return res.Code
+	}
+	if got := check(); got != http.StatusNoContent {
+		t.Fatalf("before the change: %d", got)
+	}
+
+	// The same policy, reloaded: sessions survive a redeploy that changes nothing.
+	server.SetSites(map[string]*Site{testSiteID: p.site(OIDCConfig{AnyUser: true})})
+	if got := check(); got != http.StatusNoContent {
+		t.Fatalf("after an unchanged reload: %d", got)
+	}
+
+	server.SetSites(map[string]*Site{testSiteID: p.site(OIDCConfig{ClientRoles: []ClientRole{{Client: "proxy", Role: "view"}}})})
+	if got := check(); got != http.StatusUnauthorized {
+		t.Fatalf("a session from under the old policy still works: %d", got)
 	}
 }
