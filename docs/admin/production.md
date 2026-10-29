@@ -37,6 +37,11 @@ as files and read through Spring's config tree, exactly as in Compose, so nothin
 the two. NetworkPolicies are included because which component may talk to which is most of this
 platform's security story, and a cluster that permits everything discards it.
 
+For [protected sites](protected-sites.md), the ConfigMap carries the gate settings
+(`GATE_RELAY_URL`, `GATE_OIDC_*`) and commented mail settings, and a NetworkPolicy lets the agent
+pods reach the API on 8080 to have sign-in codes mailed. Uncomment the mail settings before
+offering email sign-in.
+
 Agents are a DaemonSet, but only for clusters that also serve the proxied traffic, and only on
 nodes labelled `enginx.net/proxy=true`. Most estates will not use it: the agent's usual home is a
 virtual machine outside any cluster, and a host does not have to be a pod.
@@ -126,6 +131,13 @@ by the same CA still cannot impersonate a host.
 `/etc/nginx/enginx/default-tls/`, which only a Phase 9 agent creates. Deploying such a bundle to an
 older agent fails validation citing a certificate nobody configured. On a first install the order
 does not matter.
+
+**From 0.1.x to 0.2.0, the same rule holds, and it matters more.** A 0.2.0 agent writes the files
+protected sites need (`0640`, owned by the NGINX worker group) and runs the gate that email and
+identity provider sign-in rely on. The platform refuses to render a protected site for an older
+agent, so nothing breaks; the site simply cannot be deployed until its host is upgraded. The first
+0.2.0 start of the management server also seals the private keys of every stored bundle, and logs
+how many.
 
 ### 2.4 Bring it up
 
@@ -437,6 +449,13 @@ NGINX error log as `[emerg] bind() to … failed` or `still could not bind()`. F
 host, then deploy again. The next deployment re-sends the configuration even though nothing about
 the site changed, and the agent reloads; once its VERIFY passes, identical deployments are skipped
 again.
+
+**Served, but its protection is not enforced** means a [protected site](protected-sites.md)
+answered a visitor who had not signed in. The phase says what was answered. The usual causes are a
+`return` or `rewrite` in one of the host's custom files, another server block claiming the name,
+an htpasswd file the workers cannot read (a 500, with `Permission denied` in the error log; check
+`AGENT_NGINX_GROUP`), or a gate that is not running. A deployment that has passed `nginx -t` also
+records a warning when a protected site's server block contains `return` or `rewrite`.
 
 A VERIFY phase marked SKIPPED means the agent could not be probed at all. That is not a site
 outage; check the agent.

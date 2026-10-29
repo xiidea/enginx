@@ -26,6 +26,24 @@ data:
   ACME_ACCEPT_TOS: "true"
 
   NOTIFICATION_OPERATOR_ADDRESSES: platform@example.com
+
+  # Site protection (docs/admin/protected-sites.md). Where the agents' gates ask for a sign-in
+  # code to be mailed: this API as they reach it, inside the cluster. 50-network-policy.yaml lets
+  # the agent pods through; a host outside the cluster needs the public URL instead.
+  GATE_RELAY_URL: http://proxy-management:8080/api/v1/agents/gate/otp-mail
+  # The identity provider sites sign visitors in at. The issuer is public, as for the console;
+  # the backchannel is how the gates reach it. Leave GATE_OIDC_ISSUER_URI unset to offer no OIDC
+  # sign-in. enginx-sites should be a public client with PKCE, allowing each site's
+  # https://<domain>/.enginx/auth/callback.
+  GATE_OIDC_ISSUER_URI: https://enginx.example.com/realms/enginx
+  GATE_OIDC_BACKCHANNEL_URI: http://keycloak:8080/realms/enginx
+  GATE_OIDC_CLIENT_ID: enginx-sites
+  # Mail, for sign-in codes and notifications. Uncomment and set together; an empty host would
+  # still register a mail sender, and every send would fail. The password goes in the Secret.
+  # SPRING_MAIL_HOST: smtp.example.com
+  # SPRING_MAIL_PORT: "587"
+  # SPRING_MAIL_USERNAME: enginx@example.com
+  # SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
   AUDIT_RETENTION_MONTHS: "0"
 
   # Wraps data keys in Vault, so the key-encryption key is never in a pod's memory. Set to
@@ -54,3 +72,5 @@ stringData:
   enginx.crypto.vault.token: "change-me"
   enginx.agent.key-store-password: "change-me"
   enginx.agent.trust-store-password: "change-me"
+  # With SPRING_MAIL_HOST in the ConfigMap:
+  # spring.mail.password: "change-me"

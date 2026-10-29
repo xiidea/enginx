@@ -122,6 +122,24 @@ services:
       AGENT_KEYSTORE: /etc/enginx/pki/management.p12
       AGENT_TRUSTSTORE: /etc/enginx/pki/truststore.p12
 
+      # Site protection (docs/admin/protected-sites.md), each optional; blank offers none.
+      # Email sign-in: where hosts' gates ask for a code to be mailed, as the hosts reach this API,
+      # e.g. https://nginx.example.com/api/v1/agents/gate/otp-mail. Codes go out by the mail
+      # settings below.
+      GATE_RELAY_URL: ${GATE_RELAY_URL:-}
+      # Identity provider sign-in: the provider's public issuer, how hosts reach it when that
+      # differs, and the gates' client (public, with PKCE).
+      GATE_OIDC_ISSUER_URI: ${GATE_OIDC_ISSUER_URI:-}
+      GATE_OIDC_BACKCHANNEL_URI: ${GATE_OIDC_BACKCHANNEL_URI:-}
+      GATE_OIDC_CLIENT_ID: ${GATE_OIDC_CLIENT_ID:-}
+      # Mail, for sign-in codes and notifications. Uncomment together: an empty host would still
+      # register a mail sender, and every send would fail. Put the password in a secrets file,
+      # spring.mail.password, like the others.
+      # SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:?}
+      # SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      # SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:?}
+      # SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+
       CRYPTO_ACTIVE_KEY_ID: ${CRYPTO_ACTIVE_KEY_ID:-k1}
 
       # Production issuance. Let's Encrypt counts certificates per registered domain per week, and

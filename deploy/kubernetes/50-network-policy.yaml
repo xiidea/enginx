@@ -28,6 +28,16 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - port: 8080
+    # The agents' gates, asking for a sign-in code to be mailed (GATE_RELAY_URL). The request is
+    # authenticated by its signature with the site's key, not by where it comes from; this only
+    # keeps every other pod away from the API, as before. Only when a code is sent: checking a
+    # visitor's session never leaves the agent's pod.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: enginx-agent
+      ports:
+        - port: 8080
     # A metrics scraper. /actuator/prometheus still requires a SUPER_ADMIN token — this only makes
     # the port reachable, it does not make the endpoint open.
     - from:
