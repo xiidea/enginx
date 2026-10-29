@@ -135,6 +135,12 @@ final class RenderFixtures {
             return this;
         }
 
+        Builder basicAuthOnLoginPage(BasicAuthUser... users) {
+            this.protection = SiteProtection.basicWithLoginPage(List.of(users),
+                    new net.xiidea.enginx.domain.proxy.BasicLoginPage(java.time.Duration.ofHours(8)));
+            return this;
+        }
+
         Builder emailOtp(String... allowed) {
             this.protection = net.xiidea.enginx.domain.proxy.SiteProtection.emailOtp(new EmailOtpPolicy(
                     java.util.Arrays.stream(allowed).map(AllowedEmail::new).toList(), null));

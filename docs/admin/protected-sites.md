@@ -56,6 +56,24 @@ users. Over the API it is the `protection` object of the site request:
   is live.
 - The audit trail records the mode and the usernames, never a hash.
 
+### A login page instead of the browser's prompt
+
+By default a visitor gets the browser's own username and password prompt, which no site can style
+or replace. Choose **Visitors sign in with: a login page** (in the API,
+`"basicLoginPage": {"sessionTtlSeconds": 28800}`) and the host's gate serves a login page on the
+site's domain instead, for the same users and passwords:
+
+- **Sessions.** A visitor signs in once and stays signed in for the session length; **Sign out**
+  (`/.enginx/auth/logout`) and **Sign everyone out** work as for the other gate modes. Changing a
+  user's password or removing the user ends their sessions at once, as it would with the prompt.
+- **Limits on guessing.** Failed attempts are limited per client and per username, which NGINX's own
+  basic authentication cannot do. An unknown username takes as long to refuse as a wrong password.
+- **Scripts keep working.** A request carrying `Authorization: Basic` with valid credentials is let
+  through without a session, so `curl -u user:pass` is unaffected. Its failures count against the
+  same limits as the form's.
+- **It needs the gate**, like email and identity provider sign-in: the agent image runs it, and a host
+  whose service manager runs NGINX runs `enginx-gate` too. The browser's prompt needs NGINX alone.
+
 ### How it is stored and served
 
 Each password is hashed with SHA-512-crypt (`$6$`, 5000 rounds), the strongest scheme that both

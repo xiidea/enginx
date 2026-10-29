@@ -1342,6 +1342,14 @@ export interface components {
         BasicAuthUserResponse: {
             username: string;
         };
+        /** @description Basic authentication on the gate's login page. Present only when chosen; absent means the browser's own prompt. */
+        BasicLoginPageDto: {
+            /**
+             * Format: int32
+             * @description How long a sign-in lasts, 300 to 2592000. Defaults to 86400.
+             */
+            sessionTtlSeconds?: number;
+        };
         BundleFileResponse: {
             content?: string;
             path?: string;
@@ -1770,6 +1778,8 @@ export interface components {
         };
         /** @description Who may reach the site. Omit on update to keep the current protection. */
         ProtectionRequest: {
+            /** @description For BASIC: sign in on a login page served by the host's gate, rather than the browser's prompt. Omit for the prompt. */
+            basicLoginPage?: components["schemas"]["BasicLoginPageDto"];
             basicUsers?: components["schemas"]["BasicAuthUserRequest"][];
             emailOtp?: components["schemas"]["EmailOtpRequest"];
             /**
@@ -1780,6 +1790,7 @@ export interface components {
             oidc?: components["schemas"]["OidcAccessRequest"];
         };
         ProtectionResponse: {
+            basicLoginPage?: components["schemas"]["BasicLoginPageDto"];
             basicUsers: components["schemas"]["BasicAuthUserResponse"][];
             emailOtp?: components["schemas"]["EmailOtpResponse"];
             mode: string;

@@ -82,6 +82,9 @@ public class ProxySiteEntity {
     @Column(name = "oidc_any_user")
     private Boolean oidcAnyUser;
 
+    @Column(name = "basic_login_page", nullable = false)
+    private boolean basicLoginPage;
+
     @Column(name = "connect_timeout_s", nullable = false)
     private int connectTimeoutSeconds;
 
@@ -341,6 +344,14 @@ public class ProxySiteEntity {
 
     public void setGateSessionTtlSeconds(Integer gateSessionTtlSeconds) {
         this.gateSessionTtlSeconds = gateSessionTtlSeconds;
+    }
+
+    public boolean isBasicLoginPage() {
+        return basicLoginPage;
+    }
+
+    public void setBasicLoginPage(boolean basicLoginPage) {
+        this.basicLoginPage = basicLoginPage;
     }
 
     public Boolean getOidcAnyUser() {

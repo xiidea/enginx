@@ -60,6 +60,8 @@ export class SiteForm implements OnInit {
   readonly locations = signal<LocationRule[]>([]);
   readonly protectionMode = signal<ProtectionMode>('NONE');
   readonly basicUsers = signal<BasicUserRow[]>([]);
+  /** Basic authentication on the gate's login page rather than the browser's prompt. */
+  readonly basicLoginPage = signal(false);
   /** One address or *@domain per line. */
   readonly allowedEmails = signal('');
   readonly sessionHours = signal(24);
@@ -159,6 +161,10 @@ export class SiteForm implements OnInit {
     // The server never returns a password or its hash, so an existing user starts with an empty
     // password field, which saving sends as "keep the current one".
     this.basicUsers.set(site.protection.basicUsers.map((user) => ({ username: user.username, password: '', existing: true })));
+    if (site.protection.basicLoginPage) {
+      this.basicLoginPage.set(true);
+      this.sessionHours.set(Math.max(1, Math.round((site.protection.basicLoginPage.sessionTtlSeconds ?? 86400) / 3600)));
+    }
     if (site.protection.emailOtp) {
       this.allowedEmails.set(site.protection.emailOtp.allowedEmails.join('\n'));
       this.sessionHours.set(Math.max(1, Math.round(site.protection.emailOtp.sessionTtlSeconds / 3600)));
@@ -282,6 +288,10 @@ export class SiteForm implements OnInit {
                 // An empty password is omitted, which the server reads as "keep the current one".
                 .map((user) => ({ username: user.username.trim(), password: user.password || undefined }))
             : [],
+        basicLoginPage:
+          this.protectionMode() === 'BASIC' && this.basicLoginPage()
+            ? { sessionTtlSeconds: this.sessionHours() * 3600 }
+            : undefined,
         emailOtp:
           this.protectionMode() === 'EMAIL_OTP'
             ? {

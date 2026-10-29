@@ -17,8 +17,10 @@ protected site never waits on the platform to check a visitor.
 ### Highlights
 
 - **Protected sites: basic authentication.** A site can require a username and password from a user
-  list kept on the site. Passwords are write-only, stored as SHA-512-crypt, and never returned. See
-  [protected sites](docs/admin/protected-sites.md).
+  list kept on the site. Passwords are write-only, stored as SHA-512-crypt, and never returned.
+  Visitors sign in with the browser's prompt, or on a **login page** served by the gate, with
+  sessions, limits on failed attempts and *Sign everyone out*, while scripts can still send basic
+  credentials. See [protected sites](docs/admin/protected-sites.md).
 - **Protected sites: email sign-in.** A site can admit only visitors who sign in with a code mailed
   to an allowed address or `*@domain`. Codes are mailed by the platform, so hosts hold no SMTP
   credentials; sessions are checked on the host alone. **Sign everyone out** replaces a site's key.
@@ -83,8 +85,8 @@ protected site never waits on the platform to check a visitor.
    identity provider sign-in ([configuration](docs/admin/configuration.md)). Basic authentication
    needs neither. On a host whose service manager runs NGINX, run `enginx-gate` as a service too.
 
-Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, `gate_session_ttl_s` and
-`oidc_any_user`; the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails`,
+Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, `gate_session_ttl_s`,
+`oidc_any_user` and `basic_login_page`; the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails`,
 `proxy_site_oidc_users`, `proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and
 `config_bundle_files.file_mode` plus sealed-content columns, with `content` now null for sensitive
 files. API: `protection` on the site request and response, `GET /proxy-sites/protection-modes`,

@@ -119,8 +119,10 @@ public class ProxySiteDtoMapper {
                         .map(r -> new ProtectionInput.Oidc.Role(r.client(), r.role()))
                         .toList(),
                 request.oidc().sessionTtlSeconds());
+        ProtectionInput.LoginPage loginPage = request.basicLoginPage() == null ? null
+                : new ProtectionInput.LoginPage(request.basicLoginPage().sessionTtlSeconds());
         return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users,
-                emailOtp, oidc);
+                emailOtp, oidc, loginPage);
     }
 
     public AdminState toAdminState(Boolean enabled) {
@@ -175,7 +177,10 @@ public class ProxySiteDtoMapper {
                                         .map(r -> new net.xiidea.enginx.api.proxy.dto.OidcRoleDto(r.client(), r.role()))
                                         .toList(),
                                 spec.protection().oidc().sessionTtl().toSeconds(),
-                                "https://" + spec.domain().value() + "/.enginx/auth/callback")),
+                                "https://" + spec.domain().value() + "/.enginx/auth/callback"),
+                        spec.protection().basicLoginPage() == null ? null
+                                : new net.xiidea.enginx.api.proxy.dto.BasicLoginPageDto(
+                                        (int) spec.protection().basicLoginPage().sessionTtl().toSeconds())),
                 site.createdBy(),
                 site.createdAt(),
                 site.updatedBy(),

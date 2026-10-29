@@ -386,6 +386,17 @@
         ],
         "type": "object"
       },
+      "BasicLoginPageDto": {
+        "description": "Basic authentication on the gate's login page. Present only when chosen; absent means the browser's own prompt.",
+        "properties": {
+          "sessionTtlSeconds": {
+            "description": "How long a sign-in lasts, 300 to 2592000. Defaults to 86400.",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "BundleFileResponse": {
         "properties": {
           "content": {
@@ -1668,6 +1679,10 @@
       "ProtectionRequest": {
         "description": "Who may reach the site. Omit on update to keep the current protection.",
         "properties": {
+          "basicLoginPage": {
+            "$ref": "#/components/schemas/BasicLoginPageDto",
+            "description": "For BASIC: sign in on a login page served by the host's gate, rather than the browser's prompt. Omit for the prompt."
+          },
           "basicUsers": {
             "items": {
               "$ref": "#/components/schemas/BasicAuthUserRequest"
@@ -1696,6 +1711,9 @@
       },
       "ProtectionResponse": {
         "properties": {
+          "basicLoginPage": {
+            "$ref": "#/components/schemas/BasicLoginPageDto"
+          },
           "basicUsers": {
             "items": {
               "$ref": "#/components/schemas/BasicAuthUserResponse"

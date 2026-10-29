@@ -33,6 +33,13 @@ type Server struct {
 	providers *providers
 	oidcFlows *oidcFlows
 
+	// Basic authentication on a login page: attempts per client and per username, form and
+	// Authorization header alike, and a short memory of headers already checked, so a script
+	// sending one on every request does not pay a SHA-512-crypt each time.
+	passwordByIP   *limiter
+	passwordByUser *limiter
+	checkedHeaders *headerCache
+
 	// background tracks codes still being handed to the platform, so a shutdown, or a test, can
 	// wait for them.
 	background sync.WaitGroup
@@ -52,6 +59,10 @@ func NewServer(relay Relay) *Server {
 		byIP:    newLimiter(10, 15*time.Minute),
 		byEmail: newLimiter(5, 15*time.Minute),
 		starts:  newLimiter(120, 15*time.Minute),
+
+		passwordByIP:   newLimiter(20, 15*time.Minute),
+		passwordByUser: newLimiter(10, 15*time.Minute),
+		checkedHeaders: newHeaderCache(time.Minute),
 
 		providers: newProviders(nil),
 		oidcFlows: newOIDCFlows(),
@@ -97,19 +108,27 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	cookie, err := r.Cookie(SessionCookie)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
+	who, ok := s.sessionOf(site, r)
+	if !ok && site.Mode == ModeBasic {
+		// A script with credentials, rather than a browser with a session.
+		who, ok = s.basicHeader(site, r)
 	}
-	who, err := verifySession(site, cookie.Value, s.now())
-	if err != nil {
+	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	w.Header().Set("X-Enginx-Email", who.Email)
 	w.Header().Set("X-Enginx-User", who.User)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) sessionOf(site *Site, r *http.Request) (identity, bool) {
+	cookie, err := r.Cookie(SessionCookie)
+	if err != nil {
+		return identity{}, false
+	}
+	who, err := verifySession(site, cookie.Value, s.now())
+	return who, err == nil
 }
 
 func (s *Server) unavailable(w http.ResponseWriter) {
@@ -123,15 +142,22 @@ func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 		s.unavailable(w)
 		return
 	}
-	if site.Mode == ModeOIDC {
+	switch site.Mode {
+	case ModeOIDC:
 		s.startOIDC(w, r, site)
-		return
+	case ModeBasic:
+		render(w, http.StatusOK, page{Domain: site.Domain, Step: "password", Redirect: redirectFromQuery(r.URL.RawQuery)})
+	default:
+		render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: redirectFromQuery(r.URL.RawQuery)})
 	}
-	render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: redirectFromQuery(r.URL.RawQuery)})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	site := s.site(r)
+	if site != nil && site.Mode == ModeBasic {
+		s.handlePasswordLogin(w, r, site)
+		return
+	}
 	if site == nil || site.Mode != ModeEmailOTP {
 		s.unavailable(w)
 		return

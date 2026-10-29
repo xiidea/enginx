@@ -135,6 +135,24 @@ class SiteProtectionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("a login page reads back as saved, gets a key, and makes sign-out-everyone possible")
+    void loginPageRoundTrips() {
+        ProxySite site = sites.create(new ProxySiteCommands.Create(spec(), AdminState.ENABLED,
+                new ProtectionInput(ProtectionMode.BASIC, List.of(user("alice", "correct horse")), null, null,
+                        new ProtectionInput.LoginPage(3600))));
+
+        ProxySite reloaded = sites.get(site.id());
+        assertThat(reloaded.spec().protection().basicLoginPage().sessionTtl().toSeconds()).isEqualTo(3600);
+        assertThat(reloaded.spec().protection().usesGate()).isTrue();
+        sites.signOutEveryone(site.id());
+
+        ProxySite prompt = sites.update(new ProxySiteCommands.Update(site.id(), spec(), null,
+                new ProtectionInput(ProtectionMode.BASIC, List.of(user("alice", null)))));
+        assertThat(prompt.spec().protection().basicLoginPage()).isNull();
+        assertThatThrownBy(() -> sites.signOutEveryone(site.id())).isInstanceOf(ValidationException.class);
+    }
+
+    @Test
     @DisplayName("short passwords are refused")
     void shortPasswordsAreRefused() {
         assertThatThrownBy(() -> create(user("alice", "short")))

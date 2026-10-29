@@ -2,6 +2,7 @@ package net.xiidea.enginx.infrastructure.persistence.mapper;
 
 import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
+import net.xiidea.enginx.domain.proxy.BasicLoginPage;
 import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
 import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.OidcAccessPolicy;
@@ -61,12 +62,14 @@ public class ProxySiteMapper {
                 entity.oidcUsers().stream().map(ProxySiteOidcUserEntity::getUsername).toList(),
                 entity.oidcRoles().stream().map(r -> new OidcRole(r.getClientId(), r.getRoleName())).toList(),
                 sessionTtl);
+        BasicLoginPage loginPage = entity.isBasicLoginPage() ? new BasicLoginPage(sessionTtl) : null;
         SiteProtection protection = new SiteProtection(entity.getProtectionMode(),
                 entity.basicAuthUsers().stream()
                         .map(u -> new BasicAuthUser(u.getUsername(), u.getPasswordHash()))
                         .toList(),
                 emailOtp,
-                oidc);
+                oidc,
+                loginPage);
 
         ProxySiteSpec spec = new ProxySiteSpec(
                 entity.getName(),
@@ -114,6 +117,7 @@ public class ProxySiteMapper {
         java.time.Duration sessionTtl = spec.protection().sessionTtl();
         entity.setGateSessionTtlSeconds(sessionTtl == null ? null : (int) sessionTtl.toSeconds());
         entity.setOidcAnyUser(oidc == null ? null : oidc.anyUser());
+        entity.setBasicLoginPage(spec.protection().basicLoginPage() != null);
         entity.setConnectTimeoutSeconds(spec.timeouts().connectSeconds());
         entity.setReadTimeoutSeconds(spec.timeouts().readSeconds());
         entity.setSendTimeoutSeconds(spec.timeouts().sendSeconds());

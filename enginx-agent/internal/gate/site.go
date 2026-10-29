@@ -30,6 +30,9 @@ const (
 const (
 	ModeEmailOTP = "EMAIL_OTP"
 	ModeOIDC     = "OIDC"
+	// ModeBasic is basic authentication on the gate's login page: the site's users and their
+	// SHA-512-crypt hashes, checked here rather than by NGINX's auth_basic.
+	ModeBasic = "BASIC"
 )
 
 // Site is one protected site, as the platform rendered it into the bundle.
@@ -43,6 +46,8 @@ type Site struct {
 	RelayURL string
 	// Identity provider sign-in.
 	OIDC *OIDCConfig
+	// Basic authentication on a login page: username to hash.
+	BasicUsers map[string]string
 
 	sessionKey []byte
 	relayKey   []byte
@@ -58,6 +63,12 @@ type siteFile struct {
 	AllowedEmails     []string    `json:"allowedEmails"`
 	RelayURL          string      `json:"relayUrl"`
 	OIDC              *OIDCConfig `json:"oidc"`
+	BasicUsers        []basicUser `json:"basicUsers"`
+}
+
+type basicUser struct {
+	Username string `json:"username"`
+	Hash     string `json:"hash"`
 }
 
 // OIDCConfig is the platform's identity provider, and who among its users may enter this site.
@@ -122,6 +133,10 @@ func parseSite(data []byte) (*Site, error) {
 		if f.RelayURL == "" {
 			return nil, fmt.Errorf("relayUrl is required for email sign-in")
 		}
+	case ModeBasic:
+		if len(f.BasicUsers) == 0 {
+			return nil, fmt.Errorf("basicUsers is required for basic authentication")
+		}
 	case ModeOIDC:
 		if f.OIDC == nil || f.OIDC.Issuer == "" || f.OIDC.ClientID == "" {
 			return nil, fmt.Errorf("oidc.issuer and oidc.clientId are required for identity provider sign-in")
@@ -147,9 +162,21 @@ func parseSite(data []byte) (*Site, error) {
 		Allowed:    f.AllowedEmails,
 		RelayURL:   f.RelayURL,
 		OIDC:       f.OIDC,
+		BasicUsers: basicUserMap(f.BasicUsers),
 		sessionKey: derive(key, sessionLabel),
 		relayKey:   derive(key, relayLabel),
 	}, nil
+}
+
+func basicUserMap(users []basicUser) map[string]string {
+	if len(users) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(users))
+	for _, u := range users {
+		out[u.Username] = u.Hash
+	}
+	return out
 }
 
 // Admits reports whether an address is on the site's allow-list: an exact entry, or *@domain for

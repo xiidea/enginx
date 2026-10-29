@@ -244,6 +244,29 @@
       }
 
       @if (protectionMode() === 'BASIC') {
+        <div class="grid-2">
+          <div>
+            <label for="basic-style">Visitors sign in with</label>
+            <select id="basic-style" [ngModel]="basicLoginPage()" (ngModelChange)="basicLoginPage.set($event)">
+              <option [ngValue]="false">The browser's prompt</option>
+              <option [ngValue]="true">A login page</option>
+            </select>
+          </div>
+          @if (basicLoginPage()) {
+            <div>
+              <label for="basic-session">Sign-in lasts (hours)</label>
+              <input id="basic-session" type="number" min="1" max="720"
+                [ngModel]="sessionHours()" (ngModelChange)="sessionHours.set(+$event)" />
+            </div>
+          }
+        </div>
+        @if (basicLoginPage()) {
+          <p class="hint">
+            The host's gate shows a login page, keeps visitors signed in, limits failed attempts and
+            can sign everyone out. Scripts can still send the username and password as basic
+            credentials.
+          </p>
+        }
         @for (user of basicUsers(); track $index) {
           <div class="user-row">
             <div class="field">

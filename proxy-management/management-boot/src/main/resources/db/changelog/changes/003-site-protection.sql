@@ -133,3 +133,18 @@ ALTER TABLE config_bundle_files
 --rollback ALTER TABLE config_bundle_files DROP CONSTRAINT ck_bundle_file_sensitive_sealed, DROP CONSTRAINT ck_bundle_file_content, DROP CONSTRAINT ck_bundle_file_mode;
 --rollback ALTER TABLE config_bundle_files DROP COLUMN content_iv, DROP COLUMN content_cipher, DROP COLUMN content_kek_id, DROP COLUMN content_wrapped_dek, DROP COLUMN content_ciphertext, DROP COLUMN file_mode;
 --rollback ALTER TABLE config_bundle_files ALTER COLUMN content SET NOT NULL;
+
+--changeset enginx:003-080-basic-login-page
+--comment Basic authentication on the gate's login page rather than the browser's prompt: the same
+--comment users, through the gate, with sessions. A sign-in through the gate has a length, so
+--comment gate_session_ttl_s is now set for a basic-auth site with a login page too.
+ALTER TABLE proxy_sites ADD COLUMN basic_login_page boolean NOT NULL DEFAULT false;
+ALTER TABLE proxy_sites DROP CONSTRAINT ck_site_gate_session_ttl;
+ALTER TABLE proxy_sites
+    ADD CONSTRAINT ck_site_basic_login_page CHECK (NOT basic_login_page OR protection_mode = 'BASIC'),
+    ADD CONSTRAINT ck_site_gate_session_ttl CHECK (
+        (protection_mode IN ('EMAIL_OTP','OIDC') OR basic_login_page) = (gate_session_ttl_s IS NOT NULL)
+        AND (gate_session_ttl_s IS NULL OR gate_session_ttl_s BETWEEN 300 AND 2592000));
+--rollback ALTER TABLE proxy_sites DROP CONSTRAINT ck_site_gate_session_ttl, DROP CONSTRAINT ck_site_basic_login_page;
+--rollback ALTER TABLE proxy_sites ADD CONSTRAINT ck_site_gate_session_ttl CHECK ((protection_mode IN ('EMAIL_OTP','OIDC')) = (gate_session_ttl_s IS NOT NULL) AND (gate_session_ttl_s IS NULL OR gate_session_ttl_s BETWEEN 300 AND 2592000));
+--rollback ALTER TABLE proxy_sites DROP COLUMN basic_login_page;

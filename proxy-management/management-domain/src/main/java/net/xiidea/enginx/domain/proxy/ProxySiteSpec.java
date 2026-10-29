@@ -120,7 +120,7 @@ public record ProxySiteSpec(
             throw new ValidationException("protection.mode",
                     "Protecting a site requires SSL with the HTTP to HTTPS redirect enabled");
         }
-        if (protection.mode().usesGate()) {
+        if (protection.usesGate()) {
             for (ProxySiteHeader header : headers) {
                 if (header.direction() == HeaderDirection.REQUEST
                         && (header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)

@@ -14,12 +14,16 @@ import java.util.Set;
  * from them is the same bytes for the same set however they were entered, and an unchanged list
  * redeploys as a no-op.
  */
+/**
+ * @param basicLoginPage for {@link ProtectionMode#BASIC} only: sign in on the gate's login page
+ *                       rather than the browser's prompt; null for the prompt
+ */
 public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp,
-                             OidcAccessPolicy oidc) {
+                             OidcAccessPolicy oidc, BasicLoginPage basicLoginPage) {
 
     public static final int MAX_BASIC_USERS = 64;
 
-    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of(), null, null);
+    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of(), null, null, null);
 
     public SiteProtection {
         if (mode == null) {
@@ -68,20 +72,40 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
             throw new ValidationException("protection.oidc",
                     "An identity provider access policy can only be set when the mode is OIDC");
         }
+        if (mode != ProtectionMode.BASIC && basicLoginPage != null) {
+            throw new ValidationException("protection.basicLoginPage",
+                    "A login page can only be chosen for basic authentication");
+        }
+    }
+
+    public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp,
+                          OidcAccessPolicy oidc) {
+        this(mode, basicUsers, emailOtp, oidc, null);
     }
 
     public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers) {
-        this(mode, basicUsers, null, null);
+        this(mode, basicUsers, null, null, null);
     }
 
     public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp) {
-        this(mode, basicUsers, emailOtp, null);
+        this(mode, basicUsers, emailOtp, null, null);
     }
 
-    /** How long a gate sign-in lasts, for either gate mode. */
+    /**
+     * Whether the host's gate decides who gets in: email and identity provider sign-in always, and
+     * basic authentication on a login page.
+     */
+    public boolean usesGate() {
+        return mode.usesGate() || basicLoginPage != null;
+    }
+
+    /** How long a gate sign-in lasts, for any mode that has one. */
     public java.time.Duration sessionTtl() {
         if (emailOtp != null) {
             return emailOtp.sessionTtl();
+        }
+        if (basicLoginPage != null) {
+            return basicLoginPage.sessionTtl();
         }
         return oidc == null ? null : oidc.sessionTtl();
     }
@@ -91,15 +115,19 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
     }
 
     public static SiteProtection basic(List<BasicAuthUser> users) {
-        return new SiteProtection(ProtectionMode.BASIC, users, null);
+        return new SiteProtection(ProtectionMode.BASIC, users, null, null, null);
+    }
+
+    public static SiteProtection basicWithLoginPage(List<BasicAuthUser> users, BasicLoginPage loginPage) {
+        return new SiteProtection(ProtectionMode.BASIC, users, null, null, loginPage);
     }
 
     public static SiteProtection emailOtp(EmailOtpPolicy policy) {
-        return new SiteProtection(ProtectionMode.EMAIL_OTP, List.of(), policy, null);
+        return new SiteProtection(ProtectionMode.EMAIL_OTP, List.of(), policy, null, null);
     }
 
     public static SiteProtection oidc(OidcAccessPolicy policy) {
-        return new SiteProtection(ProtectionMode.OIDC, List.of(), null, policy);
+        return new SiteProtection(ProtectionMode.OIDC, List.of(), null, policy, null);
     }
 
     public boolean isProtected() {

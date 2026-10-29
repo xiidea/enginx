@@ -14,7 +14,10 @@ public record ProtectionRequest(
         @Schema(description = "NONE, BASIC, EMAIL_OTP or OIDC", example = "BASIC") String mode,
         @Valid @Size(max = 64) List<BasicAuthUserRequest> basicUsers,
         @Valid EmailOtpRequest emailOtp,
-        @Valid OidcRequest oidc) {
+        @Valid OidcRequest oidc,
+        @Schema(description = "For BASIC: sign in on a login page served by the host's gate, rather than the "
+                + "browser's prompt. Omit for the prompt.")
+        @Valid BasicLoginPageDto basicLoginPage) {
 
     @Schema(name = "OidcAccessRequest",
             description = "Who, among the platform identity provider's users, may enter. Required when the mode is OIDC. "

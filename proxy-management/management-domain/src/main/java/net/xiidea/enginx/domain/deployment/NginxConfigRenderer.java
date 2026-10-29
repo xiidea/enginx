@@ -319,7 +319,9 @@ public final class NginxConfigRenderer {
     private List<BundleFile> renderProtectionFiles(ProxySite site, GateMaterialProvider gates) {
         return switch (site.spec().protection().mode()) {
             case NONE -> List.of();
-            case BASIC -> List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
+            case BASIC -> site.spec().protection().usesGate()
+                    ? List.of(BundleFile.workerReadable(gateFilePath(site), gateFile(site, gates)))
+                    : List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
             case EMAIL_OTP, OIDC -> List.of(BundleFile.workerReadable(gateFilePath(site), gateFile(site, gates)));
         };
     }
@@ -340,9 +342,12 @@ public final class NginxConfigRenderer {
         if (gates.keyFor(site.id()).isEmpty()) {
             return false;
         }
-        return site.spec().protection().mode() == ProtectionMode.OIDC
-                ? gates.oidcProvider().isPresent()
-                : gates.relayUrl().isPresent();
+        return switch (site.spec().protection().mode()) {
+            case OIDC -> gates.oidcProvider().isPresent();
+            case EMAIL_OTP -> gates.relayUrl().isPresent();
+            // The site's own users and key are all a login page needs.
+            default -> true;
+        };
     }
 
     private static String gateFile(ProxySite site, GateMaterialProvider gates) {
@@ -361,13 +366,27 @@ public final class NginxConfigRenderer {
         out.append("  \"mode\": \"").append(spec.protection().mode().name()).append("\",\n");
         out.append("  \"key\": \"").append(key).append("\",\n");
         out.append("  \"sessionTtlSeconds\": ").append(spec.protection().sessionTtl().toSeconds()).append(",\n");
-        if (spec.protection().mode() == ProtectionMode.OIDC) {
-            appendOidc(out, site, gates);
-        } else {
-            appendEmailOtp(out, site, gates);
+        switch (spec.protection().mode()) {
+            case OIDC -> appendOidc(out, site, gates);
+            case BASIC -> appendBasicUsers(out, site);
+            default -> appendEmailOtp(out, site, gates);
         }
         out.append("}\n");
         return out.toString();
+    }
+
+    /**
+     * The site's users, for a login page. The same SHA-512-crypt hashes the htpasswd file would
+     * carry: BasicAuthUser admits only [./$A-Za-z0-9] in a hash and no quote in a username.
+     */
+    private static void appendBasicUsers(StringBuilder out, ProxySite site) {
+        List<net.xiidea.enginx.domain.proxy.BasicAuthUser> users = site.spec().protection().basicUsers();
+        out.append("  \"basicUsers\": [");
+        for (int i = 0; i < users.size(); i++) {
+            out.append(i == 0 ? "\n" : ",\n").append("    {\"username\": \"").append(users.get(i).username())
+                    .append("\", \"hash\": \"").append(users.get(i).passwordHash()).append("\"}");
+        }
+        out.append("\n  ]\n");
     }
 
     private static void appendEmailOtp(StringBuilder out, ProxySite site, GateMaterialProvider gates) {
@@ -503,7 +522,9 @@ public final class NginxConfigRenderer {
         // without gate material leaves it out, as it does nothing else the host is sent.
         String protectionDigest = switch (spec.protection().mode()) {
             case NONE -> "";
-            case BASIC -> BundleFile.digest(spec.protection().htpasswd());
+            case BASIC -> spec.protection().usesGate()
+                    ? (gateMaterialAvailable(site, gates) ? BundleFile.digest(gateFile(site, gates)) : "")
+                    : BundleFile.digest(spec.protection().htpasswd());
             case EMAIL_OTP, OIDC -> gateMaterialAvailable(site, gates) ? BundleFile.digest(gateFile(site, gates)) : "";
         };
 
@@ -683,12 +704,12 @@ public final class NginxConfigRenderer {
         // Only on the TLS server. Protection requires forceHttps, so the plain-HTTP server for a
         // protected site is the redirect server, which keeps answering ACME challenges and the
         // probe without credentials — and never asks for a password in cleartext.
-        if (ssl && spec.protection().mode() == ProtectionMode.BASIC) {
+        if (ssl && spec.protection().mode() == ProtectionMode.BASIC && !spec.protection().usesGate()) {
             out.append("    auth_basic \"").append(BASIC_AUTH_REALM).append("\";\n");
             out.append("    auth_basic_user_file /etc/nginx/enginx/current/")
                     .append(htpasswdPath(site)).append(";\n\n");
         }
-        if (ssl && spec.protection().mode().usesGate()) {
+        if (ssl && spec.protection().usesGate()) {
             appendGate(out, site);
         }
 
@@ -745,6 +766,9 @@ public final class NginxConfigRenderer {
         out.append("        proxy_pass ").append(socket).append("/check;\n");
         out.append("        proxy_pass_request_body off;\n");
         out.append("        proxy_set_header Content-Length \"\";\n");
+        // So failed credentials sent in an Authorization header are limited per client, as the
+        // login form's are.
+        out.append("        proxy_set_header X-Real-IP $remote_addr;\n");
         out.append("        proxy_set_header X-Enginx-Site ").append(site.id()).append(";\n");
         out.append("    }\n\n");
 
@@ -806,7 +830,7 @@ public final class NginxConfigRenderer {
             }
         }
 
-        if (spec.protection().mode().usesGate()) {
+        if (spec.protection().usesGate()) {
             // Always set, so the upstream can trust it: a client sending its own is overwritten.
             out.append("        proxy_set_header X-Enginx-Email    $enginx_email;\n");
             out.append("        proxy_set_header X-Enginx-User     $enginx_user;\n");

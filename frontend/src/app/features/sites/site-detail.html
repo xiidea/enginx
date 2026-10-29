@@ -297,10 +297,17 @@
             <div class="facts">
               <div><span class="key">Access</span><span>basic authentication</span></div>
               <div>
+                <span class="key">Sign-in</span>
+                <span>{{ site.protection.basicLoginPage ? 'login page, lasts ' + sessionLength(site.protection.basicLoginPage.sessionTtlSeconds ?? 86400) : "browser's prompt" }}</span>
+              </div>
+              <div>
                 <span class="key">Users</span>
                 <span class="mono small">{{ basicAuthUsernames() }}</span>
               </div>
             </div>
+            @if (site.protection.basicLoginPage && canManage()) {
+              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+            }
           } @else if (site.protection.emailOtp; as emailOtp) {
             <div class="facts">
               <div><span class="key">Access</span><span>email one-time code</span></div>

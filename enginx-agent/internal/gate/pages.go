@@ -41,6 +41,17 @@ button{margin-top:1rem;width:100%;padding:.6rem;font-size:1rem;border:0;border-r
 <button type="submit">Sign in</button>
 </form>
 <p><a href="/.enginx/auth/login?rd={{.Redirect}}">Use a different address</a></p>
+{{else if eq .Step "password"}}
+<p>Sign in to continue.</p>
+{{if .Note}}<p class="note">{{.Note}}</p>{{end}}
+<form method="post" action="/.enginx/auth/login">
+<input type="hidden" name="rd" value="{{.Redirect}}">
+<label for="username">Username</label>
+<input id="username" name="username" autocomplete="username" value="{{.Username}}" required autofocus>
+<label for="password" style="margin-top:.75rem">Password</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required>
+<button type="submit">Sign in</button>
+</form>
 {{else if eq .Step "denied"}}
 <p>You are signed in as <strong>{{.Email}}</strong>, but that account may not enter this site.</p>
 <p><a href="/.enginx/auth/login?switch=1">Use another account</a></p>
@@ -60,6 +71,7 @@ type page struct {
 	Step     string
 	Email    string
 	Redirect string
+	Username string
 	Note     string
 }
 

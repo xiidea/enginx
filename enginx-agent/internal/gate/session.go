@@ -18,13 +18,16 @@ type sessionClaims struct {
 	Site    string `json:"s"`
 	Email   string `json:"e"`
 	User    string `json:"u,omitempty"`
+	Proof   string `json:"p,omitempty"`
 	Expires int64  `json:"x"`
 }
 
-// identity is who a session belongs to.
+// identity is who a session belongs to. Proof, for a basic-auth sign-in, ties the session to the
+// password it was made with, so changing the password or removing the user ends it.
 type identity struct {
 	Email string
 	User  string
+	Proof string
 }
 
 var errInvalidSession = errors.New("invalid session")
@@ -33,7 +36,8 @@ var errInvalidSession = errors.New("invalid session")
 // signs nobody out, and rotating the site's key on the platform signs out everyone.
 func issueSession(site *Site, who identity, now time.Time) (string, time.Time) {
 	expires := now.Add(site.SessionTTL)
-	payload, _ := json.Marshal(sessionClaims{Site: site.ID, Email: who.Email, User: who.User, Expires: expires.Unix()})
+	payload, _ := json.Marshal(sessionClaims{Site: site.ID, Email: who.Email, User: who.User, Proof: who.Proof,
+		Expires: expires.Unix()})
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
 	return encoded + "." + sign(site.sessionKey, encoded), expires
 }
@@ -58,7 +62,22 @@ func verifySession(site *Site, value string, now time.Time) (identity, error) {
 	if claims.Site != site.ID || now.Unix() >= claims.Expires || (claims.Email == "" && claims.User == "") {
 		return identity{}, errInvalidSession
 	}
-	return identity{Email: claims.Email, User: claims.User}, nil
+	who := identity{Email: claims.Email, User: claims.User, Proof: claims.Proof}
+	if site.Mode == ModeBasic && passwordProof(site, who.User) != who.Proof {
+		return identity{}, errInvalidSession
+	}
+	return who, nil
+}
+
+// passwordProof binds a basic-auth session to the user's current hash, without carrying the hash:
+// an HMAC of it under the session key, so it says nothing about the password to anyone holding
+// the cookie. A user who no longer exists gets a value no issued proof can equal.
+func passwordProof(site *Site, username string) string {
+	hash, ok := site.BasicUsers[username]
+	if !ok {
+		return "\x00"
+	}
+	return sign(site.sessionKey, "password\n"+username+"\n"+hash)[:22]
 }
 
 func sign(key []byte, message string) string {

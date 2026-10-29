@@ -170,7 +170,7 @@ public class ProxySiteService {
     public ProxySite signOutEveryone(UUID id) {
         ProxySite site = load(id);
         permissions.requireSiteAccess(site, PermissionLevel.MANAGE);
-        if (!site.spec().protection().mode().usesGate()) {
+        if (!site.spec().protection().usesGate()) {
             throw new ValidationException("protection.mode",
                     "Only a site with email or identity provider sign-in has sessions to end");
         }
@@ -295,6 +295,11 @@ public class ProxySiteService {
             }
             users.add(new BasicAuthUser(username, htpasswdHasher.hash(password)));
         }
+        if (input.mode() == ProtectionMode.BASIC && input.basicLoginPage() != null) {
+            Integer ttl = input.basicLoginPage().sessionTtlSeconds();
+            return SiteProtection.basicWithLoginPage(users,
+                    new net.xiidea.enginx.domain.proxy.BasicLoginPage(ttl == null ? null : java.time.Duration.ofSeconds(ttl)));
+        }
         return new SiteProtection(input.mode(), users);
     }
 
@@ -344,7 +349,7 @@ public class ProxySiteService {
 
     /** In the same transaction as the save, so a gated site can never exist without its key. */
     private void issueGateKeyIfGated(ProxySite site) {
-        if (site.spec().protection().mode().usesGate()) {
+        if (site.spec().protection().usesGate()) {
             gateKeys.ensure(site.id());
         }
     }

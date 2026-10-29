@@ -150,6 +150,24 @@ class NginxConfigRendererTest {
         }
 
         @Test
+        @DisplayName("on a login page, the gate checks the same users: no auth_basic, no htpasswd, the hashes in its file")
+        void loginPageGoesThroughTheGate() {
+            ProxySite onPage = spec("private.example.com").ssl(true, false)
+                    .basicAuthOnLoginPage(new BasicAuthUser("alice", SECRET_HASH))
+                    .site(SITE_ID);
+            ConfigBundle bundle = renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(onPage), TEST_CERTIFICATE,
+                    TEST_GATE, "ada", NOW);
+
+            String config = fileContent(bundle, "conf.d/private.example.com.conf");
+            assertThat(config).doesNotContain("auth_basic").contains("auth_request /.enginx/auth/check;");
+            assertThat(bundle.files()).extracting(BundleFile::path).doesNotContain("auth/private.example.com/htpasswd");
+            String gate = fileContent(bundle, "gate/sites/private.example.com.json");
+            assertThat(gate).contains("\"mode\": \"BASIC\"")
+                    .contains("{\"username\": \"alice\", \"hash\": \"" + SECRET_HASH + "\"}")
+                    .contains("\"sessionTtlSeconds\": 28800");
+        }
+
+        @Test
         @DisplayName("a host whose agent cannot write worker-readable files is refused before deployment")
         void olderAgentIsRefused() {
             RenderTarget old = new RenderTarget("1.27.5", true, "0.1.2");

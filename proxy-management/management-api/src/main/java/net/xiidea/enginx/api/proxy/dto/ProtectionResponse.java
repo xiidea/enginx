@@ -7,7 +7,7 @@ import java.util.List;
 /** Who may reach a site. Usernames only: a password hash is never returned. */
 @Schema(name = "ProtectionResponse", requiredProperties = {"mode", "basicUsers"})
 public record ProtectionResponse(String mode, List<BasicAuthUserResponse> basicUsers, EmailOtpResponse emailOtp,
-                                 OidcResponse oidc) {
+                                 OidcResponse oidc, BasicLoginPageDto basicLoginPage) {
 
     /**
      * Present only when the mode is OIDC.
