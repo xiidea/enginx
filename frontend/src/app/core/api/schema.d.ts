@@ -919,6 +919,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proxy-sites/protection-modes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which protection modes this platform can serve
+         * @description A gate mode is unavailable until its platform settings are configured; saving a site with one is refused. The reason says which setting is missing.
+         */
+        get: operations["proxySite_protectionModes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proxy-sites/{id}": {
         parameters: {
             query?: never;
@@ -1742,6 +1762,11 @@ export interface components {
             title?: string;
             /** Format: uri */
             type?: string;
+        };
+        ProtectionModeAvailability: {
+            available: boolean;
+            mode: string;
+            reason?: string;
         };
         /** @description Who may reach the site. Omit on update to keep the current protection. */
         ProtectionRequest: {
@@ -3844,6 +3869,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_protectionModes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProtectionModeAvailability"][];
                 };
             };
             /** @description Unauthorized */

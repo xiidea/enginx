@@ -6,21 +6,22 @@ import {
   AgentRegistrationToken,
   AgentRegistrationTokenCreated,
   AuditEntry,
-  GrantPreview,
   Certificate,
+  CreateLocalUserRequest,
   Deployment,
   DirectoryCleanup,
   DirectoryEntry,
   DomainGroup,
-  CreateLocalUserRequest,
-  GroupMember,
   EffectivePermission,
+  GrantPreview,
+  GroupMember,
   LocalUser,
   NginxInstance,
   Page,
   PermissionGrant,
   PermissionLevel,
   Preview,
+  ProtectionModeAvailability,
   PushTransport,
   ScopeType,
   Site,
@@ -100,7 +101,7 @@ export class SitesApi {
   }
 
   /** Which protection modes the platform can serve, and why not the others. */
-  protectionModes(): Observable<{ mode: string; available: boolean; reason?: string | null }[]> {
+  protectionModes(): Observable<ProtectionModeAvailability[]> {
     return this.api.get('/proxy-sites/protection-modes');
   }
 

@@ -73,6 +73,8 @@ export type ProtectionMode = 'NONE' | 'BASIC' | 'EMAIL_OTP' | 'OIDC';
 
 export type BasicAuthUserRequest = Schemas['BasicAuthUserRequest'];
 
+export type ProtectionModeAvailability = Wire<Schemas['ProtectionModeAvailability']>;
+
 export type NginxInstance = Wire<Schemas['NginxInstanceResponse']>;
 
 export interface DeploymentEvent {

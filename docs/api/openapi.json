@@ -1647,6 +1647,24 @@
         },
         "type": "object"
       },
+      "ProtectionModeAvailability": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "mode"
+        ],
+        "type": "object"
+      },
       "ProtectionRequest": {
         "description": "Who may reach the site. Omit on update to keep the current protection.",
         "properties": {
@@ -5049,6 +5067,41 @@
           }
         },
         "summary": "Create a proxy site",
+        "tags": [
+          "Proxy sites"
+        ]
+      }
+    },
+    "/api/v1/proxy-sites/protection-modes": {
+      "get": {
+        "description": "A gate mode is unavailable until its platform settings are configured; saving a site with one is refused. The reason says which setting is missing.",
+        "operationId": "proxySite_protectionModes",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProtectionModeAvailability"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Which protection modes this platform can serve",
         "tags": [
           "Proxy sites"
         ]
