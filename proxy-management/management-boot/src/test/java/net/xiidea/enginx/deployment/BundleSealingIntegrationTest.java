@@ -136,7 +136,7 @@ class BundleSealingIntegrationTest extends AbstractIntegrationTest {
         String plaintext = bundles.findActiveForInstance(instanceId).orElseThrow().files().stream()
                 .filter(f -> f.path().equals(PRIVKEY)).findFirst().orElseThrow().content();
 
-        // What a database from before 006 holds: the row in the clear, which the constraint now
+        // What a database upgraded from 0.1.2 holds: the row in the clear, which the constraint now
         // refuses, so it is lifted for the length of the test.
         jdbc.execute("ALTER TABLE config_bundle_files DROP CONSTRAINT ck_bundle_file_sensitive_sealed");
         try {

@@ -48,14 +48,12 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   secret, and re-wrapped when the key rotates. Existing bundles are sealed when the platform first
   starts on this release; the log says how many.
 
-Schema: migrations `003-site-protection`, `004-gate`, `005-gate-oidc` and `006-sealed-bundle-files`
-add
-`proxy_sites.protection_mode`, `gate_session_ttl_s` and `oidc_any_user`; the
-`proxy_site_basic_auth_users`, `proxy_site_allowed_emails`, `proxy_site_oidc_users`,
-`proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and `config_bundle_files.file_mode`
-plus sealed-content columns, with `content` now null for sensitive files. API: `protection` on the site
-request and response, `POST /proxy-sites/{id}/sign-out-everyone`, and
-`POST /agents/gate/otp-mail` for gates.
+Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, `gate_session_ttl_s` and
+`oidc_any_user`; the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails`,
+`proxy_site_oidc_users`, `proxy_site_oidc_roles` and `proxy_site_gate_secrets` tables; and
+`config_bundle_files.file_mode` plus sealed-content columns, with `content` now null for sensitive
+files. API: `protection` on the site request and response, `POST
+/proxy-sites/{id}/sign-out-everyone`, and `POST /agents/gate/otp-mail` for gates.
 
 ## 0.1.2
 
