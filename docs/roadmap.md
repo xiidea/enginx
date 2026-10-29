@@ -240,6 +240,31 @@ password change — enforced by a filter, since a console check is a suggestion.
 **14.4 — Console.** Sign-in renders whichever methods the server reports, a forced password-change
 screen, and a Local users page for global admins.
 
+## Known issue — the site form drops custom locations — **open**
+
+Found while adding site protection; to be fixed on its own, not alongside it.
+
+A site's location rules can be set over the API and are shown on the site page, but the console's
+site form has no Locations section and its `save()` never sends `locations`. The API reads the
+missing field as an empty list (`ProxySiteDtoMapper.toSpec`), the spec turns an empty list into the
+single root location (`ProxySiteSpec`), and the persistence merge then deletes every other stored
+location (`ProxySiteMapper.mergeLocations`). Saving any site from the console, for any reason,
+silently reduces it to `location /`. Nothing fails and the audit snapshot does not record
+locations, so the loss is noticed only when something that depended on the path changes behaviour.
+
+Most sites only ever have the root location, which is why it has not shown.
+
+**Fix, in order:**
+
+1. **Stop the loss.** The form keeps `site.locations` from `fill()` and sends them back from
+   `save()` unchanged. Small and safe on its own.
+2. **Edit them in the console.** A Locations card with rows like the headers card: path and match
+   type, in order.
+3. **Decide the API semantics.** Either keep `PUT` as a full replacement, where omission means the
+   root location, or treat an omitted `locations` on update as "keep the current ones", as
+   `protection` already is. The second changes the contract, so it belongs in a minor release.
+4. **Record locations in the audit snapshot**, so a change like this is visible after the fact.
+
 ---
 
 ## Sequencing at a glance
@@ -253,6 +278,7 @@ screen, and a Local users page for global admins.
 | 12 | Certificate and key capability | R1, open questions 2 and 4 | **Complete** |
 | 13 | Delivery | Improvement 7 | **Complete** |
 | 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
+| — | Site form drops custom locations | Known issue | Open |
 
 Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
 in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than
