@@ -99,6 +99,11 @@ export class SitesApi {
     return this.api.post(`/proxy-sites/${id}/enable`);
   }
 
+  /** Which protection modes the platform can serve, and why not the others. */
+  protectionModes(): Observable<{ mode: string; available: boolean; reason?: string | null }[]> {
+    return this.api.get('/proxy-sites/protection-modes');
+  }
+
   /** Replaces the site's gate key. Sessions end once the site is next deployed. */
   signOutEveryone(id: string): Observable<Site> {
     return this.api.post(`/proxy-sites/${id}/sign-out-everyone`);

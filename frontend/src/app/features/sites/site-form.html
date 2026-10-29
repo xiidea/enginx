@@ -225,9 +225,15 @@
         <select id="protection" [ngModel]="protectionMode()" (ngModelChange)="onProtectionModeChange($event)">
           <option value="NONE">Anyone (public)</option>
           <option value="BASIC">Basic authentication</option>
-          <option value="EMAIL_OTP">Email one-time code</option>
-          <option value="OIDC">Identity provider sign-in</option>
+          <option value="EMAIL_OTP" [disabled]="modeDisabled('EMAIL_OTP')">Email one-time code</option>
+          <option value="OIDC" [disabled]="modeDisabled('OIDC')">Identity provider sign-in</option>
         </select>
+        @if (unavailableModes()['EMAIL_OTP']; as reason) {
+          <p class="hint">Email sign-in is not set up on this platform: {{ reason }}.</p>
+        }
+        @if (unavailableModes()['OIDC']; as reason) {
+          <p class="hint">Identity provider sign-in is not set up on this platform: {{ reason }}.</p>
+        }
       </div>
 
       @if (protectionMode() !== 'NONE' && !canProtect()) {

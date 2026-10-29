@@ -1,10 +1,12 @@
 package net.xiidea.enginx.application.proxy;
 
 import net.xiidea.enginx.application.gate.GateKeys;
+import net.xiidea.enginx.application.gate.OtpMailer;
 import net.xiidea.enginx.application.permission.SitePermissionService;
 import net.xiidea.enginx.application.shared.ActorProvider;
 import net.xiidea.enginx.application.shared.AuditRecorder;
 import net.xiidea.enginx.domain.audit.AuditAction;
+import net.xiidea.enginx.domain.deployment.GateMaterialProvider;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.permission.AccessScope;
 import net.xiidea.enginx.domain.permission.PermissionLevel;
@@ -66,6 +68,8 @@ public class ProxySiteService {
     private final ActorProvider actorProvider;
     private final HtpasswdHasher htpasswdHasher;
     private final GateKeys gateKeys;
+    private final GateMaterialProvider gateMaterial;
+    private final OtpMailer mailer;
     private final Clock clock;
 
     public ProxySiteService(ProxySiteRepository sites,
@@ -75,6 +79,8 @@ public class ProxySiteService {
                             ActorProvider actorProvider,
                             HtpasswdHasher htpasswdHasher,
                             GateKeys gateKeys,
+                            GateMaterialProvider gateMaterial,
+                            OtpMailer mailer,
                             Clock clock) {
         this.sites = sites;
         this.instances = instances;
@@ -83,6 +89,8 @@ public class ProxySiteService {
         this.actorProvider = actorProvider;
         this.htpasswdHasher = htpasswdHasher;
         this.gateKeys = gateKeys;
+        this.gateMaterial = gateMaterial;
+        this.mailer = mailer;
         this.clock = clock;
     }
 
@@ -111,6 +119,7 @@ public class ProxySiteService {
                 : command.spec().withProtection(resolveProtection(command.protection(), SiteProtection.none()));
         permissions.requireCreatePermission(spec.domain());
         requireInstanceExists(spec.nginxInstanceId());
+        requireGateConfigured(spec, null);
         requireDomainAvailable(spec, null);
 
         Instant now = clock.instant();
@@ -137,6 +146,7 @@ public class ProxySiteService {
             spec = spec.withLocations(site.spec().locations());
         }
         requireDomainAvailable(spec, site.id());
+        requireGateConfigured(spec, current);
 
         // Renaming a site onto a different domain is a move across namespaces, so it needs the
         // same authority that creating it there would have needed.
@@ -286,6 +296,50 @@ public class ProxySiteService {
             users.add(new BasicAuthUser(username, htpasswdHasher.hash(password)));
         }
         return new SiteProtection(input.mode(), users);
+    }
+
+    /** Whether each protection mode can be chosen on this platform, and if not, why not. */
+    public record ModeAvailability(ProtectionMode mode, boolean available, String reason) {
+    }
+
+    /** Read-only and the same for every caller: it describes the platform, not any site. */
+    public List<ModeAvailability> protectionModes() {
+        List<ModeAvailability> modes = new ArrayList<>();
+        for (ProtectionMode mode : ProtectionMode.values()) {
+            String reason = unavailableReason(mode);
+            modes.add(new ModeAvailability(mode, reason == null, reason));
+        }
+        return modes;
+    }
+
+    private String unavailableReason(ProtectionMode mode) {
+        return switch (mode) {
+            case NONE, BASIC -> null;
+            case EMAIL_OTP -> gateMaterial.relayUrl().isEmpty()
+                    ? "GATE_RELAY_URL, the address hosts reach this API at, is not configured"
+                    : mailer.available() ? null : "no mail server is configured (SPRING_MAIL_HOST)";
+            case OIDC -> gateMaterial.oidcProvider().isEmpty()
+                    ? "GATE_OIDC_ISSUER_URI and GATE_OIDC_CLIENT_ID are not configured"
+                    : null;
+        };
+    }
+
+    /**
+     * Refuses a gate mode the platform is not set up to serve, when the site is saved rather than
+     * when it is next deployed — by which time whoever chose it has moved on, and the only trace is
+     * a failed deployment. A site that already had the mode keeps it, so taking a setting away does
+     * not make the site impossible to edit; its deployments say why they fail.
+     */
+    private void requireGateConfigured(ProxySiteSpec spec, SiteProtection previous) {
+        ProtectionMode mode = spec.protection().mode();
+        if (previous != null && previous.mode() == mode) {
+            return;
+        }
+        String reason = unavailableReason(mode);
+        if (reason != null) {
+            String what = mode == ProtectionMode.OIDC ? "Identity provider sign-in" : "Email sign-in";
+            throw new ValidationException("protection.mode", what + " is not set up on this platform: " + reason + ".");
+        }
     }
 
     /** In the same transaction as the save, so a gated site can never exist without its key. */

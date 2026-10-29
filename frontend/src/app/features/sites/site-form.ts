@@ -69,6 +69,15 @@ export class SiteForm implements OnInit {
   /** One per line: `role` for a realm role, `client:role` for a client role. */
   readonly oidcRoles = signal('');
 
+  /** Why each unavailable mode cannot be chosen here; absent for those that can. */
+  readonly unavailableModes = signal<Partial<Record<ProtectionMode, string>>>({});
+  /** The mode the site was loaded with, which it may keep even if the platform no longer offers it. */
+  private readonly savedMode = signal<ProtectionMode>('NONE');
+
+  modeDisabled(mode: ProtectionMode): boolean {
+    return !!this.unavailableModes()[mode] && this.savedMode() !== mode;
+  }
+
   /** Mirrors the server's rule: credentials are only ever asked for over HTTPS. */
   readonly canProtect = computed(() => this.sslEnabled() && this.forceHttps());
 
@@ -97,6 +106,15 @@ export class SiteForm implements OnInit {
         }
       },
       error: (problem) => this.notifications.problem(problem),
+    });
+
+    this.api.protectionModes().subscribe({
+      next: (modes) =>
+        this.unavailableModes.set(
+          Object.fromEntries(modes.filter((m) => !m.available).map((m) => [m.mode, m.reason ?? 'not configured'])),
+        ),
+      // Without the list every mode stays selectable; the server still refuses what it cannot serve.
+      error: () => this.unavailableModes.set({}),
     });
 
     this.certificatesApi.list().subscribe({
@@ -137,6 +155,7 @@ export class SiteForm implements OnInit {
     const own = site.locations.filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX'));
     this.locations.set(own.length ? [...site.locations] : []);
     this.protectionMode.set(site.protection.mode as ProtectionMode);
+    this.savedMode.set(site.protection.mode as ProtectionMode);
     // The server never returns a password or its hash, so an existing user starts with an empty
     // password field, which saving sends as "keep the current one".
     this.basicUsers.set(site.protection.basicUsers.map((user) => ({ username: user.username, password: '', existing: true })));

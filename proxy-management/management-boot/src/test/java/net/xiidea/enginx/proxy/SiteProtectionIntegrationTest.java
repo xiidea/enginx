@@ -213,6 +213,30 @@ class SiteProtectionIntegrationTest extends AbstractIntegrationTest {
         assertThat(after).contains("alice").contains("BASIC").doesNotContain("$6$");
     }
 
+    @Test
+    @DisplayName("a gate mode the platform is not set up for is refused when saved, saying what is missing")
+    void unconfiguredGateModesAreRefusedOnSave() {
+        assertThatThrownBy(() -> sites.create(new ProxySiteCommands.Create(spec(), AdminState.ENABLED,
+                new ProtectionInput(ProtectionMode.EMAIL_OTP, List.of(),
+                        new ProtectionInput.EmailOtp(List.of("*@example.com"), null)))))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("GATE_RELAY_URL");
+        assertThatThrownBy(() -> sites.create(new ProxySiteCommands.Create(spec(), AdminState.ENABLED,
+                new ProtectionInput(ProtectionMode.OIDC, List.of(), null,
+                        new ProtectionInput.Oidc(true, List.of(), List.of(), null)))))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("GATE_OIDC_ISSUER_URI");
+    }
+
+    @Test
+    @DisplayName("the platform says which modes it can serve, and why not the others")
+    void protectionModesAreReported() {
+        assertThat(sites.protectionModes())
+                .extracting(m -> m.mode() + "=" + m.available())
+                .containsExactly("NONE=true", "BASIC=true", "EMAIL_OTP=false", "OIDC=false");
+        assertThat(sites.protectionModes()).filteredOn(m -> !m.available()).allMatch(m -> m.reason() != null);
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     private ProxySite create(ProtectionInput.BasicUser... users) {

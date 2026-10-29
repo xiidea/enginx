@@ -140,6 +140,21 @@ public class ProxySiteController {
         return PageResponse.from(service.search(query), mapper::toSummary);
     }
 
+    @io.swagger.v3.oas.annotations.media.Schema(name = "ProtectionModeAvailability",
+            requiredProperties = {"mode", "available"})
+    public record ProtectionModeResponse(String mode, boolean available, String reason) {
+    }
+
+    @GetMapping("/protection-modes")
+    @Operation(summary = "Which protection modes this platform can serve",
+            description = "A gate mode is unavailable until its platform settings are configured; saving a site "
+                    + "with one is refused. The reason says which setting is missing.")
+    public List<ProtectionModeResponse> protectionModes() {
+        return service.protectionModes().stream()
+                .map(m -> new ProtectionModeResponse(m.mode().name(), m.available(), m.reason()))
+                .toList();
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Fetch one proxy site")
     public ResponseEntity<ProxySiteResponse> get(@PathVariable UUID id) {
