@@ -250,14 +250,35 @@ func probeProtection(ctx context.Context, target verifyTarget, port int) (bool, 
 
 	random := make([]byte, 8)
 	_, _ = rand.Read(random)
-	for _, path := range []string{"/", "/.enginx-verify-" + hex.EncodeToString(random)} {
-		refused, detail := askUnauthenticated(ctx, client, name, path, target.Protection)
-		if !refused {
-			return false, detail
+	paths := []string{"/", "/.enginx-verify-" + hex.EncodeToString(random)}
+
+	// Retried, like the marker: straight after a reload an old worker can still take the request,
+	// and one that predates the site answers it from the HTTPS catch-all with a 404 — which reads
+	// as the site letting a visitor through when it is only not live on that worker yet. A
+	// protection that is genuinely not enforced fails just as surely, a few seconds later.
+	deadline := time.Now().Add(protectionSettle)
+	for {
+		enforced, detail := true, ""
+		for _, path := range paths {
+			if refused, why := askUnauthenticated(ctx, client, name, path, target.Protection); !refused {
+				enforced, detail = false, why
+				break
+			}
+		}
+		if enforced || !time.Now().Before(deadline) || ctx.Err() != nil {
+			return enforced, detail
+		}
+		select {
+		case <-ctx.Done():
+			return enforced, detail
+		case <-time.After(250 * time.Millisecond):
 		}
 	}
-	return true, ""
 }
+
+// protectionSettle is how long the protection check waits out a reload's hand-over. A variable so
+// tests need not wait for it.
+var protectionSettle = markerSettle
 
 func askUnauthenticated(ctx context.Context, client *http.Client, name, path, protection string) (bool, string) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)

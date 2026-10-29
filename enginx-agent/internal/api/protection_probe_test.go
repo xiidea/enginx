@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // listenProtected starts an HTTP server on 127.0.0.1 for the marker, and an HTTPS one for the
@@ -97,5 +98,36 @@ func TestSignInRedirects(t *testing.T) {
 		if got := redirectsToSignIn(location, "private.example.com"); got != want {
 			t.Errorf("redirectsToSignIn(%q) = %v, want %v", location, got, want)
 		}
+	}
+}
+
+// What VERIFY saw for a newly added site: the first answers come from a worker that predates it,
+// through the catch-all, before the reload's new workers take over.
+func TestAnOldWorkersAnswerIsWaitedOut(t *testing.T) {
+	answered := 0
+	result := verifyProtected(t, "BASIC", func(w http.ResponseWriter, r *http.Request) {
+		answered++
+		if answered <= 3 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	if result.ProtectionEnforced == nil || !*result.ProtectionEnforced {
+		t.Fatalf("a site that refuses once the reload settles was reported unprotected: %+v", result)
+	}
+}
+
+func TestAProtectionThatNeverHoldsStillFails(t *testing.T) {
+	saved := protectionSettle
+	protectionSettle = 600 * time.Millisecond
+	t.Cleanup(func() { protectionSettle = saved })
+
+	result := verifyProtected(t, "BASIC", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	if result.ProtectionEnforced == nil || *result.ProtectionEnforced {
+		t.Fatalf("a site that never refuses was reported protected: %+v", result)
 	}
 }
