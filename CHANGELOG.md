@@ -56,17 +56,16 @@ protected site never waits on the platform to check a visitor.
   resend exactly what was validated, and its sensitive files (certificate private keys, htpasswd
   files, gate files) were kept in the clear. They are now envelope-encrypted like every other
   secret, and re-wrapped when the key rotates.
-- **A node with the scheduler turned off runs no scheduled jobs.** `SCHEDULER_ENABLED=false` removed
-  the node's job definitions but still started a scheduler against the shared job store, which went
-  on firing every job the other nodes had registered.
+- **A node with the scheduler turned off runs no scheduled jobs.** `SCHEDULER_ENABLED` is on by
+  default and nothing shipped turns it off. Set to `false`, it removed the node's job definitions
+  but still started a scheduler against the shared job store, which went on firing every job the
+  other nodes had registered. It now runs none of them.
 
 ### Breaking changes since 0.1.2
 
 - **An update that leaves `locations` out keeps the site's current ones.** It used to reset the site
   to the root location. Send an empty list for the root location alone. `protection` behaves the
   same way.
-- **`SCHEDULER_ENABLED=false` now means the node runs no scheduled jobs at all**, not only none of its
-  own. Keep at least one node with the scheduler on.
 - **`config_bundle_files.content` is null for sensitive files**, which are held in the new sealed
   columns. Only a tool reading that table directly is affected; the API is unchanged.
 
