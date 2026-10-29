@@ -240,7 +240,7 @@ password change — enforced by a filter, since a console check is a suggestion.
 **14.4 — Console.** Sign-in renders whichever methods the server reports, a forced password-change
 screen, and a Local users page for global admins.
 
-## Known issue — the site form drops custom locations — **open**
+## Known issue — the site form drops custom locations — **fixed for 0.2.0**
 
 Found while adding site protection; to be fixed on its own, not alongside it.
 
@@ -265,6 +265,9 @@ Most sites only ever have the root location, which is why it has not shown.
    `protection` already is. The second changes the contract, so it belongs in a minor release.
 4. **Record locations in the audit snapshot**, so a change like this is visible after the fact.
 
+All four were done before 0.2.0. The API took the second option: an update that omits `locations`
+keeps the site's current ones, as with `protection`; an empty list still means the root location.
+
 ---
 
 ## Sequencing at a glance
@@ -278,7 +281,7 @@ Most sites only ever have the root location, which is why it has not shown.
 | 12 | Certificate and key capability | R1, open questions 2 and 4 | **Complete** |
 | 13 | Delivery | Improvement 7 | **Complete** |
 | 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
-| — | Site form drops custom locations | Known issue | Open |
+| — | Site form drops custom locations | Known issue | **Fixed** (0.2.0) |
 
 Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
 in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than

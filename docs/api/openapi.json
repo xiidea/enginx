@@ -1738,6 +1738,7 @@
             "type": "string"
           },
           "locations": {
+            "description": "In order. Omitted on update, the site keeps its current locations; an empty list, or omitted on create, means the single root location.",
             "items": {
               "$ref": "#/components/schemas/LocationDto"
             },
@@ -5136,7 +5137,7 @@
         ]
       },
       "put": {
-        "description": "Send the version last read as If-Match to have concurrent edits rejected.",
+        "description": "Send the version last read as If-Match to have concurrent edits rejected. Locations and protection left out of the request are kept as they are.",
         "operationId": "proxySite_update",
         "parameters": [
           {

@@ -361,4 +361,43 @@
       }
     </div>
   </section>
+
+  <section class="card span">
+    <div class="card-head">
+      <h2>Locations</h2>
+      <button class="btn btn-sm" type="button" (click)="addLocation()">Add location</button>
+    </div>
+    <div class="card-body stack">
+      @if (!locations().length) {
+        <p class="hint">Everything under <code>/</code> is proxied to the upstreams.</p>
+      }
+      @for (location of locations(); track $index) {
+        <div class="location-row">
+          <div class="field">
+            <label [for]="'loc-path-' + $index">Path</label>
+            <input [id]="'loc-path-' + $index" class="mono" placeholder="/api"
+              [ngModel]="location.pathPattern" (ngModelChange)="updateLocation($index, { pathPattern: $event })" />
+          </div>
+          <div class="field">
+            <label [for]="'loc-match-' + $index">Match</label>
+            <select [id]="'loc-match-' + $index" [ngModel]="location.matchType"
+              (ngModelChange)="updateLocation($index, { matchType: $event })">
+              <option value="PREFIX">Starts with</option>
+              <option value="EXACT">Exactly</option>
+            </select>
+          </div>
+          <div class="field">
+            <button class="btn btn-sm" type="button" (click)="removeLocation($index)">Remove</button>
+          </div>
+        </div>
+      }
+      @if (locations().length) {
+        <p class="hint">
+          Each gets its own <code>location</code> block with the site's proxy settings. Paths start
+          with <code>/</code> and use letters, digits and <code>. _ ~ / * -</code>. Remove every row
+          to go back to <code>/</code> alone.
+        </p>
+      }
+    </div>
+  </section>
 </div>

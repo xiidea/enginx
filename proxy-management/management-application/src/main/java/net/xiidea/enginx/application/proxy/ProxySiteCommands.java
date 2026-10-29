@@ -29,11 +29,18 @@ public final class ProxySiteCommands {
      *                        otherwise a concurrent edit has happened and the write is refused.
      * @param protection      the protection to apply; null keeps the site's current protection, so
      *                        a client that predates protection cannot remove it by omission
+     * @param keepLocations   the request left locations out, so the site keeps the ones it has
+     *                        rather than being reduced to the root location
      */
-    public record Update(UUID id, ProxySiteSpec spec, Long expectedVersion, ProtectionInput protection) {
+    public record Update(UUID id, ProxySiteSpec spec, Long expectedVersion, ProtectionInput protection,
+                         boolean keepLocations) {
 
         public Update(UUID id, ProxySiteSpec spec, Long expectedVersion) {
-            this(id, spec, expectedVersion, null);
+            this(id, spec, expectedVersion, null, false);
+        }
+
+        public Update(UUID id, ProxySiteSpec spec, Long expectedVersion, ProtectionInput protection) {
+            this(id, spec, expectedVersion, protection, false);
         }
     }
 

@@ -153,6 +153,12 @@ public record ProxySiteSpec(
                 upstreams, headers, locations, protection);
     }
 
+    public ProxySiteSpec withLocations(List<LocationRule> newLocations) {
+        return new ProxySiteSpec(name, domain, nginxInstanceId, window, sslEnabled, forceHttps,
+                hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,
+                upstreams, headers, newLocations, protection);
+    }
+
     public ProxySiteSpec withProtection(SiteProtection newProtection) {
         return new ProxySiteSpec(name, domain, nginxInstanceId, window, sslEnabled, forceHttps,
                 hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,

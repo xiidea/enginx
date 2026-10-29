@@ -162,7 +162,8 @@ public class ProxySiteController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Replace a proxy site",
-            description = "Send the version last read as If-Match to have concurrent edits rejected.")
+            description = "Send the version last read as If-Match to have concurrent edits rejected. "
+                    + "Locations and protection left out of the request are kept as they are.")
     public ResponseEntity<ProxySiteResponse> update(
             @PathVariable UUID id,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
@@ -170,7 +171,8 @@ public class ProxySiteController {
 
         return ok(service.update(new ProxySiteCommands.Update(
                 id, mapper.toSpec(request), EntityVersion.parseIfMatch(ifMatch),
-                mapper.toProtectionInput(request.protection()))));
+                mapper.toProtectionInput(request.protection()),
+                request.locations() == null)));
     }
 
     @DeleteMapping("/{id}")

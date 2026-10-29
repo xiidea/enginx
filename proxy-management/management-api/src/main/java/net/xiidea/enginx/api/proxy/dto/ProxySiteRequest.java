@@ -36,6 +36,8 @@ public record ProxySiteRequest(
         Long maxBodySizeBytes,
         @NotEmpty(message = "At least one upstream is required") @Valid List<UpstreamDto> upstreams,
         @Valid List<HeaderDto> headers,
+        @io.swagger.v3.oas.annotations.media.Schema(description = "In order. Omitted on update, the site keeps its "
+                + "current locations; an empty list, or omitted on create, means the single root location.")
         @Valid List<LocationDto> locations,
         @Valid ProtectionRequest protection) {
 }

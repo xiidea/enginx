@@ -930,7 +930,7 @@ export interface paths {
         get: operations["proxySite_get"];
         /**
          * Replace a proxy site
-         * @description Send the version last read as If-Match to have concurrent edits rejected.
+         * @description Send the version last read as If-Match to have concurrent edits rejected. Locations and protection left out of the request are kept as they are.
          */
         put: operations["proxySite_update"];
         post?: never;
@@ -1773,6 +1773,7 @@ export interface components {
             headers?: components["schemas"]["HeaderDto"][];
             hstsEnabled?: boolean;
             loadBalancingMethod?: string;
+            /** @description In order. Omitted on update, the site keeps its current locations; an empty list, or omitted on create, means the single root location. */
             locations?: components["schemas"]["LocationDto"][];
             /** Format: int64 */
             maxBodySizeBytes?: number;

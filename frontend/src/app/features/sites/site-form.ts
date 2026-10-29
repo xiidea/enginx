@@ -5,6 +5,7 @@ import { CertificatesApi, InstancesApi, SitesApi } from '../../core/api/resource
 import {
   Certificate,
   HeaderRule,
+  LocationRule,
   NginxInstance,
   ProtectionMode,
   Site,
@@ -55,6 +56,8 @@ export class SiteForm implements OnInit {
   readonly maxBodySizeMb = signal(1);
   readonly upstreams = signal<Upstream[]>([{ scheme: 'http', host: '', port: 8080 }]);
   readonly headers = signal<HeaderRule[]>([]);
+  /** In order: NGINX's own matching decides which wins, but the order is what the operator sees. */
+  readonly locations = signal<LocationRule[]>([]);
   readonly protectionMode = signal<ProtectionMode>('NONE');
   readonly basicUsers = signal<BasicUserRow[]>([]);
   /** One address or *@domain per line. */
@@ -130,6 +133,9 @@ export class SiteForm implements OnInit {
     this.maxBodySizeMb.set(Math.max(1, Math.round(site.maxBodySizeBytes / 1048576)));
     this.upstreams.set(site.upstreams.length ? [...site.upstreams] : [{ scheme: 'http', host: '', port: 8080 }]);
     this.headers.set([...site.headers]);
+    // A site with only the root location has none of its own to show.
+    const own = site.locations.filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX'));
+    this.locations.set(own.length ? [...site.locations] : []);
     this.protectionMode.set(site.protection.mode as ProtectionMode);
     // The server never returns a password or its hash, so an existing user starts with an empty
     // password field, which saving sends as "keep the current one".
@@ -190,6 +196,25 @@ export class SiteForm implements OnInit {
     this.basicUsers.update((all) => all.map((user, i) => (i === index ? { ...user, ...patch } : user)));
   }
 
+  addLocation(): void {
+    this.locations.update((all) =>
+      all.length ? [...all, { pathPattern: '', matchType: 'PREFIX' }] : [
+        // The root keeps serving everything the new path does not; without it the site would
+        // answer only that path.
+        { pathPattern: '/', matchType: 'PREFIX' },
+        { pathPattern: '', matchType: 'PREFIX' },
+      ],
+    );
+  }
+
+  removeLocation(index: number): void {
+    this.locations.update((all) => all.filter((_, i) => i !== index));
+  }
+
+  updateLocation(index: number, patch: Partial<LocationRule>): void {
+    this.locations.update((all) => all.map((location, i) => (i === index ? { ...location, ...patch } : location)));
+  }
+
   /** Mirrors the server's rule so the impossible combination cannot be submitted. */
   onSslChange(enabled: boolean): void {
     this.sslEnabled.set(enabled);
@@ -225,6 +250,10 @@ export class SiteForm implements OnInit {
       maxBodySizeBytes: this.maxBodySizeMb() * 1048576,
       upstreams: this.upstreams().filter((upstream) => upstream.host.trim()),
       headers: this.headers().filter((header) => header.name.trim()),
+      // Always sent, so what the form shows is what is saved. Empty means the root location alone.
+      locations: this.locations()
+        .filter((location) => location.pathPattern.trim())
+        .map((location) => ({ pathPattern: location.pathPattern.trim(), matchType: location.matchType })),
       protection: {
         mode: this.protectionMode(),
         basicUsers:

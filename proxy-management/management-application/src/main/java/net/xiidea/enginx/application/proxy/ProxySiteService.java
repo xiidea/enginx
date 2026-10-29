@@ -133,6 +133,9 @@ public class ProxySiteService {
         ProxySiteSpec spec = command.spec().withProtection(command.protection() == null
                 ? current
                 : resolveProtection(command.protection(), current));
+        if (command.keepLocations()) {
+            spec = spec.withLocations(site.spec().locations());
+        }
         requireDomainAvailable(spec, site.id());
 
         // Renaming a site onto a different domain is a move across namespaces, so it needs the
