@@ -148,6 +148,8 @@ class SiteProtectionIntegrationTest extends AbstractIntegrationTest {
         create(user("alice", "correct horse"));
 
         assertThat(deploy().status()).isEqualTo(DeploymentStatus.SUCCESS);
+        // Learned before rendering, and kept after the activation rather than cleared by it.
+        assertThat(instances.findById(instanceId).orElseThrow().agentVersion()).isEqualTo("dev");
 
         ConfigBundle active = bundles.findActiveForInstance(instanceId).orElseThrow();
         BundleFile htpasswd = active.files().stream()

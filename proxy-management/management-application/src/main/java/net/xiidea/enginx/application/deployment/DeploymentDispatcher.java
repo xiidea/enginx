@@ -334,9 +334,14 @@ public class DeploymentDispatcher {
         }
     }
 
+    /**
+     * An activation reports the NGINX version, not the agent's, so the agent version already known
+     * is kept. Recording null here left the instance looking as if it had never reported one after
+     * every deployment, which is what decides whether a protected site can be rendered for it.
+     */
     private static NginxInstance observed(NginxInstance instance, AgentActivation activation, Instant now) {
         instance.observed(net.xiidea.enginx.domain.nginx.InstanceStatus.ONLINE,
-                activation.nginxVersion(), null, now);
+                activation.nginxVersion(), instance.agentVersion(), now);
         return instance;
     }
 

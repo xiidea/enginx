@@ -60,6 +60,9 @@ protected site never waits on the platform to check a visitor.
   default and nothing shipped turns it off. Set to `false`, it removed the node's job definitions
   but still started a scheduler against the shared job store, which went on firing every job the
   other nodes had registered. It now runs none of them.
+- **A host keeps its agent version after a deployment.** Every activation recorded the instance with
+  no agent version until its next heartbeat, so the console showed none, and a protected site's
+  render had to ask the agent again each time.
 
 ### Breaking changes since 0.1.2
 
