@@ -320,3 +320,28 @@ func TestAFullFlowStoreEvictsTheOldest(t *testing.T) {
 		t.Fatal("the newest flow was lost")
 	}
 }
+
+// A browser posts a page's form with `Origin: null` when the page's referrer policy is
+// no-referrer, so the sign-in pages must not use it: their own forms would be refused as
+// cross-origin. Found in a real browser; a test client sets Origin by hand and never sees it.
+func TestSignInPagesKeepTheOriginOnTheirOwnForms(t *testing.T) {
+	server, _ := newTestServer(t)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, request("GET", "/.enginx/auth/login?rd=/", nil))
+
+	if got := res.Header().Get("Referrer-Policy"); got != "same-origin" {
+		t.Errorf("Referrer-Policy = %q, want same-origin", got)
+	}
+	if strings.Contains(res.Body.String(), "no-referrer") {
+		t.Error("the page still asks for no-referrer, which makes its own forms post Origin: null")
+	}
+
+	// And null itself stays refused: a sandboxed frame or a data: URL sends it too.
+	r := request("POST", "/.enginx/auth/login", url.Values{"email": {"bob@example.com"}})
+	r.Header.Set("Origin", "null")
+	refused := httptest.NewRecorder()
+	server.Handler().ServeHTTP(refused, r)
+	if refused.Code != http.StatusForbidden {
+		t.Errorf("Origin: null got %d, want 403", refused.Code)
+	}
+}

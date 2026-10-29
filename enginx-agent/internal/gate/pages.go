@@ -10,7 +10,7 @@ import (
 var pages = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="same-origin">
 <title>Sign in · {{.Domain}}</title>
 <style>
 body{font:16px/1.5 system-ui,sans-serif;background:#f6f6f4;color:#1d1d1b;display:grid;place-items:center;min-height:100vh;margin:0}
@@ -70,7 +70,10 @@ func render(w http.ResponseWriter, status int, p page) {
 	// Nothing on these pages is meant to be framed, scripted or loaded from elsewhere.
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Referrer-Policy", "no-referrer")
+	// same-origin, not no-referrer: under no-referrer a browser posts these pages' own forms with
+	// `Origin: null`, which the same-origin check must refuse — null is also what a sandboxed
+	// frame or a data: URL sends. same-origin still sends nothing to any other site.
+	h.Set("Referrer-Policy", "same-origin")
 	w.WriteHeader(status)
 	_ = pages.Execute(w, p)
 }
