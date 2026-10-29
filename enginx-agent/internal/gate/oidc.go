@@ -216,8 +216,10 @@ func (f *oidcFlows) put(state string, flow *oidcFlow, now time.Time) error {
 			delete(f.flows, id)
 		}
 	}
+	// Full: the oldest gives way, rather than everyone being refused. Refusing would let anyone
+	// who can send requests stop every sign-in on the host for the life of a flow.
 	if len(f.flows) >= maxPending {
-		return errors.New("too many sign-ins in progress")
+		evictOldest(f.flows, func(flow *oidcFlow) time.Time { return flow.expires })
 	}
 	f.flows[state] = flow
 	return nil
@@ -260,9 +262,26 @@ func callbackURI(site *Site, r *http.Request) string {
 	return "https://" + host + callbackPath
 }
 
+// verifiedEmail is the token's email, unless the provider says it is not verified. A provider that
+// lets people register, or change their address, without proving it would otherwise let anyone
+// claim an address on a site's list, and pass it upstream as X-Enginx-Email. A provider that does
+// not send email_verified at all is taken at its word.
+func verifiedEmail(claims map[string]any) string {
+	if verified, present := claims["email_verified"]; present && verified != true {
+		return ""
+	}
+	return normaliseEmail(claimString(claims, "email"))
+}
+
 func (s *Server) startOIDC(w http.ResponseWriter, r *http.Request, site *Site) {
 	cfg := site.OIDC
 	now := s.now()
+	// Each start holds a flow for ten minutes, so starts are limited per client.
+	if !s.starts.allow(site.ID+"|"+r.Header.Get("X-Real-IP"), now) {
+		render(w, http.StatusTooManyRequests, page{Domain: site.Domain, Step: "retry",
+			Note: "Too many sign-in attempts. Wait a few minutes and try again."})
+		return
+	}
 	state, err := s.providers.state(r.Context(), cfg, now)
 	if err != nil {
 		slog.Error("the identity provider could not be reached", "site", site.Domain, "error", err)
@@ -429,7 +448,7 @@ func (s *Server) exchange(ctx context.Context, site *Site, flow *oidcFlow, code 
 		return identity{}, nil, nil, errors.New("the ID token does not answer this sign-in")
 	}
 
-	who := identity{Email: normaliseEmail(claimString(claims, "email")), User: claimString(claims, "preferred_username")}
+	who := identity{Email: verifiedEmail(claims), User: claimString(claims, "preferred_username")}
 	if who.User == "" {
 		who.User = claimString(claims, "sub")
 	}

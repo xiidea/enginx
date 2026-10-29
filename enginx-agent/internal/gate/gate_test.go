@@ -95,6 +95,8 @@ func TestRedirectsStayOnTheSite(t *testing.T) {
 		"rd=//evil.example/":      "/",
 		"rd=/\\evil.example":      "/",
 		"rd=https://evil.example": "/",
+		"rd=/\t/evil.example":     "/",
+		"rd=/ok\x7f":              "/",
 		"":                        "/",
 		"other=1":                 "/",
 	} {
@@ -294,5 +296,27 @@ func TestSameOriginIgnoresThePort(t *testing.T) {
 		if got := sameOrigin(r); got != want {
 			t.Errorf("sameOrigin(%q) = %v, want %v", origin, got, want)
 		}
+	}
+}
+
+// A full store makes room rather than refusing: refusing would let anyone stop every sign-in.
+func TestAFullFlowStoreEvictsTheOldest(t *testing.T) {
+	store := newCodeStore()
+	now := time.Unix(1700000000, 0)
+	first, _ := store.start(testSiteID, "first@example.com", "111111", "/", now)
+	for i := 1; i < maxPending; i++ {
+		if _, err := store.start(testSiteID, "x@example.com", "", "/", now.Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	latest, err := store.start(testSiteID, "latest@example.com", "222222", "/", now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("a full store refused a new sign-in: %v", err)
+	}
+	if _, ok := store.verify(first, testSiteID, "111111", now.Add(3*time.Second)); ok {
+		t.Fatal("the oldest flow was kept")
+	}
+	if _, ok := store.verify(latest, testSiteID, "222222", now.Add(3*time.Second)); !ok {
+		t.Fatal("the newest flow was lost")
 	}
 }

@@ -71,8 +71,9 @@ func (s *codeStore) start(siteID, email, code, redirect string, now time.Time) (
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sweep(now)
+	// Full: the oldest gives way, rather than everyone being refused.
 	if len(s.flows) >= maxPending {
-		return "", fmt.Errorf("too many sign-ins in progress")
+		evictOldest(s.flows, func(flow *pending) time.Time { return flow.expires })
 	}
 	s.flows[id] = &pending{siteID: siteID, email: email, digest: digest, expires: now.Add(codeValidFor), redirect: redirect}
 	return id, nil
@@ -100,6 +101,17 @@ func (s *codeStore) verify(flowID, siteID, code string, now time.Time) (*pending
 		delete(s.flows, flowID)
 	}
 	return nil, false
+}
+
+// evictOldest removes the entry that would expire first.
+func evictOldest[T any](entries map[string]T, expires func(T) time.Time) {
+	oldest, first := "", time.Time{}
+	for id, entry := range entries {
+		if at := expires(entry); oldest == "" || at.Before(first) {
+			oldest, first = id, at
+		}
+	}
+	delete(entries, oldest)
 }
 
 func (s *codeStore) sweep(now time.Time) {

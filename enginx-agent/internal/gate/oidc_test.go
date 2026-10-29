@@ -260,3 +260,34 @@ func TestOnlyRS256AndES256Verify(t *testing.T) {
 		t.Fatal("none must never verify")
 	}
 }
+
+// An address the provider has not verified is not an address: it neither matches a user rule nor
+// reaches the upstream.
+func TestAnUnverifiedEmailIsNotTrusted(t *testing.T) {
+	p := newFakeProvider(t)
+	p.claims = map[string]any{"email": "alice@example.com", "email_verified": false, "preferred_username": "mallory"}
+	callback := signIn(t, newOIDCServer(t, p, OIDCConfig{Users: []string{"alice@example.com"}}))
+	if cookie(callback.Result(), SessionCookie) != nil {
+		t.Fatal("an unverified email matched a user rule")
+	}
+
+	p.claims["email_verified"] = true
+	callback = signIn(t, newOIDCServer(t, p, OIDCConfig{Users: []string{"alice@example.com"}}))
+	if cookie(callback.Result(), SessionCookie) == nil {
+		t.Fatalf("a verified email was refused: %d", callback.Code)
+	}
+}
+
+func TestOIDCStartsAreLimitedPerClient(t *testing.T) {
+	p := newFakeProvider(t)
+	server := newOIDCServer(t, p, OIDCConfig{AnyUser: true})
+	last := 0
+	for i := 0; i < 121; i++ {
+		res := httptest.NewRecorder()
+		server.Handler().ServeHTTP(res, request("GET", "/.enginx/auth/login", nil))
+		last = res.Code
+	}
+	if last != http.StatusTooManyRequests {
+		t.Fatalf("the 121st start from one client: %d", last)
+	}
+}

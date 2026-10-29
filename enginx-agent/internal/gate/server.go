@@ -25,6 +25,10 @@ type Server struct {
 	codes   *codeStore
 	byIP    *limiter
 	byEmail *limiter
+	// starts limits identity provider sign-ins begun per client. Generous: a whole office behind
+	// one address signs in through it, and a full flow store makes room rather than refusing, so
+	// this only has to stop a flood, not ration honest use.
+	starts *limiter
 
 	providers *providers
 	oidcFlows *oidcFlows
@@ -47,6 +51,7 @@ func NewServer(relay Relay) *Server {
 		codes:   newCodeStore(),
 		byIP:    newLimiter(10, 15*time.Minute),
 		byEmail: newLimiter(5, 15*time.Minute),
+		starts:  newLimiter(120, 15*time.Minute),
 
 		providers: newProviders(nil),
 		oidcFlows: newOIDCFlows(),
@@ -240,8 +245,17 @@ func redirectFromQuery(rawQuery string) string {
 // protocol-relative to a browser, so only a single leading slash followed by something else is
 // let through.
 func safeRedirect(target string) string {
-	if target == "" || target[0] != '/' || strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") ||
-		strings.ContainsAny(target, "\r\n\x00") || len(target) > 2048 {
+	if target == "" || target[0] != '/' || len(target) > 2048 {
+		return "/"
+	}
+	// Any control character, not only CR and LF: browsers strip tabs and newlines from a URL, so
+	// "/\t/evil.example" arrives as "//evil.example", protocol-relative to another site.
+	for _, c := range target {
+		if c < 0x20 || c == 0x7f {
+			return "/"
+		}
+	}
+	if strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") {
 		return "/"
 	}
 	return target
