@@ -331,7 +331,12 @@ export class SiteForm implements OnInit {
     call.subscribe({
       next: (site) => {
         this.saving.set(false);
-        this.notifications.success(existing ? 'Site updated' : 'Site created', site.domain);
+        // Saving never deploys, which is easy to forget when the change is who may get in: the
+        // host keeps the old rules until the next deployment.
+        this.notifications.success(
+          existing ? 'Site updated' : 'Site created',
+          `${site.domain}: deploy it to apply the change on its host.`,
+        );
         this.router.navigate(['/sites', site.id]);
       },
       error: (problem) => {
