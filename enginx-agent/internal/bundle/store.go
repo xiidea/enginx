@@ -66,6 +66,11 @@ type Store struct {
 	mu sync.Mutex
 }
 
+// ReleaseDir is where a bundle's files are, once staged.
+func (s *Store) ReleaseDir(bundleID string) string {
+	return s.releasePath(bundleID)
+}
+
 func NewStore(root string) *Store {
 	return &Store{root: root, retain: defaultRetain, workerGID: -1}
 }

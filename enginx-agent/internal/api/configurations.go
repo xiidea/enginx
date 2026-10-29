@@ -118,7 +118,7 @@ func (s *Server) handleActivateConfiguration(w http.ResponseWriter, r *http.Requ
 		response := map[string]any{
 			"bundleId":         result.BundleID,
 			"previousBundleId": result.PreviousBundleID,
-			"testOutput":       result.TestOutput,
+			"testOutput":       s.annotate(bundleID, result.TestOutput),
 			"nginxVersion":     result.NginxVersion,
 			"noop":             result.Noop,
 			"reloadedAt":       time.Now().UTC().Format(time.RFC3339),

@@ -309,7 +309,19 @@ func (s *Server) ActivateBundle(ctx context.Context, bundleID string, reload boo
 	if err := defaulttls.Ensure(s.cfg.ReleasesDir); err != nil {
 		return bundle.Result{}, err
 	}
-	return s.bundles.Activate(ctx, bundleID, s.bundleNginx(), reload)
+	result, err := s.bundles.Activate(ctx, bundleID, s.bundleNginx(), reload)
+	if err == nil {
+		result.TestOutput = s.annotate(bundleID, result.TestOutput)
+	}
+	return result, err
+}
+
+// annotate adds to a successful validation's output what it cannot see: directives in the host's
+// custom files that answer a protected site's visitors before they sign in.
+func (s *Server) annotate(bundleID, output string) string {
+	warnings := protectionWarnings(s.bundles.ReleaseDir(bundleID), filepath.Join(s.cfg.ReleasesDir, "custom"),
+		filepath.Dir(s.cfg.NginxConf))
+	return withProtectionWarnings(output, warnings)
 }
 
 // IncludeDir is the directory the host's nginx.conf must include for bundles to be served.

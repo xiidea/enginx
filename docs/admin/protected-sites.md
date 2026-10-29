@@ -254,6 +254,16 @@ block claiming the same name, files the workers cannot open, and a gate that is 
 
 For both gate modes, the expected refusal is a redirect to `/.enginx/auth/login` on the site.
 
-It cannot see a bypass confined to one specific path that it does not ask for. Directives in custom
-files remain root's responsibility on the host, as they always were. VERIFY runs on push hosts;
-pull hosts are not probed.
+It cannot see a bypass confined to a path it does not ask for, such as a `location = /health`
+with a `return` in a custom file. For that, every deployment's validation also reads the custom
+files each protected site's server block includes (`custom/server/` and `custom/sites/<domain>/`,
+following their own includes), and records each `return` or `rewrite` it finds as a warning with
+the validation output:
+
+```
+warning: private.example.com is protected, but /etc/nginx/enginx/custom/sites/private.example.com/health.conf:2 has `return`, which answers before the visitor is asked to sign in
+```
+
+A warning does not fail the deployment: the file is root's on the host, and its author may mean
+it. Directives in custom files remain root's responsibility, as they always were. VERIFY runs on
+push hosts; pull hosts are not probed, but do report the warnings.
