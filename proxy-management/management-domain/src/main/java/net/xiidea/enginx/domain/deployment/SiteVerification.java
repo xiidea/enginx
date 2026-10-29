@@ -16,13 +16,33 @@ package net.xiidea.enginx.domain.deployment;
  * @param observedMarker what came back at the marker path, or null when it was not a marker
  * @param expectedMarker what the deployed bundle renders for this site
  * @param error          why no response arrived, or null
+ * @param expectedProtection {@code BASIC} or {@code GATE} when the site must refuse a visitor who
+ *                       has not signed in, or null for a public site
+ * @param protectionEnforced whether an unauthenticated request was refused as expected; null when
+ *                       not checked
+ * @param protectionDetail what the unauthenticated request got, when it was not refused
  */
 public record SiteVerification(String serverName, boolean responded, int statusCode, boolean identified,
-                               String observedMarker, String expectedMarker, String error) {
+                               String observedMarker, String expectedMarker, String error,
+                               String expectedProtection, Boolean protectionEnforced, String protectionDetail) {
 
-    /** Served by the configuration just deployed. */
+    public SiteVerification(String serverName, boolean responded, int statusCode, boolean identified,
+                            String observedMarker, String expectedMarker, String error) {
+        this(serverName, responded, statusCode, identified, observedMarker, expectedMarker, error, null, null, null);
+    }
+
+    /**
+     * Served by the configuration just deployed, and, for a protected site, refusing a visitor who
+     * has not signed in. A protected site that lets anyone through is not served as configured: a
+     * directive in a host's custom file, another server claiming the name, or files the workers
+     * cannot read all produce exactly that, and none of them fails {@code nginx -t}.
+     */
     public boolean served() {
-        return responded && identified;
+        return responded && identified && protectionHolds();
+    }
+
+    private boolean protectionHolds() {
+        return expectedProtection == null || Boolean.TRUE.equals(protectionEnforced);
     }
 
     /** This site's own server block answered, but from a different render of it. */
@@ -35,8 +55,13 @@ public record SiteVerification(String serverName, boolean responded, int statusC
         if (!responded) {
             return serverName + " → no response (" + (error == null ? "unknown" : error) + ")";
         }
+        if (identified && !protectionHolds()) {
+            return serverName + " → served (" + revisionOf(expectedMarker) + "), but its protection is not enforced: "
+                    + (protectionDetail == null ? "it was not checked" : protectionDetail);
+        }
         if (identified) {
-            return serverName + " → served (" + revisionOf(expectedMarker) + ")";
+            return serverName + " → served (" + revisionOf(expectedMarker) + ")"
+                    + (expectedProtection == null ? "" : ", and refuses visitors who have not signed in");
         }
         if (olderConfigurationLive()) {
             return serverName + " → an older configuration is still live (" + revisionOf(observedMarker)

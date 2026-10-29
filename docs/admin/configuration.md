@@ -17,6 +17,9 @@ Every setting the platform reads, and the schema behind it.
 | `OIDC_CLIENT_ID` | `enginx-api` | Required audience, for local tokens as well |
 | `OIDC_ROLE_CLIENT_ID` | `enginx-frontend` | The console's client. Its client roles count alongside realm roles; other clients' roles are ignored |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | |
+| `GATE_RELAY_URL` | unset | Where hosts' gates ask for a sign-in code to be mailed: this API as the NGINX hosts reach it, ending in `/api/v1/agents/gate/otp-mail`. Required for [email sign-in](protected-sites.md#email-sign-in) |
+| `GATE_MAIL_FROM` | `NOTIFICATION_FROM` | Sender of sign-in codes |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` / `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | unset | SMTP, for notifications and sign-in codes alike |
 
 ### Choosing an authentication method
 
@@ -60,8 +63,10 @@ Leave `OIDC_JWK_SET_URI` unset when running outside Docker: ordinary discovery w
 Liquibase owns the schema. Two changelogs, both a baseline:
 
 ```
-db/changelog/changes/001-baseline.sql   the platform's own schema
-db/changelog/changes/002-quartz.sql     Quartz's vendor DDL, copied verbatim
+db/changelog/changes/001-baseline.sql        the platform's own schema
+db/changelog/changes/002-quartz.sql          Quartz's vendor DDL, copied verbatim
+db/changelog/changes/003-site-protection.sql basic authentication, and bundle file modes
+db/changelog/changes/004-gate.sql            email sign-in: allow-lists, session length, gate keys
 ```
 
 The incremental changelogs that built this up were squashed before the first production

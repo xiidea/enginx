@@ -76,6 +76,9 @@ public class ProxySiteEntity {
     private net.xiidea.enginx.domain.proxy.ProtectionMode protectionMode =
             net.xiidea.enginx.domain.proxy.ProtectionMode.NONE;
 
+    @Column(name = "gate_session_ttl_s")
+    private Integer gateSessionTtlSeconds;
+
     @Column(name = "connect_timeout_s", nullable = false)
     private int connectTimeoutSeconds;
 
@@ -120,6 +123,10 @@ public class ProxySiteEntity {
     @BatchSize(size = 64)
     private List<ProxySiteBasicAuthUserEntity> basicAuthUsers = new ArrayList<>();
 
+    @OneToMany(mappedBy = "site", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 64)
+    private List<ProxySiteAllowedEmailEntity> allowedEmails = new ArrayList<>();
+
     protected ProxySiteEntity() {
     }
 
@@ -149,6 +156,10 @@ public class ProxySiteEntity {
         return basicAuthUsers;
     }
 
+    public List<ProxySiteAllowedEmailEntity> allowedEmails() {
+        return allowedEmails;
+    }
+
     public void attach(ProxySiteUpstreamEntity child) {
         child.setSite(this);
     }
@@ -162,6 +173,10 @@ public class ProxySiteEntity {
     }
 
     public void attach(ProxySiteBasicAuthUserEntity child) {
+        child.setSite(this);
+    }
+
+    public void attach(ProxySiteAllowedEmailEntity child) {
         child.setSite(this);
     }
 
@@ -291,6 +306,14 @@ public class ProxySiteEntity {
 
     public void setProtectionMode(net.xiidea.enginx.domain.proxy.ProtectionMode protectionMode) {
         this.protectionMode = protectionMode;
+    }
+
+    public Integer getGateSessionTtlSeconds() {
+        return gateSessionTtlSeconds;
+    }
+
+    public void setGateSessionTtlSeconds(Integer gateSessionTtlSeconds) {
+        this.gateSessionTtlSeconds = gateSessionTtlSeconds;
     }
 
     public int getConnectTimeoutSeconds() {

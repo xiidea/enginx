@@ -74,10 +74,14 @@ jobs:
             GOARM=""
             case "$target" in */arm/*) GOARM="${rest#*/}";; esac
 
-            name="enginx-agent-${GOOS}-${GOARCH}${GOARM:+v$GOARM}"
-            echo "→ $name"
-            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" \
-              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" ./cmd/agent
+            # The gate ships beside the agent: a host running NGINX under its own service manager
+            # runs it as a service too, for sites with email sign-in.
+            for command in agent gate; do
+              name="enginx-${command}-${GOOS}-${GOARCH}${GOARM:+v$GOARM}"
+              echo "→ $name"
+              CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" \
+                go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" "./cmd/$command"
+            done
           done
           ls -l dist
 
@@ -100,24 +104,26 @@ jobs:
         run: |
           set -euo pipefail
           check() {
-            platform="$1"; binary="$2"
+            platform="$1"; command="$2"; binary="$3"
             reported="$(docker run --rm --platform "$platform" -v "$PWD/dist:/dist:ro" \
               alpine:3.20 "/dist/$binary" -version)"
             echo "$platform -> $reported"
             case "$reported" in
-              "enginx-agent ${VERSION} "*) ;;
+              "enginx-${command} ${VERSION} "*) ;;
               *) echo "::error::$binary reports '$reported', expected version ${VERSION}"; exit 1;;
             esac
           }
-          check linux/amd64  enginx-agent-linux-amd64
-          check linux/arm64  enginx-agent-linux-arm64
-          check linux/arm/v7 enginx-agent-linux-armv7
+          for command in agent gate; do
+            check linux/amd64  "$command" "enginx-${command}-linux-amd64"
+            check linux/arm64  "$command" "enginx-${command}-linux-arm64"
+            check linux/arm/v7 "$command" "enginx-${command}-linux-armv7"
+          done
 
       - name: Checksums
         working-directory: enginx-agent/dist
         run: |
           set -euo pipefail
-          sha256sum enginx-agent-* > SHA256SUMS
+          sha256sum enginx-agent-* enginx-gate-* > SHA256SUMS
           cat SHA256SUMS
 
       - uses: actions/upload-artifact@v4
@@ -167,10 +173,12 @@ jobs:
           LDFLAGS="-s -w -X ${PKG}.Version=${VERSION} -X ${PKG}.Commit=${GITHUB_SHA::7}"
 
           for GOARCH in amd64 arm64; do
-            name="enginx-agent-darwin-${GOARCH}"
-            echo "→ $name"
-            CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" \
-              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" ./cmd/agent
+            for command in agent gate; do
+              name="enginx-${command}-darwin-${GOARCH}"
+              echo "→ $name"
+              CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" \
+                go build -trimpath -ldflags "$LDFLAGS" -o "dist/$name" "./cmd/$command"
+            done
           done
           ls -l dist
 
@@ -183,11 +191,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          for binary in enginx-agent-darwin-arm64 enginx-agent-darwin-amd64; do
+          for binary in enginx-agent-darwin-arm64 enginx-agent-darwin-amd64 \
+                        enginx-gate-darwin-arm64 enginx-gate-darwin-amd64; do
             reported="$(./dist/$binary -version)"
             echo "$binary -> $reported"
+            command="${binary#enginx-}"; command="${command%%-*}"
             case "$reported" in
-              "enginx-agent ${VERSION} "*) ;;
+              "enginx-${command} ${VERSION} "*) ;;
               *) echo "::error::$binary reports '$reported', expected version ${VERSION}"; exit 1;;
             esac
           done

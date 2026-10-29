@@ -24,6 +24,7 @@ import static net.xiidea.enginx.domain.deployment.RenderFixtures.NO_CERTIFICATES
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.OTHER_HASH;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.SECRET_HASH;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.TEST_CERTIFICATE;
+import static net.xiidea.enginx.domain.deployment.RenderFixtures.TEST_GATE;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.location;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.requestHeader;
 import static net.xiidea.enginx.domain.deployment.RenderFixtures.responseHeader;
@@ -104,6 +105,14 @@ class NginxConfigRendererTest {
                     .site(SITE_ID);
             assertMatchesGolden("basic-auth.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN));
         }
+
+        @Test
+        void emailSignInThroughTheGate() {
+            ProxySite site = spec("private.example.com").ssl(true, false)
+                    .emailOtp("*@example.com", "Alice@Partner.org")
+                    .site(SITE_ID);
+            assertMatchesGolden("email-otp.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, TEST_GATE, MODERN));
+        }
     }
 
     @Nested
@@ -167,6 +176,65 @@ class NginxConfigRendererTest {
             assertThat(after.contentHash()).isNotEqualTo(before.contentHash());
             assertThat(NginxConfigRenderer.siteMarkers(after))
                     .isNotEqualTo(NginxConfigRenderer.siteMarkers(before));
+        }
+    }
+
+    @Nested
+    @DisplayName("email sign-in through the gate")
+    class Gate {
+
+        private final ProxySite gatedSite = spec("private.example.com").ssl(true, false)
+                .emailOtp("*@example.com", "alice@partner.org")
+                .site(SITE_ID);
+
+        private ConfigBundle render(GateMaterialProvider gates) {
+            return renderer.render(BUNDLE, INSTANCE, MODERN, 1, List.of(gatedSite), TEST_CERTIFICATE, gates, "ada", NOW);
+        }
+
+        @Test
+        @DisplayName("the gate's file carries the key and the sorted allow-list, worker-readable and hidden")
+        void gateFileIsWorkerReadableAndHidden() {
+            ConfigBundle bundle = render(TEST_GATE);
+
+            BundleFile gate = bundle.files().stream()
+                    .filter(file -> file.path().equals("gate/sites/private.example.com.json"))
+                    .findFirst().orElseThrow();
+            assertThat(gate.access()).isEqualTo(BundleFile.Access.WORKER_READABLE);
+            assertThat(gate.content())
+                    .contains("\"key\": \"" + RenderFixtures.GATE_KEY + "\"")
+                    .contains("\"siteId\": \"" + SITE_ID + "\"")
+                    .contains("\"sessionTtlSeconds\": 86400");
+            assertThat(gate.content().indexOf("*@example.com"))
+                    .isLessThan(gate.content().indexOf("alice@partner.org"));
+            assertThat(bundle.publicFiles()).noneMatch(file -> file.path().startsWith("gate/"));
+        }
+
+        @Test
+        @DisplayName("the redirect server asks for nothing; the gate's own pages are not themselves checked")
+        void onlyTheTlsServerIsGated() {
+            String config = renderer.renderSitePreview(gatedSite, TEST_CERTIFICATE, TEST_GATE, MODERN);
+            String redirectServer = config.substring(config.indexOf("listen 80;"), config.indexOf("listen 443"));
+
+            assertThat(redirectServer).doesNotContain("auth_request");
+            assertThat(config).contains("location ^~ /.enginx/auth/ {\n        auth_request off;");
+            assertThat(config).contains("proxy_set_header X-Enginx-Email    $enginx_email;");
+        }
+
+        @Test
+        @DisplayName("without a key or a relay address the render fails rather than ship a gate that cannot work")
+        void missingMaterialFailsTheRender() {
+            assertThatThrownBy(() -> render(GateMaterialProvider.NONE))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("No gate key");
+        }
+
+        @Test
+        @DisplayName("a host whose agent cannot run the gate is refused before deployment")
+        void olderAgentIsRefused() {
+            assertThatThrownBy(() -> renderer.render(BUNDLE, INSTANCE, new RenderTarget("1.27.5", true, "0.1.2"), 1,
+                    List.of(gatedSite), TEST_CERTIFICATE, TEST_GATE, "ada", NOW))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("email sign-in");
         }
     }
 

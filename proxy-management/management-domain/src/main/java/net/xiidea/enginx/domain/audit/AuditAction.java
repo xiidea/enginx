@@ -11,6 +11,8 @@ public enum AuditAction {
     PROXY_SITE_NOTIFICATIONS_UPDATED,
     PROXY_SITE_EXPIRY_REMOVED,
     PROXY_SITE_CLONED,
+    PROXY_SITE_SESSIONS_REVOKED,
+    GATE_CODE_SENT,
     NGINX_INSTANCE_REGISTERED,
     /**
      * The host is serving a configuration the platform did not put there. Recorded, never acted

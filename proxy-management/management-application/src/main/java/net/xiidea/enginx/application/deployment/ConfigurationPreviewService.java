@@ -4,6 +4,7 @@ import net.xiidea.enginx.application.permission.SitePermissionService;
 import net.xiidea.enginx.domain.deployment.BundleFile;
 import net.xiidea.enginx.domain.deployment.CertificateMaterialProvider;
 import net.xiidea.enginx.domain.deployment.ConfigBundle;
+import net.xiidea.enginx.domain.deployment.GateMaterialProvider;
 import net.xiidea.enginx.domain.deployment.ConfigBundleRepository;
 import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
 import net.xiidea.enginx.domain.deployment.RenderTarget;
@@ -37,6 +38,7 @@ public class ConfigurationPreviewService {
     private final ConfigBundleRepository bundles;
     private final NginxConfigRenderer renderer;
     private final CertificateMaterialProvider certificates;
+    private final GateMaterialProvider gates;
     private final SitePermissionService permissions;
     private final NginxInstanceRepository instances;
     private final Clock clock;
@@ -45,6 +47,7 @@ public class ConfigurationPreviewService {
                                        ConfigBundleRepository bundles,
                                        NginxConfigRenderer renderer,
                                        CertificateMaterialProvider certificates,
+                                       GateMaterialProvider gates,
                                        SitePermissionService permissions,
                                        NginxInstanceRepository instances,
                                        Clock clock) {
@@ -53,6 +56,7 @@ public class ConfigurationPreviewService {
         this.bundles = bundles;
         this.renderer = renderer;
         this.certificates = certificates;
+        this.gates = gates;
         this.permissions = permissions;
         this.clock = clock;
     }
@@ -69,11 +73,11 @@ public class ConfigurationPreviewService {
         RenderTarget target = instances.findById(site.nginxInstanceId())
                 .map(RenderTarget::of)
                 .orElse(RenderTarget.UNKNOWN);
-        String siteConfiguration = renderer.renderSitePreview(site, certificates, target);
+        String siteConfiguration = renderer.renderSitePreview(site, certificates, gates, target);
 
         List<ProxySite> deployable = sites.findDeployableForInstance(site.nginxInstanceId(), now);
         ConfigBundle proposed = renderer.render(UUID.randomUUID(), site.nginxInstanceId(), target, 0,
-                deployable, certificates, "preview", now);
+                deployable, certificates, gates, "preview", now);
         ConfigBundle active = bundles.findActiveForInstance(site.nginxInstanceId()).orElse(null);
 
         return new ConfigurationPreview(

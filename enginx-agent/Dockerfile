@@ -17,6 +17,11 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -X github.com/xiidea/enginx/enginx-agent/internal/version.Version=${VERSION} \
       -X github.com/xiidea/enginx/enginx-agent/internal/version.Commit=${COMMIT}" \
     -o /out/enginx-agent ./cmd/agent
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags="-s -w \
+      -X github.com/xiidea/enginx/enginx-agent/internal/version.Version=${VERSION} \
+      -X github.com/xiidea/enginx/enginx-agent/internal/version.Commit=${COMMIT}" \
+    -o /out/enginx-gate ./cmd/gate
 
 # ---- run ------------------------------------------------------------------
 # The agent ships in the same image as NGINX. It has to signal the NGINX process, and a process
@@ -35,6 +40,8 @@ LABEL org.opencontainers.image.title="Easy NGINX Admin agent" \
 
 
 COPY --from=build /out/enginx-agent /usr/local/bin/enginx-agent
+# The gate for sites with email sign-in. Started by the agent as the nginx user, never as root.
+COPY --from=build /out/enginx-gate /usr/local/bin/enginx-gate
 
 RUN mkdir -p /etc/nginx/enginx/releases /etc/enginx/pki
 

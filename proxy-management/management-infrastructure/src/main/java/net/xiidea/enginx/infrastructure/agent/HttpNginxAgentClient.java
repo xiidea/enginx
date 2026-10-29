@@ -148,6 +148,9 @@ public class HttpNginxAgentClient implements NginxAgentPort {
             ObjectNode node = sites.addObject();
             node.put("serverName", target.serverName());
             node.put("marker", target.marker());
+            if (target.protection() != null) {
+                node.put("protection", target.protection());
+            }
         }
 
         HttpResponse<String> response = send(instance, "POST", "/agent/v1/verify",
@@ -157,7 +160,13 @@ public class HttpNginxAgentClient implements NginxAgentPort {
         }
 
         java.util.Map<String, String> expected = new java.util.HashMap<>();
-        targets.forEach(target -> expected.put(target.serverName(), target.marker()));
+        java.util.Map<String, String> protections = new java.util.HashMap<>();
+        targets.forEach(target -> {
+            expected.put(target.serverName(), target.marker());
+            if (target.protection() != null) {
+                protections.put(target.serverName(), target.protection());
+            }
+        });
 
         List<SiteVerification> results = new ArrayList<>();
         for (JsonNode result : parse(response).path("results")) {
@@ -169,7 +178,10 @@ public class HttpNginxAgentClient implements NginxAgentPort {
                     result.path("identified").asBoolean(false),
                     textOf(result, "marker"),
                     expected.get(serverName),
-                    textOf(result, "error")));
+                    textOf(result, "error"),
+                    protections.get(serverName),
+                    result.has("protectionEnforced") ? result.path("protectionEnforced").asBoolean() : null,
+                    textOf(result, "protectionDetail")));
         }
         return results;
     }

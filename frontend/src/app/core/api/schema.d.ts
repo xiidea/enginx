@@ -68,6 +68,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/gate/otp-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mail a sign-in code
+         * @description Signed by the gate with the site's relay key. 204 when sent; 403 when the address is not allowed or the request is not authentic; 429 when rate limited; 503 when mail is not configured.
+         */
+        post: operations["gateRelay_sendCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/heartbeat": {
         parameters: {
             query?: never;
@@ -1073,6 +1093,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proxy-sites/{id}/sign-out-everyone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End every email sign-in session
+         * @description Replaces the site's gate key. Sessions signed with the old key stop working once the site is next deployed.
+         */
+        post: operations["proxySite_signOutEveryone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proxy-sites/{id}/upstream-check": {
         parameters: {
             query?: never;
@@ -1480,6 +1520,30 @@ export interface components {
             /** Format: uuid */
             proxySiteId: string;
         };
+        /** @description Who may sign in with a code sent by email. Required when the mode is EMAIL_OTP. */
+        EmailOtpRequest: {
+            /** @description Exact addresses, or *@domain for everyone at a domain */
+            allowedEmails: string[];
+            /**
+             * Format: int32
+             * @description How long a sign-in lasts, 300 to 2592000. Defaults to 86400.
+             */
+            sessionTtlSeconds?: number;
+        };
+        EmailOtpResponse: {
+            allowedEmails: string[];
+            /** Format: int64 */
+            sessionTtlSeconds: number;
+        };
+        GateCodeRequest: {
+            code: string;
+            email: string;
+            signature: string;
+            /** Format: uuid */
+            siteId: string;
+            /** Format: int64 */
+            timestamp: number;
+        };
         /** @description What a grant would reach, before it is created. */
         GrantPreviewResponse: {
             coversFutureDomains: boolean;
@@ -1655,14 +1719,16 @@ export interface components {
         /** @description Who may reach the site. Omit on update to keep the current protection. */
         ProtectionRequest: {
             basicUsers?: components["schemas"]["BasicAuthUserRequest"][];
+            emailOtp?: components["schemas"]["EmailOtpRequest"];
             /**
-             * @description NONE or BASIC
+             * @description NONE, BASIC or EMAIL_OTP
              * @example BASIC
              */
             mode: string;
         };
         ProtectionResponse: {
             basicUsers: components["schemas"]["BasicAuthUserResponse"][];
+            emailOtp?: components["schemas"]["EmailOtpResponse"];
             mode: string;
         };
         ProxySiteRequest: {
@@ -1989,6 +2055,39 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AgentBundleResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    gateRelay_sendCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GateCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
             /** @description Unauthorized */
@@ -4099,6 +4198,37 @@ export interface operations {
                 "application/json": components["schemas"]["RenewRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProxySiteResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    proxySite_signOutEveryone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

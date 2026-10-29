@@ -65,6 +65,13 @@ public class TestAgent implements NginxAgentPort {
         this.sitesRespond = respond;
     }
 
+    private volatile boolean protectionBypassed;
+
+    /** Has a protected site answer a visitor who has not signed in, as a stray `return` would. */
+    public void bypassProtection(boolean bypassed) {
+        this.protectionBypassed = bypassed;
+    }
+
     public void failVerification(boolean fail) {
         this.verificationFails = fail;
     }
@@ -87,6 +94,7 @@ public class TestAgent implements NginxAgentPort {
         verificationFails = false;
         answeredByAnotherServer = false;
         olderConfigurationLive = false;
+        protectionBypassed = false;
         synchronized (verifiedNames) {
             verifiedNames.clear();
         }
@@ -168,7 +176,9 @@ public class TestAgent implements NginxAgentPort {
                         String older = target.marker().substring(0, target.marker().indexOf(' ')) + " v0 000000000000";
                         return new SiteVerification(target.serverName(), true, 200, false, older, target.marker(), null);
                     }
-                    return new SiteVerification(target.serverName(), true, 200, true, target.marker(), target.marker(), null);
+                    return new SiteVerification(target.serverName(), true, 200, true, target.marker(), target.marker(), null,
+                            target.protection(), target.protection() == null ? null : !protectionBypassed,
+                            protectionBypassed ? "/ answered 200 without signing in" : null);
                 })
                 .toList();
     }

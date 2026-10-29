@@ -225,6 +225,7 @@
         <select id="protection" [ngModel]="protectionMode()" (ngModelChange)="onProtectionModeChange($event)">
           <option value="NONE">Anyone (public)</option>
           <option value="BASIC">Basic authentication</option>
+          <option value="EMAIL_OTP">Email one-time code</option>
         </select>
       </div>
 
@@ -257,6 +258,25 @@
         <p class="hint">
           Visitors are asked for one of these before anything reaches the upstream. Passwords are
           stored hashed and never shown again; leave one empty to keep it.
+        </p>
+      } @else if (protectionMode() === 'EMAIL_OTP') {
+        <div class="grid-2">
+          <div>
+            <label for="allowed">Allowed addresses</label>
+            <textarea id="allowed" class="mono" rows="4" placeholder="alice@example.com&#10;*@example.com"
+              [ngModel]="allowedEmails()" (ngModelChange)="allowedEmails.set($event)"></textarea>
+            <p class="hint">One per line. <code>*&#64;example.com</code> allows everyone at that domain.</p>
+          </div>
+          <div>
+            <label for="session">Sign-in lasts (hours)</label>
+            <input id="session" type="number" min="1" max="720"
+              [ngModel]="sessionHours()" (ngModelChange)="sessionHours.set(+$event)" />
+            <p class="hint">Up to 30 days.</p>
+          </div>
+        </div>
+        <p class="hint">
+          Visitors enter their address and get a code by email, sent by this platform's mail
+          server. The host needs to reach this platform to send one, but never to check a sign-in.
         </p>
       } @else {
         <p class="hint">Anyone who can reach the host can reach the site.</p>

@@ -189,6 +189,14 @@ public class ProxySiteController {
         return ok(service.enable(id));
     }
 
+    @PostMapping("/{id}/sign-out-everyone")
+    @Operation(summary = "End every email sign-in session",
+            description = "Replaces the site's gate key. Sessions signed with the old key stop working once the "
+                    + "site is next deployed.")
+    public ResponseEntity<ProxySiteResponse> signOutEveryone(@PathVariable UUID id) {
+        return ok(service.signOutEveryone(id));
+    }
+
     @PostMapping("/{id}/disable")
     @Operation(summary = "Disable a proxy site")
     public ResponseEntity<ProxySiteResponse> disable(@PathVariable UUID id) {

@@ -2,12 +2,16 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +57,8 @@ type verifyTarget struct {
 	ServerName string `json:"serverName"`
 	// Marker is what the platform's server block for this name returns at SiteMarkerPath.
 	Marker string `json:"marker"`
+	// Protection is BASIC or GATE when the site must refuse a visitor who has not signed in.
+	Protection string `json:"protection,omitempty"`
 }
 
 type verifyRequest struct {
@@ -76,6 +82,11 @@ type verifyResult struct {
 	// Lets the platform say *which* config answered, not only that the expected one did not.
 	Marker string `json:"marker,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// ProtectionEnforced is set for a protected site: whether a request without credentials or a
+	// session was refused the way its protection refuses.
+	ProtectionEnforced *bool `json:"protectionEnforced,omitempty"`
+	// ProtectionDetail says what such a request got instead, when it was not refused.
+	ProtectionDetail string `json:"protectionDetail,omitempty"`
 }
 
 type verifyResponse struct {
@@ -131,7 +142,13 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := runConcurrently(r.Context(), targets, func(ctx context.Context, target verifyTarget) verifyResult {
-		return probeSite(ctx, client, target, port)
+		result := probeSite(ctx, client, target, port)
+		if target.Protection != "" && result.Identified {
+			enforced, detail := probeProtection(ctx, target, s.protectedPort)
+			result.ProtectionEnforced = &enforced
+			result.ProtectionDetail = detail
+		}
+		return result
 	})
 
 	writeJSON(w, http.StatusOK, verifyResponse{Results: results})
@@ -195,6 +212,92 @@ func probeOnce(ctx context.Context, client *http.Client, target verifyTarget, po
 		result.Identified = target.Marker != "" && seen == target.Marker
 	}
 	return result
+}
+
+// --- protection -------------------------------------------------------------
+
+// protectionProbePort is where a protected site is served: protection requires HTTPS, and the
+// port-80 server of such a site only redirects.
+const protectionProbePort = 443
+
+// probeProtection asks as a visitor who has not signed in, over HTTPS on loopback, for the root
+// and for a path nobody configured. The answer must be the refusal the protection gives: 401 for
+// basic authentication, a redirect to the gate's sign-in page for a gated site.
+//
+// From the outside on purpose. `nginx -t` accepts a `return` in a host's custom file that answers
+// before credentials are checked, another server block claiming the same name, and an htpasswd
+// file the workers cannot open; each of them only shows when someone asks. Certificates are not
+// checked: the question is who is let in, and the certificate is VERIFY's concern elsewhere.
+func probeProtection(ctx context.Context, target verifyTarget, port int) (bool, string) {
+	if port == 0 {
+		port = protectionProbePort
+	}
+	name := strings.TrimSpace(target.ServerName)
+	client := &http.Client{
+		Timeout: probeTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				dialer := &net.Dialer{Timeout: probeTimeout}
+				return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+			},
+			TLSClientConfig:   &tls.Config{ServerName: name, InsecureSkipVerify: true}, //nolint:gosec // see above
+			DisableKeepAlives: true,
+		},
+	}
+
+	random := make([]byte, 8)
+	_, _ = rand.Read(random)
+	for _, path := range []string{"/", "/.enginx-verify-" + hex.EncodeToString(random)} {
+		refused, detail := askUnauthenticated(ctx, client, name, path, target.Protection)
+		if !refused {
+			return false, detail
+		}
+	}
+	return true, ""
+}
+
+func askUnauthenticated(ctx context.Context, client *http.Client, name, path, protection string) (bool, string) {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+name+path, nil)
+	if err != nil {
+		return false, err.Error()
+	}
+	request.Host = name
+	request.Header.Set("User-Agent", "enginx-agent/verify")
+	response, err := client.Do(request)
+	if err != nil {
+		return false, path + " could not be requested over HTTPS: " + summarise(err)
+	}
+	defer response.Body.Close()
+
+	switch protection {
+	case "BASIC":
+		if response.StatusCode == http.StatusUnauthorized && response.Header.Get("WWW-Authenticate") != "" {
+			return true, ""
+		}
+	case "GATE":
+		if response.StatusCode == http.StatusFound && redirectsToSignIn(response.Header.Get("Location"), name) {
+			return true, ""
+		}
+	default:
+		return false, "unknown protection " + protection
+	}
+	return false, fmt.Sprintf("%s answered %d without signing in", path, response.StatusCode)
+}
+
+// redirectsToSignIn accepts the gate's sign-in page as a relative redirect, which is what the
+// platform renders, or an absolute one back to the same site, which is what a host-level
+// absolute_redirect would turn it into. A redirect anywhere else is not the gate refusing.
+func redirectsToSignIn(location, name string) bool {
+	target, err := url.Parse(location)
+	if err != nil || !strings.HasPrefix(target.Path, "/.enginx/auth/login") {
+		return false
+	}
+	return target.Host == "" || strings.EqualFold(target.Hostname(), name)
 }
 
 // --- upstream reachability -------------------------------------------------

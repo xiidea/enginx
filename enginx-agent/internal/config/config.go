@@ -69,6 +69,16 @@ type Config struct {
 	// "www-data" on Debian and Ubuntu packages.
 	NginxGroup string
 
+	// GateBinary is the gate the agent starts, as GateUser, when it runs NGINX itself. A host
+	// without it simply has no email sign-in.
+	GateBinary string
+	// GateUser is the unprivileged user the gate runs as: NGINX's worker user, so the workers can
+	// reach its socket and it can read the gate files written for them.
+	GateUser string
+	// GateSocket is where the gate listens. Fixed in the rendered configuration; overridable here
+	// only for tests.
+	GateSocket string
+
 	CommandTimeout time.Duration
 	AgentVersion   string
 
@@ -122,6 +132,9 @@ func Load() (Config, error) {
 		NginxConf:         env("AGENT_NGINX_CONF", "/etc/nginx/nginx.conf"),
 		NginxPIDFile:      env("AGENT_NGINX_PID_FILE", "/run/nginx.pid"),
 		NginxGroup:        strings.TrimSpace(env("AGENT_NGINX_GROUP", "nginx")),
+		GateBinary:        env("AGENT_GATE_BINARY", "/usr/local/bin/enginx-gate"),
+		GateUser:          strings.TrimSpace(env("AGENT_GATE_USER", "nginx")),
+		GateSocket:        "/run/enginx/gate.sock",
 		CommandTimeout:    30 * time.Second,
 		AgentVersion:      env("AGENT_VERSION", version.Version),
 

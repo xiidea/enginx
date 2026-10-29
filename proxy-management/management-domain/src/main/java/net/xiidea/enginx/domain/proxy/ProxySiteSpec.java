@@ -39,6 +39,9 @@ public record ProxySiteSpec(
     private static final int MAX_HEADERS = 32;
     private static final int MAX_LOCATIONS = 32;
 
+    /** The header a gated site passes upstream with the signed-in visitor's address. */
+    public static final String GATE_EMAIL_HEADER = "X-Enginx-Email";
+
     public ProxySiteSpec {
         if (name == null || name.isBlank()) {
             throw new ValidationException("name", "Name must not be blank");
@@ -113,6 +116,15 @@ public record ProxySiteSpec(
         if (protection.isProtected() && !(sslEnabled && forceHttps)) {
             throw new ValidationException("protection.mode",
                     "Protecting a site requires SSL with the HTTP to HTTPS redirect enabled");
+        }
+        if (protection.mode().usesGate()) {
+            for (ProxySiteHeader header : headers) {
+                if (header.direction() == HeaderDirection.REQUEST
+                        && header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)) {
+                    throw new ValidationException("headers",
+                            GATE_EMAIL_HEADER + " is set by the gate on a protected site and cannot be overridden");
+                }
+            }
         }
     }
 

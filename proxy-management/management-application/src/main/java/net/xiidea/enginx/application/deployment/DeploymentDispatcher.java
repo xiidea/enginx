@@ -14,6 +14,7 @@ import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.deployment.DeploymentPhase;
 import net.xiidea.enginx.domain.deployment.DeploymentRepository;
 import net.xiidea.enginx.domain.deployment.DeploymentTrigger;
+import net.xiidea.enginx.domain.deployment.GateMaterialProvider;
 import net.xiidea.enginx.domain.deployment.NginxAgentPort;
 import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
 import net.xiidea.enginx.domain.deployment.RenderTarget;
@@ -55,6 +56,7 @@ public class DeploymentDispatcher {
     private final NginxInstanceRepository instances;
     private final NginxConfigRenderer renderer;
     private final CertificateMaterialProvider certificates;
+    private final GateMaterialProvider gates;
     private final NginxAgentPort agent;
     private final PullDeploymentCoordinator pullDeployments;
     private final AuditRecorder audit;
@@ -66,6 +68,7 @@ public class DeploymentDispatcher {
                                 NginxInstanceRepository instances,
                                 NginxConfigRenderer renderer,
                                 CertificateMaterialProvider certificates,
+                                GateMaterialProvider gates,
                                 NginxAgentPort agent,
                                 PullDeploymentCoordinator pullDeployments,
                                 AuditRecorder audit,
@@ -76,6 +79,7 @@ public class DeploymentDispatcher {
         this.instances = instances;
         this.renderer = renderer;
         this.certificates = certificates;
+        this.gates = gates;
         this.agent = agent;
         this.pullDeployments = pullDeployments;
         this.audit = audit;
@@ -147,7 +151,7 @@ public class DeploymentDispatcher {
         learnVersions(instance, now);
         List<ProxySite> deployable = sites.findDeployableForInstance(instance.id(), now);
         ConfigBundle rendered = renderer.render(UUID.randomUUID(), instance.id(), RenderTarget.of(instance),
-                bundles.nextSequence(instance.id()), deployable, certificates,
+                bundles.nextSequence(instance.id()), deployable, certificates, gates,
                 deployment.createdBy(), now);
 
         // The no-op shortcut compares what we would send against what the *database* believes the
@@ -313,8 +317,11 @@ public class DeploymentDispatcher {
             // Each with the marker the deployed bundle renders for it, read from that bundle's own
             // files: a response from anything else on the port, or from an earlier render of the
             // same site, does not count as this deployment being served.
+            // And, for a protected site, whether it refuses a visitor who has not signed in.
+            java.util.Map<String, String> protections = NginxConfigRenderer.siteProtections(bundle);
             List<NginxAgentPort.VerifyTarget> targets = NginxConfigRenderer.siteMarkers(bundle).entrySet().stream()
-                    .map(entry -> new NginxAgentPort.VerifyTarget(entry.getKey(), entry.getValue()))
+                    .map(entry -> new NginxAgentPort.VerifyTarget(entry.getKey(), entry.getValue(),
+                            protections.get(entry.getKey())))
                     .toList();
 
             if (targets.isEmpty()) {

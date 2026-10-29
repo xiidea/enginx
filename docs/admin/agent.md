@@ -169,6 +169,8 @@ command-injection surface to protect.
 | `AGENT_NGINX_CONF` | `/etc/nginx/nginx.conf` | The configuration NGINX is started with |
 | `AGENT_NGINX_MANAGED` | `true` | `true`: the agent starts and supervises NGINX. `false`: the host's service manager runs it, and the agent only validates and reloads |
 | `AGENT_NGINX_PID_FILE` | `/run/nginx.pid` | Where the running master's pid is. Read when NGINX is external, and checked at startup so a managed agent refuses to start a second master |
+| `AGENT_GATE_BINARY` | `/usr/local/bin/enginx-gate` | The [gate](protected-sites.md#email-sign-in) the agent starts and restarts when it runs NGINX itself (`AGENT_NGINX_MANAGED=true`). Absent, the host has no email sign-in |
+| `AGENT_GATE_USER` | `nginx` | The unprivileged user the gate runs as: NGINX's worker user, so the workers can reach its socket |
 | `AGENT_NGINX_GROUP` | `nginx` | The group NGINX's worker processes run as (`www-data` on Debian and Ubuntu packages), by name or id. Secrets the workers read on each request, such as a [protected site's](protected-sites.md) htpasswd file, are written `0640` owned by it |
 | `AGENT_VERSION` | the compiled-in version | Overridden only for testing |
 

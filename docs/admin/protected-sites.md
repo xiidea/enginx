@@ -12,7 +12,7 @@ needs them: ACME HTTP-01 challenges, so the site's certificate can still renew, 
 |---|---|---|
 | `NONE` | Nothing; the site is public | available |
 | `BASIC` | Enters a username and password from the site's own user list | available |
-| Email one-time code | Enters an allowed email address and the code sent to it | planned |
+| `EMAIL_OTP` | Enters an allowed email address, then the code mailed to it | available |
 | OIDC | Signs in at an identity provider | planned |
 
 ## Requirements
@@ -20,9 +20,10 @@ needs them: ACME HTTP-01 challenges, so the site's certificate can still renew, 
 - **HTTPS with the redirect on.** A protected site must have SSL enabled *and* the HTTP to HTTPS
   redirect, so a password is never sent in cleartext. The API refuses anything else, and so does the
   database. The port-80 server of such a site only redirects; it never asks for credentials.
-- **Agent 0.2.0 or later on the host.** The htpasswd file has to be readable by NGINX's worker
-  processes, which older agents cannot arrange (see [below](#why-the-agent-version-matters)). A
-  deployment to a host whose agent is older fails at render, before anything is sent, saying so.
+- **Agent 0.2.0 or later on the host.** Both modes ship files NGINX's worker processes (or the gate,
+  running as their user) read, which older agents cannot arrange (see
+  [below](#why-the-agent-version-matters)). A deployment to a host whose agent is older fails at
+  render, before anything is sent, saying so.
 - **The worker group.** The agent gives the file to the group NGINX's workers run as, named by
   `AGENT_NGINX_GROUP` (default `nginx`, which is right for the official image and most
   distributions; Debian and Ubuntu packages use `www-data`). If the group cannot be resolved, the
@@ -83,8 +84,100 @@ have reported success.
 So the file is written `0640`, owned by root and the worker group, and the platform only sends it to
 an agent that knows how to do that. Upgrade agents before protecting a site on their hosts.
 
-### Custom directives can bypass it
+## Email sign-in
 
-NGINX runs `return` and `rewrite` before it checks credentials. A `return` in one of the host's
-[custom files](agent.md#custom-directives) for a protected site answers without asking for a
-password. Directives in those files are root's responsibility on the host, as they always were.
+A visitor without a session is sent to a sign-in page on the site's own domain. They enter their
+address, and if it is on the site's allow-list a six-digit code is mailed to them. The code signs
+them in for the session length set on the site, after which they are asked again.
+
+```json
+"protection": {
+  "mode": "EMAIL_OTP",
+  "emailOtp": {
+    "allowedEmails": ["alice@partner.org", "*@example.com"],
+    "sessionTtlSeconds": 86400
+  }
+}
+```
+
+- `*@example.com` admits every address at exactly that domain, not its subdomains.
+- A sign-in lasts from 5 minutes to 30 days; 24 hours if unset.
+- The upstream receives the signed-in address as `X-Enginx-Email`. NGINX always sets it, so a
+  client cannot send its own, and the application can trust it.
+- **Sign everyone out** (on the site page, or `POST /proxy-sites/{id}/sign-out-everyone`) replaces
+  the site's key; the console then deploys, and every existing session stops working.
+
+### What it needs
+
+- **`GATE_RELAY_URL`** on the platform: its own API as the NGINX hosts reach it, ending in
+  `/api/v1/agents/gate/otp-mail`. Without it a site with email sign-in does not render, and says
+  why.
+- **SMTP** on the platform (`SPRING_MAIL_HOST` and friends). Codes are mailed by the platform, so
+  no host ever holds mail credentials.
+- **Outbound HTTPS from the host to the platform**, to ask for a code to be mailed. Only then:
+  checking a visitor's session never leaves the host, so a protected site keeps working with the
+  platform down for everyone already signed in. A push host that the platform can reach but that
+  cannot reach the platform back cannot offer email sign-in.
+- **The gate.** In the agent image the agent starts it, as the `nginx` user. On a host whose service
+  manager runs NGINX, run `enginx-gate` as a service too, as NGINX's worker user, with
+  `GATE_SITES_DIR=<AGENT_RELEASES_DIR>/current/gate/sites`; it listens on
+  `/run/enginx/gate.sock`. `GATE_RELAY_CA` adds a CA to trust for the relay, for a platform behind a
+  private one.
+
+### How it works
+
+```
+visitor ──▶ NGINX ──auth_request──▶ gate: valid session cookie?
+              │                        yes ▶ 204 + X-Enginx-Email ─▶ proxied to the upstream
+              │                        no  ▶ 401 ─▶ 302 to /.enginx/auth/login
+              └─ /.enginx/auth/* ─────▶ gate: sign-in pages
+                                         └─ code ──signed──▶ platform: allowed? rate? ──▶ SMTP
+```
+
+- **The gate** is a separate, unprivileged process, not part of the agent. It listens only on a
+  unix socket the NGINX workers can reach, and reads one file per site from the active bundle,
+  reloading when a deployment changes them.
+- **Sessions** are a cookie (`__Host-enginx_session`: HTTPS-only, host-only, HttpOnly) signed with a
+  key derived from the site's key. The gate keeps no session state, so restarting it signs nobody
+  out.
+- **Codes** are random, kept hashed in the gate's memory, valid for ten minutes, tied to the browser
+  that asked for them, and spent after one use or five wrong tries.
+- **The site's key** is 32 random bytes generated by the platform, envelope-encrypted at rest like a
+  certificate's private key, and re-wrapped with every key rotation. It reaches the host only in the
+  bundle, in a file the workers' group can read and no read endpoint returns.
+- **The platform stays the authority.** The gate signs each request to mail a code with a second key
+  derived from the site's key. The platform checks the signature and that the timestamp is within
+  five minutes. It then checks the address against the site's allow-list itself, whatever the gate
+  decided, and rate-limits per address and per site before anything is sent. Each code sent is
+  audited, without the code.
+
+### What a visitor cannot learn or do
+
+- Whether an address is allowed: one that is not gets the same page and the same wait, and no mail.
+- Anything from someone else's code: a code works only in the browser that asked for it.
+- Send someone to another site: the post-sign-in redirect must be a path on this site.
+- Use the forms from another site: a sign-in form posted from another origin is refused.
+- Flood an inbox: per 15 minutes, the gate allows 10 requests from one client and 5 for one
+  address; the platform allows 5 per address per 15 minutes and 200 per site per hour.
+
+Rate limits are per gate and per platform replica, held in memory.
+
+## Verification
+
+After each deployment, VERIFY asks the host, as a visitor who has not signed in, for `/` and for a
+random path on every protected site, over HTTPS on loopback. Basic authentication must answer 401;
+email sign-in must redirect to its sign-in page. Anything else fails VERIFY with what was answered
+instead, for example:
+
+```
+private.example.com → served (v4 3fa9c1d2e8b0), but its protection is not enforced: / answered 200 without signing in
+```
+
+This is what catches the ways protection can be lost that `nginx -t` accepts. NGINX runs `return`
+and `rewrite` before it checks credentials, so a `return` in one of the host's
+[custom files](agent.md#custom-directives) answers without asking. Other causes are another server
+block claiming the same name, files the workers cannot open, and a gate that is not running.
+
+It cannot see a bypass confined to one specific path that it does not ask for. Directives in custom
+files remain root's responsibility on the host, as they always were. VERIFY runs on push hosts;
+pull hosts are not probed.

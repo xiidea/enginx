@@ -27,6 +27,8 @@ type Server struct {
 	bundles     *bundle.Store
 	idempotency *idempotencyStore
 	startedAt   time.Time
+	// protectedPort is where a protected site's HTTPS server is probed; 0 means 443. Set by tests.
+	protectedPort int
 }
 
 func NewServer(cfg config.Config, controller *nginx.Controller, bundles *bundle.Store) *Server {

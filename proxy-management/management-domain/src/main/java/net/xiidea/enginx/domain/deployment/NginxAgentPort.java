@@ -39,8 +39,14 @@ public interface NginxAgentPort {
      *
      * @param marker what that site's own server block answers at
      *               {@link NginxConfigRenderer#SITE_MARKER_PATH} in the bundle just deployed
+     * @param protection {@code BASIC} or {@code GATE} when the site must refuse a visitor who has not
+     *               signed in, which the host checks by asking as one; null for a public site
      */
-    record VerifyTarget(String serverName, String marker) {
+    record VerifyTarget(String serverName, String marker, String protection) {
+
+        public VerifyTarget(String serverName, String marker) {
+            this(serverName, marker, null);
+        }
     }
 
     /**

@@ -19,9 +19,22 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   protected site for an agent older than 0.2.0, because an older agent writes the file `0600` and
   NGINX then fails every request while `nginx -t` passes.
 
-Schema: migration `003-site-protection` adds `proxy_sites.protection_mode`, the
-`proxy_site_basic_auth_users` table and `config_bundle_files.file_mode`. API: `protection` on the
-site request and response.
+- **Protected sites: email sign-in.** A site can admit only visitors who sign in with a code mailed
+  to an allowed address or `*@domain`. Codes are mailed by the platform, so hosts hold no SMTP
+  credentials; sessions are checked on the host alone. The upstream receives the address as
+  `X-Enginx-Email`. Served by `enginx-gate`, a new unprivileged process the agent image runs beside
+  NGINX and the release ships as its own binary. Needs `GATE_RELAY_URL`, SMTP, and outbound HTTPS
+  from the host to the platform. **Sign everyone out** replaces a site's key.
+- **VERIFY checks that protection is enforced.** A protected site is asked for `/` and a random path
+  as a visitor who has not signed in, and VERIFY fails if either is answered. This catches a `return`
+  in a host's custom file, a shadowing server block, unreadable files and a missing gate, none of
+  which `nginx -t` rejects.
+
+Schema: migrations `003-site-protection` and `004-gate` add `proxy_sites.protection_mode` and
+`gate_session_ttl_s`, the `proxy_site_basic_auth_users`, `proxy_site_allowed_emails` and
+`proxy_site_gate_secrets` tables, and `config_bundle_files.file_mode`. API: `protection` on the site
+request and response, `POST /proxy-sites/{id}/sign-out-everyone`, and
+`POST /agents/gate/otp-mail` for gates.
 
 ## 0.1.2
 

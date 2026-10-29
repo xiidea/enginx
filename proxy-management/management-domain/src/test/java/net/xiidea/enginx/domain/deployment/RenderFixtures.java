@@ -1,6 +1,8 @@
 package net.xiidea.enginx.domain.deployment;
 
 import net.xiidea.enginx.domain.proxy.AdminState;
+import net.xiidea.enginx.domain.proxy.AllowedEmail;
+import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.HeaderDirection;
 import net.xiidea.enginx.domain.proxy.LoadBalancingMethod;
@@ -33,6 +35,20 @@ final class RenderFixtures {
             "$6$fixturesalt0001$nTLkJQUNn08kFVHCPBxOSfCbqF3lA60ZVOdyzJeqdQv4MeAjTOPRztNt1OcbBALrB.AcE2mRt.mh8cHpEl2UD1";
     static final String OTHER_HASH =
             "$6$fixturesalt0002$SVJ/Qcuj5pOFgDaMim7YMeD0zspwX5SMLItbweCxpQAE8vOisbTGKkZoa6BxlnMLKacxFEmmhFpz8g7P7athb.";
+
+    static final String GATE_KEY = "Z2F0ZS1rZXktZm9yLXRoZS1yZW5kZXItZml4dHVyZXM=";
+
+    static final GateMaterialProvider TEST_GATE = new GateMaterialProvider() {
+        @Override
+        public Optional<String> keyFor(UUID siteId) {
+            return Optional.of(GATE_KEY);
+        }
+
+        @Override
+        public Optional<String> relayUrl() {
+            return Optional.of("https://enginx.example.com/api/v1/agents/gate/otp-mail");
+        }
+    };
 
     private RenderFixtures() {
     }
@@ -110,6 +126,12 @@ final class RenderFixtures {
 
         Builder basicAuth(BasicAuthUser... users) {
             this.protection = SiteProtection.basic(List.of(users));
+            return this;
+        }
+
+        Builder emailOtp(String... allowed) {
+            this.protection = net.xiidea.enginx.domain.proxy.SiteProtection.emailOtp(new EmailOtpPolicy(
+                    java.util.Arrays.stream(allowed).map(AllowedEmail::new).toList(), null));
             return this;
         }
 

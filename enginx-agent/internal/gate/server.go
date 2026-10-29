@@ -1,0 +1,275 @@
+package gate
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Server answers NGINX's auth_request checks and serves the sign-in pages.
+//
+// Every request arrives from NGINX over a unix socket, carrying X-Enginx-Site set by the rendered
+// configuration, which overwrites anything a client sent under that name.
+type Server struct {
+	relay Relay
+	now   func() time.Time
+
+	mu    sync.RWMutex
+	sites map[string]*Site
+
+	codes   *codeStore
+	byIP    *limiter
+	byEmail *limiter
+
+	// background tracks codes still being handed to the platform, so a shutdown, or a test, can
+	// wait for them.
+	background sync.WaitGroup
+}
+
+// Wait blocks until every code handed off for mailing has been.
+func (s *Server) Wait() {
+	s.background.Wait()
+}
+
+func NewServer(relay Relay) *Server {
+	return &Server{
+		relay:   relay,
+		now:     time.Now,
+		sites:   map[string]*Site{},
+		codes:   newCodeStore(),
+		byIP:    newLimiter(10, 15*time.Minute),
+		byEmail: newLimiter(5, 15*time.Minute),
+	}
+}
+
+// SetSites replaces the protected sites. Sessions are unaffected: they carry everything needed
+// to check them, so a reload signs nobody out unless a site's key changed.
+func (s *Server) SetSites(sites map[string]*Site) {
+	s.mu.Lock()
+	s.sites = sites
+	s.mu.Unlock()
+}
+
+func (s *Server) site(r *http.Request) *Site {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sites[r.Header.Get("X-Enginx-Site")]
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /check", s.handleCheck)
+	mux.HandleFunc("GET /.enginx/auth/login", s.handleLoginForm)
+	mux.HandleFunc("POST /.enginx/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /.enginx/auth/verify", s.handleVerify)
+	mux.HandleFunc("GET /.enginx/auth/logout", s.handleLogout)
+	return mux
+}
+
+// handleCheck is NGINX's auth_request subrequest: 204 with the address, or 401. Only the cookie
+// is read, so answering costs one HMAC and no I/O.
+func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
+	site := s.site(r)
+	if site == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	cookie, err := r.Cookie(SessionCookie)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	email, err := verifySession(site, cookie.Value, s.now())
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("X-Enginx-Email", email)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) unavailable(w http.ResponseWriter) {
+	render(w, http.StatusServiceUnavailable, page{Domain: "Sign in", Step: "error",
+		Note: "Sign-in is not available for this site right now."})
+}
+
+func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
+	site := s.site(r)
+	if site == nil {
+		s.unavailable(w)
+		return
+	}
+	render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: redirectFromQuery(r.URL.RawQuery)})
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	site := s.site(r)
+	if site == nil {
+		s.unavailable(w)
+		return
+	}
+	if !sameOrigin(r) {
+		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+		return
+	}
+	redirect := safeRedirect(r.PostFormValue("rd"))
+	email := normaliseEmail(r.PostFormValue("email"))
+	if len(email) > 254 || !strings.Contains(email, "@") {
+		render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: redirect,
+			Note: "That does not look like an email address."})
+		return
+	}
+	now := s.now()
+	if !s.byIP.allow(site.ID+"|"+r.Header.Get("X-Real-IP"), now) || !s.byEmail.allow(site.ID+"|"+email, now) {
+		render(w, http.StatusTooManyRequests, page{Domain: site.Domain, Step: "email", Redirect: redirect,
+			Note: "Too many attempts. Wait a few minutes and try again."})
+		return
+	}
+
+	// An address that is not allowed gets a flow that can never succeed, and the same page, so
+	// the form cannot be used to learn who is on the list.
+	code := ""
+	if site.Admits(email) {
+		generated, err := randomCode()
+		if err != nil {
+			s.unavailable(w)
+			return
+		}
+		code = generated
+	}
+	flow, err := s.codes.start(site.ID, email, code, redirect, now)
+	if err != nil {
+		s.unavailable(w)
+		return
+	}
+	if code != "" {
+		// In the background, so the reply takes as long for an allowed address as for any other:
+		// waiting on the platform here would let the response time say who is on the list.
+		// Failures are logged, not shown, for the same reason.
+		s.background.Add(1)
+		go func() {
+			defer s.background.Done()
+			if err := s.relay.SendCode(context.Background(), site, email, code); err != nil {
+				slog.Error("could not have a sign-in code mailed", "site", site.Domain, "error", err)
+			} else {
+				slog.Info("sign-in code sent", "site", site.Domain, "email", email)
+			}
+		}()
+	}
+	http.SetCookie(w, &http.Cookie{Name: FlowCookie, Value: flow, Path: "/", MaxAge: int(codeValidFor.Seconds()),
+		Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	render(w, http.StatusOK, page{Domain: site.Domain, Step: "code", Email: email, Redirect: redirect})
+}
+
+func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
+	site := s.site(r)
+	if site == nil {
+		s.unavailable(w)
+		return
+	}
+	if !sameOrigin(r) {
+		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+		return
+	}
+	cookie, err := r.Cookie(FlowCookie)
+	if err != nil {
+		render(w, http.StatusOK, page{Domain: site.Domain, Step: "email", Redirect: "/",
+			Note: "That sign-in has expired. Ask for a new code."})
+		return
+	}
+	now := s.now()
+	flow, ok := s.codes.verify(cookie.Value, site.ID, strings.TrimSpace(r.PostFormValue("code")), now)
+	if !ok {
+		render(w, http.StatusOK, page{Domain: site.Domain, Step: "code", Redirect: "/", Email: "your address",
+			Note: "That code is not right, or has expired. After five wrong codes, ask for a new one."})
+		return
+	}
+
+	value, expires := issueSession(site, flow.email, now)
+	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: value, Path: "/", Expires: expires,
+		MaxAge: int(site.SessionTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: FlowCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true})
+	slog.Info("signed in", "site", site.Domain, "email", flow.email)
+	http.Redirect(w, r, flow.redirect, http.StatusSeeOther)
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	site := s.site(r)
+	if site == nil {
+		s.unavailable(w)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true})
+	render(w, http.StatusOK, page{Domain: site.Domain, Step: "signed-out"})
+}
+
+// redirectFromQuery reads rd from the login URL NGINX built: `login?rd=$request_uri`, where the
+// original URI is appended raw. Everything after `rd=` is the redirect, query string included —
+// splitting on & would cut it off at its own first parameter.
+func redirectFromQuery(rawQuery string) string {
+	if !strings.HasPrefix(rawQuery, "rd=") {
+		return "/"
+	}
+	return safeRedirect(rawQuery[len("rd="):])
+}
+
+// safeRedirect keeps a redirect on this site. "//evil.example" and "/\evil.example" are
+// protocol-relative to a browser, so only a single leading slash followed by something else is
+// let through.
+func safeRedirect(target string) string {
+	if target == "" || target[0] != '/' || strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") ||
+		strings.ContainsAny(target, "\r\n\x00") || len(target) > 2048 {
+		return "/"
+	}
+	return target
+}
+
+// sameOrigin refuses a form posted from another site. Browsers send Origin on every POST; a
+// request without one is not from a browser form, and is let through to the code check.
+//
+// The host is compared without its port. NGINX passes $host, which has none, while a browser's
+// Origin carries one whenever the site is reached on a port other than 443, as it is behind any
+// port mapping. A different port on the same name is not another site.
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme != "https" {
+		return false
+	}
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return strings.EqualFold(parsed.Hostname(), host)
+}
+
+// Watch reloads the site files whenever they change, until ctx ends.
+func (s *Server) Watch(ctx context.Context, dir string, every time.Duration) {
+	last := ""
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		if signature := dirSignature(dir); signature != last {
+			sites, problems := LoadSites(dir)
+			for _, problem := range problems {
+				slog.Error("a protected site's gate file could not be read; that site refuses everyone", "error", problem)
+			}
+			s.SetSites(sites)
+			slog.Info("protected sites loaded", "count", len(sites), "dir", dir)
+			last = signature
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}

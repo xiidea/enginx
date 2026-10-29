@@ -1,5 +1,6 @@
 package net.xiidea.enginx.application.proxy;
 
+import net.xiidea.enginx.application.gate.GateKeys;
 import net.xiidea.enginx.application.permission.SitePermissionService;
 import net.xiidea.enginx.application.shared.ActorProvider;
 import net.xiidea.enginx.application.shared.AuditRecorder;
@@ -7,7 +8,9 @@ import net.xiidea.enginx.domain.audit.AuditAction;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.permission.AccessScope;
 import net.xiidea.enginx.domain.permission.PermissionLevel;
+import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
+import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
 import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteQuery;
@@ -60,6 +63,7 @@ public class ProxySiteService {
     private final AuditRecorder audit;
     private final ActorProvider actorProvider;
     private final HtpasswdHasher htpasswdHasher;
+    private final GateKeys gateKeys;
     private final Clock clock;
 
     public ProxySiteService(ProxySiteRepository sites,
@@ -68,6 +72,7 @@ public class ProxySiteService {
                             AuditRecorder audit,
                             ActorProvider actorProvider,
                             HtpasswdHasher htpasswdHasher,
+                            GateKeys gateKeys,
                             Clock clock) {
         this.sites = sites;
         this.instances = instances;
@@ -75,6 +80,7 @@ public class ProxySiteService {
         this.audit = audit;
         this.actorProvider = actorProvider;
         this.htpasswdHasher = htpasswdHasher;
+        this.gateKeys = gateKeys;
         this.clock = clock;
     }
 
@@ -108,6 +114,7 @@ public class ProxySiteService {
         Instant now = clock.instant();
         ProxySite site = ProxySite.create(UUID.randomUUID(), spec, command.adminState(), actor(), now);
         ProxySite saved = sites.save(site);
+        issueGateKeyIfGated(saved);
 
         audit.success(AuditAction.PROXY_SITE_CREATED, RESOURCE_TYPE, saved.id(), null, ProxySiteSnapshot.of(saved));
         return saved;
@@ -134,9 +141,28 @@ public class ProxySiteService {
 
         site.update(spec, actor(), clock.instant());
         ProxySite saved = sites.save(site);
+        issueGateKeyIfGated(saved);
 
         audit.success(AuditAction.PROXY_SITE_UPDATED, RESOURCE_TYPE, saved.id(), before, ProxySiteSnapshot.of(saved));
         return saved;
+    }
+
+    /**
+     * Replaces the site's gate key, so every session signed with the old one stops working at the
+     * next deployment. MANAGE, because it is a change to who is in, not an operation on traffic.
+     */
+    @Transactional
+    public ProxySite signOutEveryone(UUID id) {
+        ProxySite site = load(id);
+        permissions.requireSiteAccess(site, PermissionLevel.MANAGE);
+        if (!site.spec().protection().mode().usesGate()) {
+            throw new ValidationException("protection.mode",
+                    "Only a site with email sign-in has sessions to end");
+        }
+        gateKeys.rotate(site.id());
+        audit.success(AuditAction.PROXY_SITE_SESSIONS_REVOKED, RESOURCE_TYPE, site.id(), null,
+                Map.of("domain", site.domain().value()));
+        return site;
     }
 
     @Transactional
@@ -182,6 +208,8 @@ public class ProxySiteService {
         requireDomainAvailable(copy.spec(), null);
 
         ProxySite saved = sites.save(copy);
+        // Its own key: a clone shares nothing with its source, sessions included.
+        issueGateKeyIfGated(saved);
         audit.success(AuditAction.PROXY_SITE_CLONED, RESOURCE_TYPE, saved.id(),
                 Map.of("sourceId", source.id().toString(), "sourceDomain", source.domain().value()),
                 ProxySiteSnapshot.of(saved));
@@ -211,6 +239,15 @@ public class ProxySiteService {
         if (input.mode() == ProtectionMode.NONE) {
             return SiteProtection.none();
         }
+        if (input.mode() == ProtectionMode.EMAIL_OTP) {
+            if (input.emailOtp() == null) {
+                throw new ValidationException("protection.emailOtp", "Email sign-in needs an allow-list of addresses");
+            }
+            Integer ttl = input.emailOtp().sessionTtlSeconds();
+            return SiteProtection.emailOtp(new EmailOtpPolicy(
+                    input.emailOtp().allowedEmails().stream().map(AllowedEmail::new).toList(),
+                    ttl == null ? null : java.time.Duration.ofSeconds(ttl)));
+        }
         Map<String, BasicAuthUser> existing = current.basicUsers().stream()
                 .collect(Collectors.toMap(BasicAuthUser::username, Function.identity()));
 
@@ -235,6 +272,13 @@ public class ProxySiteService {
             users.add(new BasicAuthUser(username, htpasswdHasher.hash(password)));
         }
         return new SiteProtection(input.mode(), users);
+    }
+
+    /** In the same transaction as the save, so a gated site can never exist without its key. */
+    private void issueGateKeyIfGated(ProxySite site) {
+        if (site.spec().protection().mode().usesGate()) {
+            gateKeys.ensure(site.id());
+        }
     }
 
     /** Loads without an access check. Private, so every public path must decide for itself. */

@@ -57,6 +57,9 @@ export class SiteForm implements OnInit {
   readonly headers = signal<HeaderRule[]>([]);
   readonly protectionMode = signal<ProtectionMode>('NONE');
   readonly basicUsers = signal<BasicUserRow[]>([]);
+  /** One address or *@domain per line. */
+  readonly allowedEmails = signal('');
+  readonly sessionHours = signal(24);
 
   /** Mirrors the server's rule: credentials are only ever asked for over HTTPS. */
   readonly canProtect = computed(() => this.sslEnabled() && this.forceHttps());
@@ -126,6 +129,10 @@ export class SiteForm implements OnInit {
     // The server never returns a password or its hash, so an existing user starts with an empty
     // password field, which saving sends as "keep the current one".
     this.basicUsers.set(site.protection.basicUsers.map((user) => ({ username: user.username, password: '', existing: true })));
+    if (site.protection.emailOtp) {
+      this.allowedEmails.set(site.protection.emailOtp.allowedEmails.join('\n'));
+      this.sessionHours.set(Math.max(1, Math.round(site.protection.emailOtp.sessionTtlSeconds / 3600)));
+    }
   }
 
   addUpstream(): void {
@@ -215,6 +222,16 @@ export class SiteForm implements OnInit {
                 // An empty password is omitted, which the server reads as "keep the current one".
                 .map((user) => ({ username: user.username.trim(), password: user.password || undefined }))
             : [],
+        emailOtp:
+          this.protectionMode() === 'EMAIL_OTP'
+            ? {
+                allowedEmails: this.allowedEmails()
+                  .split(/[\s,]+/)
+                  .map((email) => email.trim())
+                  .filter((email) => email),
+                sessionTtlSeconds: this.sessionHours() * 3600,
+              }
+            : undefined,
       },
     };
 

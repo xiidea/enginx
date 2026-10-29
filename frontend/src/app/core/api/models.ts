@@ -69,7 +69,7 @@ export type Site = Wire<Schemas['ProxySiteResponse']>;
 export type SiteRequest = Schemas['ProxySiteRequest'];
 
 /** Who may reach a site. Mirrors the server's ProtectionMode. */
-export type ProtectionMode = 'NONE' | 'BASIC';
+export type ProtectionMode = 'NONE' | 'BASIC' | 'EMAIL_OTP';
 
 export type BasicAuthUserRequest = Schemas['BasicAuthUserRequest'];
 

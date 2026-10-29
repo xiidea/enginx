@@ -74,6 +74,19 @@ public final class NginxConfigRenderer {
      */
     private static final String BASIC_AUTH_REALM = "Restricted";
 
+    /**
+     * Where the host's gate listens. A unix socket, so the gate opens no port, and only processes
+     * in the NGINX worker group can reach it.
+     */
+    public static final String GATE_SOCKET = "/run/enginx/gate.sock";
+
+    /** Everything the gate serves to a visitor lives under here, on the site's own domain. */
+    public static final String GATE_PATH = "/.enginx/auth/";
+
+    private static final java.util.regex.Pattern GATE_KEY = java.util.regex.Pattern.compile("^[A-Za-z0-9+/]{43}=$");
+    private static final java.util.regex.Pattern RELAY_URL =
+            java.util.regex.Pattern.compile("^https?://[A-Za-z0-9.\\-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$");
+
     private static final String DEFAULT_TLS_CERT = "/etc/nginx/enginx/default-tls/default.crt";
     private static final String DEFAULT_TLS_KEY = "/etc/nginx/enginx/default-tls/default.key";
 
@@ -110,6 +123,22 @@ public final class NginxConfigRenderer {
                                CertificateMaterialProvider certificates,
                                String actor,
                                Instant now) {
+        return render(bundleId, nginxInstanceId, target, sequence, sites, certificates, GateMaterialProvider.NONE,
+                actor, now);
+    }
+
+    /**
+     * @param gates the key and relay address for every site the host's gate protects
+     */
+    public ConfigBundle render(UUID bundleId,
+                               UUID nginxInstanceId,
+                               RenderTarget target,
+                               long sequence,
+                               List<ProxySite> sites,
+                               CertificateMaterialProvider certificates,
+                               GateMaterialProvider gates,
+                               String actor,
+                               Instant now) {
 
         List<ProxySite> ordered = sites.stream()
                 .sorted(Comparator.comparing(site -> site.domain().value()))
@@ -123,9 +152,10 @@ public final class NginxConfigRenderer {
         Set<UUID> siteIds = new LinkedHashSet<>();
         for (ProxySite site : ordered) {
             siteIds.add(site.id());
-            files.add(BundleFile.of(siteFilePath(site), renderSite(site, certificates, target)));
+            requireProtectionSupported(site, target);
+            files.add(BundleFile.of(siteFilePath(site), renderSite(site, certificates, gates, target)));
             files.addAll(renderCertificateFiles(site, certificates));
-            files.addAll(renderProtectionFiles(site, target));
+            files.addAll(renderProtectionFiles(site, gates));
         }
 
         String contentHash = hashOf(files);
@@ -135,7 +165,13 @@ public final class NginxConfigRenderer {
 
     /** Renders one site in isolation, for the preview endpoint. */
     public String renderSitePreview(ProxySite site, CertificateMaterialProvider certificates, RenderTarget target) {
-        return renderSite(site, certificates, target);
+        return renderSite(site, certificates, GateMaterialProvider.NONE, target);
+    }
+
+    /** Renders one site in isolation, for the preview endpoint, with what its gate needs. */
+    public String renderSitePreview(ProxySite site, CertificateMaterialProvider certificates,
+                                    GateMaterialProvider gates, RenderTarget target) {
+        return renderSite(site, certificates, gates, target);
     }
 
     // ---- files -------------------------------------------------------------
@@ -259,18 +295,73 @@ public final class NginxConfigRenderer {
                 BundleFile.sensitive(directory + "privkey.pem", material.privateKeyPem()));
     }
 
-    private List<BundleFile> renderProtectionFiles(ProxySite site, RenderTarget target) {
-        if (site.spec().protection().mode() != ProtectionMode.BASIC) {
-            return List.of();
+    /**
+     * Both protection modes rest on files the NGINX workers, or the gate running as their user,
+     * read: an older agent writes them where neither can.
+     */
+    private static void requireProtectionSupported(ProxySite site, RenderTarget target) {
+        ProtectionMode mode = site.spec().protection().mode();
+        if (mode == ProtectionMode.NONE || target.supportsWorkerReadableFiles()) {
+            return;
         }
-        if (!target.supportsWorkerReadableFiles()) {
-            throw new ValidationException("protection.mode",
-                    site.domain().value() + " uses basic authentication, which needs agent "
-                            + "0.2.0 or later on its host; the host reports "
-                            + (target.agentVersion() == null ? "no agent version yet" : target.agentVersion())
-                            + ". Upgrade the agent before deploying.");
+        String what = mode == ProtectionMode.BASIC ? "basic authentication" : "email sign-in";
+        throw new ValidationException("protection.mode",
+                site.domain().value() + " uses " + what + ", which needs agent "
+                        + "0.2.0 or later on its host; the host reports "
+                        + (target.agentVersion() == null ? "no agent version yet" : target.agentVersion())
+                        + ". Upgrade the agent before deploying.");
+    }
+
+    private List<BundleFile> renderProtectionFiles(ProxySite site, GateMaterialProvider gates) {
+        return switch (site.spec().protection().mode()) {
+            case NONE -> List.of();
+            case BASIC -> List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
+            case EMAIL_OTP -> List.of(BundleFile.workerReadable(gateFilePath(site), gateFile(site, gates)));
+        };
+    }
+
+    private static String gateFilePath(ProxySite site) {
+        return "gate/sites/" + site.domain().value() + ".json";
+    }
+
+    /**
+     * What the host's gate reads to protect one site.
+     *
+     * <p>JSON written by hand, like the NGINX files, and safe for the same reason: every value is
+     * either platform-generated or has passed a value object that admits no quote, backslash or
+     * control character. The two values that come from outside a value object, the key and the
+     * relay address, are checked here against patterns just as strict.
+     */
+    private static String gateFile(ProxySite site, GateMaterialProvider gates) {
+        ProxySiteSpec spec = site.spec();
+        String key = gates.keyFor(site.id())
+                .filter(value -> GATE_KEY.matcher(value).matches())
+                .orElseThrow(() -> new ValidationException("protection.mode",
+                        "No gate key is available for " + site.domain().value()
+                                + ". Save the site again to issue one."));
+        String relayUrl = gates.relayUrl()
+                .filter(value -> RELAY_URL.matcher(value).matches())
+                .orElseThrow(() -> new ValidationException("protection.mode",
+                        site.domain().value() + " uses email sign-in, which needs enginx.gate.relay-url: "
+                                + "the address hosts reach this platform at, to have codes mailed."));
+
+        StringBuilder out = new StringBuilder(512);
+        out.append("{\n");
+        out.append("  \"version\": 1,\n");
+        out.append("  \"siteId\": \"").append(site.id()).append("\",\n");
+        out.append("  \"domain\": \"").append(spec.domain().value()).append("\",\n");
+        out.append("  \"mode\": \"").append(spec.protection().mode().name()).append("\",\n");
+        out.append("  \"key\": \"").append(key).append("\",\n");
+        out.append("  \"sessionTtlSeconds\": ").append(spec.protection().emailOtp().sessionTtl().toSeconds()).append(",\n");
+        out.append("  \"allowedEmails\": [");
+        List<net.xiidea.enginx.domain.proxy.AllowedEmail> emails = spec.protection().emailOtp().allowedEmails();
+        for (int i = 0; i < emails.size(); i++) {
+            out.append(i == 0 ? "\n" : ",\n").append("    \"").append(emails.get(i).value()).append('"');
         }
-        return List.of(BundleFile.workerReadable(htpasswdPath(site), site.spec().protection().htpasswd()));
+        out.append("\n  ],\n");
+        out.append("  \"relayUrl\": \"").append(relayUrl).append("\"\n");
+        out.append("}\n");
+        return out.toString();
     }
 
     private static String htpasswdPath(ProxySite site) {
@@ -298,7 +389,8 @@ public final class NginxConfigRenderer {
      * all three, so a reload that NGINX accepted but did not apply reads as the older config still
      * being live rather than as success.
      */
-    private String renderSite(ProxySite site, CertificateMaterialProvider certificates, RenderTarget target) {
+    private String renderSite(ProxySite site, CertificateMaterialProvider certificates, GateMaterialProvider gates,
+                              RenderTarget target) {
         ProxySiteSpec spec = site.spec();
         StringBuilder out = new StringBuilder(1024);
         String certificateDigest = "";
@@ -334,11 +426,16 @@ public final class NginxConfigRenderer {
             appendServer(out, site, false, null, target);
         }
 
-        // The user list too: a password change touches only the htpasswd file, and VERIFY must
-        // still be able to tell whether it is live.
-        String protectionDigest = spec.protection().mode() == ProtectionMode.BASIC
-                ? BundleFile.digest(spec.protection().htpasswd())
-                : "";
+        // The user list or the gate's file too: a password, an allow-list or a key change touches
+        // only that file, and VERIFY must still be able to tell whether it is live. A preview
+        // without gate material leaves it out, as it does nothing else the host is sent.
+        String protectionDigest = switch (spec.protection().mode()) {
+            case NONE -> "";
+            case BASIC -> BundleFile.digest(spec.protection().htpasswd());
+            case EMAIL_OTP -> gates.keyFor(site.id()).isPresent() && gates.relayUrl().isPresent()
+                    ? BundleFile.digest(gateFile(site, gates))
+                    : "";
+        };
 
         String withPlaceholder = out.toString();
         String fingerprint = BundleFile.digest(withPlaceholder + "\n" + certificateDigest
@@ -370,6 +467,26 @@ public final class NginxConfigRenderer {
             }
         }
         return markers;
+    }
+
+    /**
+     * The protection each protected site in a bundle renders, by domain: {@code BASIC} or
+     * {@code GATE}. Read from the files, like the markers, so VERIFY checks what was deployed.
+     */
+    public static java.util.Map<String, String> siteProtections(ConfigBundle bundle) {
+        java.util.Map<String, String> protections = new java.util.LinkedHashMap<>();
+        for (BundleFile file : bundle.files()) {
+            if (!file.path().startsWith("conf.d/") || file.path().equals(BASE_FILE)) {
+                continue;
+            }
+            String domain = file.path().substring("conf.d/".length(), file.path().length() - ".conf".length());
+            if (file.content().contains("\n    auth_request " + GATE_PATH + "check;")) {
+                protections.put(domain, "GATE");
+            } else if (file.content().contains("\n    auth_basic \"")) {
+                protections.put(domain, "BASIC");
+            }
+        }
+        return protections;
     }
 
     private void appendUpstream(StringBuilder out, ProxySite site) {
@@ -501,6 +618,9 @@ public final class NginxConfigRenderer {
             out.append("    auth_basic_user_file /etc/nginx/enginx/current/")
                     .append(htpasswdPath(site)).append(";\n\n");
         }
+        if (ssl && spec.protection().mode().usesGate()) {
+            appendGate(out, site);
+        }
 
         List<LocationRule> locations = spec.locations();
         for (int i = 0; i < locations.size(); i++) {
@@ -533,6 +653,45 @@ public final class NginxConfigRenderer {
                     .append(" \"").append(header.value()).append("\" always;\n");
         }
         out.append('\n');
+    }
+
+    /**
+     * Every request is checked by the host's gate before it is proxied; a visitor without a valid
+     * sign-in is sent to the gate's own pages on this domain.
+     *
+     * <p>The check runs in NGINX's access phase. The intercepted 401 is only the one the check
+     * produces: proxy_intercept_errors is off, so an upstream answering 401 for its own reasons is
+     * passed through rather than sent to sign in.
+     */
+    private void appendGate(StringBuilder out, ProxySite site) {
+        String socket = "http://unix:" + GATE_SOCKET + ":";
+        out.append("    auth_request ").append(GATE_PATH).append("check;\n");
+        out.append("    auth_request_set $enginx_email $upstream_http_x_enginx_email;\n");
+        out.append("    error_page 401 = @enginx_sign_in;\n\n");
+
+        out.append("    location = ").append(GATE_PATH).append("check {\n");
+        out.append("        internal;\n");
+        out.append("        proxy_pass ").append(socket).append("/check;\n");
+        out.append("        proxy_pass_request_body off;\n");
+        out.append("        proxy_set_header Content-Length \"\";\n");
+        out.append("        proxy_set_header X-Enginx-Site ").append(site.id()).append(";\n");
+        out.append("    }\n\n");
+
+        out.append("    location ^~ ").append(GATE_PATH).append(" {\n");
+        out.append("        auth_request off;\n");
+        out.append("        proxy_pass ").append(socket).append(";\n");
+        out.append("        proxy_set_header Host       $host;\n");
+        out.append("        proxy_set_header X-Real-IP  $remote_addr;\n");
+        out.append("        proxy_set_header X-Enginx-Site ").append(site.id()).append(";\n");
+        out.append("    }\n\n");
+
+        out.append("    location @enginx_sign_in {\n");
+        // Relative, so the visitor stays on the scheme, host and port they used. NGINX makes a
+        // redirect absolute by default from server_name and its own listen port, which is wrong
+        // behind any port mapping or load balancer.
+        out.append("        absolute_redirect off;\n");
+        out.append("        return 302 ").append(GATE_PATH).append("login?rd=$request_uri;\n");
+        out.append("    }\n\n");
     }
 
     private void appendLocation(StringBuilder out, ProxySite site, LocationRule location) {
@@ -571,6 +730,11 @@ public final class NginxConfigRenderer {
                 out.append("        proxy_set_header ").append(header.name())
                         .append(" \"").append(header.value()).append("\";\n");
             }
+        }
+
+        if (spec.protection().mode().usesGate()) {
+            // Always set, so the upstream can trust it: a client sending its own is overwritten.
+            out.append("        proxy_set_header X-Enginx-Email    $enginx_email;\n");
         }
 
         out.append('\n');

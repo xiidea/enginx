@@ -10,10 +10,24 @@ import java.util.List;
  * <p>Passwords are write-only: a site is returned with its usernames and never their hashes, so a
  * client editing a site sends a user without a password to mean "keep the one it has".
  */
-public record ProtectionInput(ProtectionMode mode, List<BasicUser> basicUsers) {
+public record ProtectionInput(ProtectionMode mode, List<BasicUser> basicUsers, EmailOtp emailOtp) {
 
     public ProtectionInput {
         basicUsers = basicUsers == null ? List.of() : List.copyOf(basicUsers);
+    }
+
+    public ProtectionInput(ProtectionMode mode, List<BasicUser> basicUsers) {
+        this(mode, basicUsers, null);
+    }
+
+    /**
+     * @param sessionTtlSeconds how long a sign-in lasts, or null for the default
+     */
+    public record EmailOtp(List<String> allowedEmails, Integer sessionTtlSeconds) {
+
+        public EmailOtp {
+            allowedEmails = allowedEmails == null ? List.of() : List.copyOf(allowedEmails);
+        }
     }
 
     /**

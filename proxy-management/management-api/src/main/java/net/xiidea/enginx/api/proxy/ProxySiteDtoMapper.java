@@ -110,7 +110,9 @@ public class ProxySiteDtoMapper {
         List<ProtectionInput.BasicUser> users = request.basicUsers() == null ? List.of() : request.basicUsers().stream()
                 .map(u -> new ProtectionInput.BasicUser(u.username(), u.password()))
                 .toList();
-        return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users);
+        ProtectionInput.EmailOtp emailOtp = request.emailOtp() == null ? null
+                : new ProtectionInput.EmailOtp(request.emailOtp().allowedEmails(), request.emailOtp().sessionTtlSeconds());
+        return new ProtectionInput(parseEnum(ProtectionMode.class, request.mode(), "protection.mode"), users, emailOtp);
     }
 
     public AdminState toAdminState(Boolean enabled) {
@@ -152,7 +154,12 @@ public class ProxySiteDtoMapper {
                 new ProtectionResponse(spec.protection().mode().name(),
                         spec.protection().basicUsers().stream()
                                 .map(u -> new ProtectionResponse.BasicAuthUserResponse(u.username()))
-                                .toList()),
+                                .toList(),
+                        spec.protection().emailOtp() == null ? null : new ProtectionResponse.EmailOtpResponse(
+                                spec.protection().emailOtp().allowedEmails().stream()
+                                        .map(net.xiidea.enginx.domain.proxy.AllowedEmail::value)
+                                        .toList(),
+                                spec.protection().emailOtp().sessionTtl().toSeconds())),
                 site.createdBy(),
                 site.createdAt(),
                 site.updatedBy(),

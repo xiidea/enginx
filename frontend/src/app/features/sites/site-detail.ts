@@ -270,6 +270,23 @@ export class SiteDetail implements OnInit {
     });
   }
 
+  sessionLength(seconds: number): string {
+    const hours = seconds / 3600;
+    return hours >= 24 && hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? '' : 's'}` : `${hours} hours`;
+  }
+
+  /** Rotates the gate key, then deploys, since sessions only end once the host has the new key. */
+  signOutEveryone(): void {
+    const site = this.site();
+    if (!site || !confirm(`Sign everyone out of ${site.domain}? Everyone will need a new code to get back in.`)) {
+      return;
+    }
+    this.api.signOutEveryone(site.id).subscribe({
+      next: () => this.deploy(),
+      error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
   deploy(): void {
     this.api.deploy(this.id()).subscribe({
       next: () => {

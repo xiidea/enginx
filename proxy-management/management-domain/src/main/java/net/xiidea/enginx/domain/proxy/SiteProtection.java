@@ -14,11 +14,11 @@ import java.util.Set;
  * from them is the same bytes for the same set however they were entered, and an unchanged list
  * redeploys as a no-op.
  */
-public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers) {
+public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers, EmailOtpPolicy emailOtp) {
 
     public static final int MAX_BASIC_USERS = 64;
 
-    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of());
+    private static final SiteProtection NONE = new SiteProtection(ProtectionMode.NONE, List.of(), null);
 
     public SiteProtection {
         if (mode == null) {
@@ -50,6 +50,19 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
             throw new ValidationException("protection.basicUsers",
                     "Basic authentication users can only be set when the mode is BASIC");
         }
+
+        if (mode == ProtectionMode.EMAIL_OTP && emailOtp == null) {
+            throw new ValidationException("protection.emailOtp",
+                    "Email sign-in needs an allow-list of addresses");
+        }
+        if (mode != ProtectionMode.EMAIL_OTP && emailOtp != null) {
+            throw new ValidationException("protection.emailOtp",
+                    "An email allow-list can only be set when the mode is EMAIL_OTP");
+        }
+    }
+
+    public SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers) {
+        this(mode, basicUsers, null);
     }
 
     public static SiteProtection none() {
@@ -57,7 +70,11 @@ public record SiteProtection(ProtectionMode mode, List<BasicAuthUser> basicUsers
     }
 
     public static SiteProtection basic(List<BasicAuthUser> users) {
-        return new SiteProtection(ProtectionMode.BASIC, users);
+        return new SiteProtection(ProtectionMode.BASIC, users, null);
+    }
+
+    public static SiteProtection emailOtp(EmailOtpPolicy policy) {
+        return new SiteProtection(ProtectionMode.EMAIL_OTP, List.of(), policy);
     }
 
     public boolean isProtected() {

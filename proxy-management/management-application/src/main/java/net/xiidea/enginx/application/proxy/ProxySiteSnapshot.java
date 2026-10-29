@@ -33,6 +33,13 @@ final class ProxySiteSnapshot {
         map.put("basicAuthUsers", site.spec().protection().basicUsers().stream()
                 .map(net.xiidea.enginx.domain.proxy.BasicAuthUser::username)
                 .toList());
+        net.xiidea.enginx.domain.proxy.EmailOtpPolicy emailOtp = site.spec().protection().emailOtp();
+        if (emailOtp != null) {
+            map.put("allowedEmails", emailOtp.allowedEmails().stream()
+                    .map(net.xiidea.enginx.domain.proxy.AllowedEmail::value)
+                    .toList());
+            map.put("sessionTtlSeconds", emailOtp.sessionTtl().toSeconds());
+        }
         return Map.copyOf(map);
     }
 

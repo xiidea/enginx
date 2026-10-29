@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"syscall"
@@ -22,6 +23,7 @@ import (
 	"github.com/xiidea/enginx/enginx-agent/internal/bundle"
 	"github.com/xiidea/enginx/enginx-agent/internal/config"
 	"github.com/xiidea/enginx/enginx-agent/internal/defaulttls"
+	"github.com/xiidea/enginx/enginx-agent/internal/gatesup"
 	"github.com/xiidea/enginx/enginx-agent/internal/nginx"
 	"github.com/xiidea/enginx/enginx-agent/internal/runner"
 	"github.com/xiidea/enginx/enginx-agent/internal/version"
@@ -117,6 +119,17 @@ func main() {
 			"group", cfg.NginxGroup, "error", err)
 	}
 	server := api.NewServer(cfg, controller, store)
+
+	if cfg.NginxManaged {
+		// Alongside the NGINX it runs: the gate answers NGINX's auth_request checks for sites
+		// with email sign-in, and has no reason to exist where NGINX does not.
+		go gatesup.Run(ctx, gatesup.Config{
+			Binary:   cfg.GateBinary,
+			User:     cfg.GateUser,
+			Socket:   cfg.GateSocket,
+			SitesDir: filepath.Join(cfg.ReleasesDir, "current", "gate", "sites"),
+		})
+	}
 
 	// Said at startup rather than discovered at the first deployment, which refuses on this too.
 	// On a host that already ran NGINX this is the one line that usually needs adding.

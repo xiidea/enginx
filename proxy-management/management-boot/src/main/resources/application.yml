@@ -262,6 +262,15 @@ enginx:
       webhook: ${NOTIFICATION_ROUTE_WEBHOOK:}
       log: ${NOTIFICATION_ROUTE_LOG:}
 
+  # The host-local gate that protects sites with email sign-in.
+  gate:
+    # Where gates post a code for the platform to mail: this API's address as the NGINX hosts
+    # reach it, ending in /api/v1/agents/gate/otp-mail. Unset, a site with email sign-in cannot be
+    # rendered, and says so, rather than deploying a gate whose codes never arrive.
+    relay-url: ${GATE_RELAY_URL:}
+    # The sender of sign-in codes. Mail goes through spring.mail.*, like notifications.
+    mail-from: ${GATE_MAIL_FROM:${enginx.notifications.from:enginx@localhost}}
+
   observability:
     # One database read serves every gauge on a scrape and every health probe within this window.
     statistics-cache-ttl: ${OBSERVABILITY_CACHE_TTL:15s}

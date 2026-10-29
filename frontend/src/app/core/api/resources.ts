@@ -99,6 +99,11 @@ export class SitesApi {
     return this.api.post(`/proxy-sites/${id}/enable`);
   }
 
+  /** Replaces the site's gate key. Sessions end once the site is next deployed. */
+  signOutEveryone(id: string): Observable<Site> {
+    return this.api.post(`/proxy-sites/${id}/sign-out-everyone`);
+  }
+
   disable(id: string): Observable<Site> {
     return this.api.post(`/proxy-sites/${id}/disable`);
   }

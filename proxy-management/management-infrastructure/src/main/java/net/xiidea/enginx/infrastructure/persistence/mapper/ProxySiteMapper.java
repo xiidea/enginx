@@ -1,6 +1,8 @@
 package net.xiidea.enginx.infrastructure.persistence.mapper;
 
+import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
+import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
 import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
@@ -10,6 +12,7 @@ import net.xiidea.enginx.domain.proxy.SiteProtection;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.TimeWindow;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteAllowedEmailEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteBasicAuthUserEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteHeaderEntity;
@@ -44,10 +47,14 @@ public class ProxySiteMapper {
                 .map(l -> new LocationRule(l.getPathPattern(), l.getMatchType(), l.getSortOrder()))
                 .toList();
 
+        EmailOtpPolicy emailOtp = entity.getGateSessionTtlSeconds() == null ? null : new EmailOtpPolicy(
+                entity.allowedEmails().stream().map(e -> new AllowedEmail(e.getEmail())).toList(),
+                java.time.Duration.ofSeconds(entity.getGateSessionTtlSeconds()));
         SiteProtection protection = new SiteProtection(entity.getProtectionMode(),
                 entity.basicAuthUsers().stream()
                         .map(u -> new BasicAuthUser(u.getUsername(), u.getPasswordHash()))
-                        .toList());
+                        .toList(),
+                emailOtp);
 
         ProxySiteSpec spec = new ProxySiteSpec(
                 entity.getName(),
@@ -90,6 +97,8 @@ public class ProxySiteMapper {
         entity.setSslCertificateId(spec.sslCertificateId());
         entity.setLbMethod(spec.loadBalancingMethod());
         entity.setProtectionMode(spec.protection().mode());
+        EmailOtpPolicy emailOtp = spec.protection().emailOtp();
+        entity.setGateSessionTtlSeconds(emailOtp == null ? null : (int) emailOtp.sessionTtl().toSeconds());
         entity.setConnectTimeoutSeconds(spec.timeouts().connectSeconds());
         entity.setReadTimeoutSeconds(spec.timeouts().readSeconds());
         entity.setSendTimeoutSeconds(spec.timeouts().sendSeconds());
@@ -103,6 +112,7 @@ public class ProxySiteMapper {
         mergeHeaders(entity, spec.headers());
         mergeLocations(entity, spec.locations());
         mergeBasicAuthUsers(entity, spec.protection().basicUsers());
+        mergeAllowedEmails(entity, emailOtp == null ? List.of() : emailOtp.allowedEmails());
     }
 
     /**
@@ -183,6 +193,20 @@ public class ProxySiteMapper {
             }
         }
         entity.basicAuthUsers().removeAll(existing.values());
+    }
+
+    private void mergeAllowedEmails(ProxySiteEntity entity, List<AllowedEmail> desired) {
+        Map<String, ProxySiteAllowedEmailEntity> existing =
+                index(entity.allowedEmails(), ProxySiteAllowedEmailEntity::naturalKey);
+
+        for (AllowedEmail email : desired) {
+            if (existing.remove(email.value()) == null) {
+                ProxySiteAllowedEmailEntity row = new ProxySiteAllowedEmailEntity(UUID.randomUUID(), email.value());
+                entity.attach(row);
+                entity.allowedEmails().add(row);
+            }
+        }
+        entity.allowedEmails().removeAll(existing.values());
     }
 
     private static <E> Map<String, E> index(List<E> rows, Function<E, String> keyOf) {

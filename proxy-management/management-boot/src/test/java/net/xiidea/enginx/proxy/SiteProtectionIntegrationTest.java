@@ -175,6 +175,34 @@ class SiteProtectionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("VERIFY asks the host whether the site refuses a visitor who has not signed in")
+    void verifyChecksProtection() {
+        create(user("alice", "correct horse"));
+
+        Deployment done = deploy();
+
+        assertThat(done.verificationFailed()).isFalse();
+        assertThat(done.events()).filteredOn(event -> event.phase().name().equals("VERIFY"))
+                .singleElement().satisfies(event ->
+                        assertThat(event.detail()).contains("refuses visitors who have not signed in"));
+    }
+
+    @Test
+    @DisplayName("a protected site that lets anyone through fails VERIFY, whatever let them through")
+    void anUnenforcedProtectionFailsVerify() {
+        create(user("alice", "correct horse"));
+        agent.bypassProtection(true);
+
+        Deployment done = deploy();
+
+        assertThat(done.status()).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(done.verificationFailed()).isTrue();
+        assertThat(done.events()).filteredOn(event -> event.phase().name().equals("VERIFY"))
+                .singleElement().satisfies(event ->
+                        assertThat(event.detail()).contains("protection is not enforced"));
+    }
+
+    @Test
     @DisplayName("the audit trail records who may sign in, never a hash")
     void auditCarriesNoHashes() {
         ProxySite site = create(user("alice", "correct horse"));
