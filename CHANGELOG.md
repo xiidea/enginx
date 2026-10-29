@@ -33,6 +33,9 @@ protected site never waits on the platform to check a visitor.
   `GATE_OIDC_BACKCHANNEL_URI`.
 - **The upstream knows who signed in.** Gated sites pass `X-Enginx-Email` and `X-Enginx-User`, always
   set by NGINX, so a client cannot send its own.
+- **Access rule changes apply to everyone at once.** A gated site's sessions carry the rules they
+  were issued under, so deploying a narrower allow-list or role rule ends the sessions of everyone
+  signed in under the old one, rather than letting them in until their session expires.
 - **VERIFY checks that protection is enforced.** A protected site is asked for `/` and a random path
   as a visitor who has not signed in, and VERIFY fails if either is answered: a `return` in a host's
   custom file, a shadowing server block, unreadable files or a missing gate, none of which
