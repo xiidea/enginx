@@ -15,6 +15,7 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   everyone out. A name-only edit deploys nothing. *Save without deploying* keeps a change for the
   next deployment, to send several out together. Quick saves share one deployment, and a save made
   while a deployment is already rendering is kept, with the site page showing it as not deployed.
+  While a deployment is on its way the site page says so, and checks the host once it has finished.
   The API is unchanged unless asked: add `?deploy=auto` to create, update, enable, disable, renew,
   remove-expiry and sign-out-everyone, and the response carries the queued `deploymentId`
   ([managing sites](docs/admin/managing-sites.md#deploying-on-save)).

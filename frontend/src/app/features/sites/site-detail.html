@@ -20,7 +20,11 @@
     </p>
   }
 
-  @if (undeployed().length) {
+  @if (deploying()) {
+    <div class="deploying" role="status">
+      <strong>Deploying to the host.</strong> This page updates when the deployment finishes.
+    </div>
+  } @else if (undeployed().length) {
     <!-- A save need not deploy: saved without deploying, through the API, or while another
          deployment was already rendering. Said where the site is looked at, because a saved change
          the host does not have yet looks exactly like one that did not work. -->

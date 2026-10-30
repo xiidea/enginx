@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CertificatesApi, DeploymentsApi, GroupsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
@@ -56,6 +56,16 @@ export class SiteDetail implements OnInit {
    * password or allow-list as well as anything in the site's NGINX configuration.
    */
   readonly undeployed = signal<string[]>([]);
+  /**
+   * Whether the instance's latest deployment has yet to finish. It renders current state, so a
+   * saved change is on its way rather than missing, and the page says that instead.
+   */
+  readonly deploying = computed(() => {
+    const latest = this.deployments()[0];
+    return !!latest && (latest.status === 'PENDING' || latest.status === 'IN_PROGRESS');
+  });
+  private watching?: ReturnType<typeof setTimeout>;
+  private readonly stopWatching = inject(DestroyRef).onDestroy(() => clearTimeout(this.watching));
 
   /**
    * The groups this site is filed under.
@@ -304,11 +314,7 @@ export class SiteDetail implements OnInit {
             error: () => this.certificate.set(null),
           });
         }
-        this.checkUndeployed(site.domain);
-        this.deploymentsApi.list(site.nginxInstanceId, 0, 8).subscribe({
-          next: (page) => this.deployments.set(page.content),
-          error: () => this.deployments.set([]),
-        });
+        this.watchDeployments(site);
       },
       error: (problem) => {
         this.notifications.problem(problem);
@@ -331,6 +337,29 @@ export class SiteDetail implements OnInit {
     request.subscribe({
       next: (updated) => this.applied(updated, `Site ${updated.enabled ? 'enabled' : 'disabled'}`),
       error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
+  /**
+   * Lists the instance's recent deployments, and while the latest has yet to finish, looks again
+   * shortly. The host is checked once it has: checked before, a change still on its way would be
+   * reported as not deployed.
+   */
+  private watchDeployments(site: Site): void {
+    clearTimeout(this.watching);
+    this.deploymentsApi.list(site.nginxInstanceId, 0, 8).subscribe({
+      next: (page) => {
+        this.deployments.set(page.content);
+        if (this.deploying()) {
+          this.watching = setTimeout(() => this.watchDeployments(site), 1500);
+        } else {
+          this.checkUndeployed(site.domain);
+        }
+      },
+      error: () => {
+        this.deployments.set([]);
+        this.checkUndeployed(site.domain);
+      },
     });
   }
 
@@ -419,8 +448,7 @@ export class SiteDetail implements OnInit {
       return;
     }
     this.notifications.success(title, [detail, 'Deploying to its host.'].filter(Boolean).join(' '));
-    // Give the dispatcher a moment, then show what happened rather than leaving a stale list.
-    setTimeout(() => this.load(), 2500);
+    this.watchDeployments(updated);
   }
 
   deploy(): void {
@@ -430,8 +458,10 @@ export class SiteDetail implements OnInit {
           'Deployment queued',
           'The bundle is rendered from current state and applied in the background.',
         );
-        // Give the dispatcher a moment, then show what happened rather than leaving a stale list.
-        setTimeout(() => this.load(), 2500);
+        const site = this.site();
+        if (site) {
+          this.watchDeployments(site);
+        }
       },
       error: (problem) => this.notifications.problem(problem),
     });

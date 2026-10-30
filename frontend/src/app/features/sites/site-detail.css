@@ -1,5 +1,15 @@
 /* ---------- undeployed changes ---------- */
 
+.deploying {
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.95rem;
+  background: var(--info-wash);
+  border: 1px solid var(--info);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
 .undeployed {
   display: flex;
   align-items: center;
