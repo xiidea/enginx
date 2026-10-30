@@ -176,7 +176,8 @@ public final class NginxConfigRenderer {
 
     // ---- files -------------------------------------------------------------
 
-    private static String siteFilePath(ProxySite site) {
+    /** Where a site's server blocks are in a bundle: present exactly when the bundle serves the site. */
+    public static String siteFilePath(ProxySite site) {
         return "conf.d/" + site.domain().value() + ".conf";
     }
 

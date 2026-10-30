@@ -2182,6 +2182,15 @@
         ],
         "type": "object"
       },
+      "SiteDeletionResponse": {
+        "properties": {
+          "deploymentId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SiteNotificationSettingsRequest": {
         "properties": {
           "expiryEnabled": {
@@ -5143,6 +5152,7 @@
     },
     "/api/v1/proxy-sites/{id}": {
       "delete": {
+        "description": "204 with no body; with deploy=auto, 200 and the deployment taking the site off its host.",
         "operationId": "proxySite_delete",
         "parameters": [
           {
@@ -5161,11 +5171,37 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "auto: deploy in the same request when the host was serving the site, so it stops at once. Omitted, the site leaves the host with the next deployment, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteDeletionResponse"
+                }
+              }
+            },
+            "description": "Deleted with deploy=auto"
+          },
+          "204": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteDeletionResponse"
+                }
+              }
+            },
+            "description": "Deleted; nothing deployed"
           },
           "401": {
             "content": {

@@ -954,7 +954,10 @@ export interface paths {
          */
         put: operations["proxySite_update"];
         post?: never;
-        /** Delete a proxy site */
+        /**
+         * Delete a proxy site
+         * @description 204 with no body; with deploy=auto, 200 and the deployment taking the site off its host.
+         */
         delete: operations["proxySite_delete"];
         options?: never;
         head?: never;
@@ -1943,6 +1946,10 @@ export interface components {
         };
         SetDefaultServerRequest: {
             managed: boolean;
+        };
+        SiteDeletionResponse: {
+            /** Format: uuid */
+            deploymentId?: string;
         };
         SiteNotificationSettingsRequest: {
             expiryEnabled?: boolean;
@@ -4003,7 +4010,10 @@ export interface operations {
     };
     proxySite_delete: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the host was serving the site, so it stops at once. Omitted, the site leaves the host with the next deployment, as before. */
+                deploy?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -4014,12 +4024,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Deleted with deploy=auto */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SiteDeletionResponse"];
+                };
+            };
+            /** @description Deleted; nothing deployed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SiteDeletionResponse"];
+                };
             };
             /** @description Unauthorized */
             401: {

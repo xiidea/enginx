@@ -491,12 +491,14 @@ export class SiteDetail implements OnInit {
 
   remove(): void {
     const site = this.site();
-    if (!site || !confirm(`Delete ${site.domain}? Its configuration leaves the host on the next deployment.`)) {
+    if (!site || !confirm(`Delete ${site.domain}? Its host stops serving it once the deployment that follows has run.`)) {
       return;
     }
     this.api.remove(site.id, site.version).subscribe({
-      next: () => {
-        this.notifications.success('Site deleted');
+      next: (deletion) => {
+        this.notifications.success('Site deleted', deletion.deploymentId
+          ? `Removing ${site.domain} from its host.`
+          : `The host was not serving ${site.domain}, or removes it with its next deployment.`);
         this.router.navigate(['/sites']);
       },
       error: (problem) => this.notifications.problem(problem),

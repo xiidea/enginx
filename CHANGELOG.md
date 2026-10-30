@@ -7,6 +7,17 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## Unreleased
+
+- **Deleting a site takes it off its host.** Deleting used to leave the site served until the next
+  deployment, which deploy-on-save in 0.2.1 had made easy to forget. The console now deploys when
+  the host was serving the site; one never deployed deploys nothing. Through the API, add
+  `?deploy=auto` to `DELETE /proxy-sites/{id}`: the reply is then 200 with the `deploymentId`,
+  rather than 204 ([managing sites](docs/admin/managing-sites.md#deploying-on-save)).
+- **Patch releases may add features.** Non-breaking features now ship in 0.2.x; breaking changes
+  wait for a minor release with an upgrade note ([versioning](docs/releases.md#versioning-and-compatibility)).
+  The roadmap lists what is open, in that order ([backlog](docs/roadmap.md#backlog)).
+
 ## 0.2.1
 
 - **Saving deploys, when the change needs it.** A saved change the host did not have yet looked like

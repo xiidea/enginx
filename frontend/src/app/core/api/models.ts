@@ -66,6 +66,9 @@ export type SiteSummary = Wire<Schemas['ProxySiteSummaryResponse']>;
 
 export type Site = Wire<Schemas['ProxySiteResponse']>;
 
+/** What deleting a site set in motion: the deployment taking it off its host, if one was needed. */
+export type SiteDeletion = Wire<Schemas['SiteDeletionResponse']>;
+
 export type SiteRequest = Schemas['ProxySiteRequest'];
 
 /** Who may reach a site. Mirrors the server's ProtectionMode. */

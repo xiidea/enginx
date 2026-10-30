@@ -10,6 +10,7 @@ import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.deployment.DeploymentRepository;
 import net.xiidea.enginx.domain.deployment.DeploymentStatus;
 import net.xiidea.enginx.domain.deployment.DeploymentTrigger;
+import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.outbox.OutboxMessage;
 import net.xiidea.enginx.domain.outbox.OutboxRepository;
@@ -109,11 +110,35 @@ public class DeploymentService {
                 .orElseThrow(() -> new NotFoundException("PROXY_SITE", siteId));
         permissions.requireSiteAccess(site, PermissionLevel.OPERATE);
         lock.lockForUpdate(site.nginxInstanceId());
+        return queueOrJoin(site, "onSave");
+    }
 
+    /**
+     * The deployment that takes a deleted site off its host, requested in the transaction that
+     * deletes it, with the site as it was. Empty when the host was not serving it — never
+     * deployed, or disabled and deployed since — since removing it then changes nothing there, or
+     * when none can be promised now, for the same reason as {@link #requestSiteDeployment}.
+     *
+     * <p>Whether the host serves it is read from the active bundle rather than from the site's
+     * state: a site disabled and saved without deploying is still being served.
+     */
+    @Transactional
+    public java.util.Optional<Deployment> requestRemovalDeployment(ProxySite deleted) {
+        permissions.requireSiteAccess(deleted, PermissionLevel.OPERATE);
+        lock.lockForUpdate(deleted.nginxInstanceId());
+        String path = NginxConfigRenderer.siteFilePath(deleted);
+        boolean served = bundles.findActiveForInstance(deleted.nginxInstanceId())
+                .map(bundle -> bundle.files().stream().anyMatch(file -> file.path().equals(path)))
+                .orElse(false);
+        return served ? queueOrJoin(deleted, "onDelete") : java.util.Optional.empty();
+    }
+
+    /** Queues a deployment for the site's instance, or reuses one that has not rendered yet. */
+    private java.util.Optional<Deployment> queueOrJoin(ProxySite site, String reason) {
         java.util.Optional<Deployment> active = deployments.findActiveForInstance(site.nginxInstanceId());
         if (active.isEmpty()) {
             return java.util.Optional.of(queue(site.nginxInstanceId(), DeploymentTrigger.MANUAL,
-                    Map.of("proxySiteId", siteId.toString(), "domain", site.domain().value(), "onSave", true)));
+                    Map.of("proxySiteId", site.id().toString(), "domain", site.domain().value(), reason, true)));
         }
         return active.get().status() == DeploymentStatus.PENDING ? active : java.util.Optional.empty();
     }

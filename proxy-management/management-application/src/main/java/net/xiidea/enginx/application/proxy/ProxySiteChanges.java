@@ -89,6 +89,17 @@ public class ProxySiteChanges {
     }
 
     /**
+     * Deletes the site and, when its host was serving it, queues the deployment that takes it off.
+     * The deployment, or null when none was needed or could be promised now.
+     */
+    @Transactional
+    public Deployment delete(UUID id, Long expectedVersion) {
+        ProxySite before = load(id);
+        sites.delete(id, expectedVersion);
+        return deployments.requestRemovalDeployment(before).orElse(null);
+    }
+
+    /**
      * Enabling, disabling and changing the window decide whether the site is served at all, and
      * its window appears in what is rendered. A request that changed none of it deploys nothing.
      */

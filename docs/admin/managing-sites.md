@@ -32,7 +32,12 @@ PUT  /proxy-sites/{id}?deploy=auto                ->  200, with deploymentId whe
 POST /proxy-sites?deploy=auto                     ->  201, always queues one
 POST /proxy-sites/{id}/enable|disable|renew|sign-out-everyone?deploy=auto
 DELETE /proxy-sites/{id}/expiration?deploy=auto
+DELETE /proxy-sites/{id}?deploy=auto              ->  200 {deploymentId}; 204 without deploy=auto
 ```
+
+Deleting deploys when the host is serving the site, read from the bundle it is serving rather than
+from the site's state: a site disabled and saved without deploying is still being served, and one
+never deployed is not, so deleting it deploys nothing.
 
 The save and the request for a deployment are one transaction, under the instance's lock. A
 deployment still waiting to start renders from current state, so quick saves share it: the

@@ -11,6 +11,7 @@ import net.xiidea.enginx.application.proxy.ProxySiteChanges;
 import net.xiidea.enginx.application.proxy.ProxySiteCommands;
 import net.xiidea.enginx.application.notification.SiteNotificationService;
 import net.xiidea.enginx.application.proxy.ProxySiteService;
+import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteQuery;
 import net.xiidea.enginx.domain.proxy.ProxySiteSortField;
@@ -20,7 +21,9 @@ import net.xiidea.enginx.domain.shared.SortDirection;
 import net.xiidea.enginx.domain.shared.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -207,14 +210,39 @@ public class ProxySiteController {
         return ok(auto(deploy) ? changes.update(command) : new ProxySiteChanges.Result(service.update(command), null));
     }
 
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Delete a proxy site")
-    public ResponseEntity<Void> delete(
-            @PathVariable UUID id,
-            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+    /**
+     * What deleting a site with {@code deploy=auto} set in motion. Without it the reply is 204 with
+     * no body, as it always was.
+     *
+     * @param deploymentId the deployment taking the site off its host; absent when the host was
+     *                     not serving it, or one already under way will be followed by the next
+     */
+    @Schema(name = "SiteDeletionResponse")
+    public record DeletionResponse(UUID deploymentId) {
+    }
 
-        service.delete(id, EntityVersion.parseIfMatch(ifMatch));
-        return ResponseEntity.noContent().build();
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a proxy site",
+            description = "204 with no body; with deploy=auto, 200 and the deployment taking the site off its host.",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Deleted; nothing deployed"),
+                    @ApiResponse(responseCode = "200", description = "Deleted with deploy=auto",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = DeletionResponse.class)))})
+    public ResponseEntity<DeletionResponse> delete(
+            @PathVariable UUID id,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @Parameter(description = "auto: deploy in the same request when the host was serving the site, "
+                    + "so it stops at once. Omitted, the site leaves the host with the next deployment, as before.")
+            @RequestParam(required = false) String deploy) {
+
+        Long version = EntityVersion.parseIfMatch(ifMatch);
+        if (!auto(deploy)) {
+            service.delete(id, version);
+            return ResponseEntity.noContent().build();
+        }
+        Deployment deployment = changes.delete(id, version);
+        return ResponseEntity.ok(new DeletionResponse(deployment == null ? null : deployment.id()));
     }
 
     @PostMapping("/{id}/enable")

@@ -25,6 +25,7 @@ import {
   PushTransport,
   ScopeType,
   Site,
+  SiteDeletion,
   SiteNotificationSettings,
   SiteRequest,
   SiteStatus,
@@ -85,8 +86,9 @@ export class SitesApi {
     return this.api.put(`/proxy-sites/${id}${onSave(deploy)}`, request, version);
   }
 
-  remove(id: string, version: number): Observable<void> {
-    return this.api.delete(`/proxy-sites/${id}`, version);
+  /** Deletes, and deploys when the host was serving the site, so it stops at once. */
+  remove(id: string, version: number): Observable<SiteDeletion> {
+    return this.api.delete(`/proxy-sites/${id}${onSave(true)}`, version);
   }
 
   notifications(id: string): Observable<SiteNotificationSettings> {

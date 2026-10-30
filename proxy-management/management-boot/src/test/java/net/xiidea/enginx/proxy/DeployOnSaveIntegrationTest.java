@@ -2,9 +2,13 @@ package net.xiidea.enginx.proxy;
 
 import net.xiidea.enginx.application.certificate.CertificateCommands;
 import net.xiidea.enginx.application.certificate.CertificateService;
+import net.xiidea.enginx.application.deployment.OutboxDispatcherJob;
 import net.xiidea.enginx.application.proxy.ProtectionInput;
 import net.xiidea.enginx.application.proxy.ProxySiteChanges;
 import net.xiidea.enginx.application.proxy.ProxySiteCommands;
+import net.xiidea.enginx.application.proxy.ProxySiteService;
+import net.xiidea.enginx.domain.deployment.ConfigBundleRepository;
+import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
 import net.xiidea.enginx.domain.proxy.AdminState;
@@ -50,6 +54,12 @@ class DeployOnSaveIntegrationTest extends AbstractIntegrationTest {
     private TestSubjectProvider caller;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private OutboxDispatcherJob dispatcher;
+    @Autowired
+    private ConfigBundleRepository bundles;
+    @Autowired
+    private ProxySiteService service;
 
     private UUID instanceId;
     private UUID certificateId;
@@ -132,6 +142,40 @@ class DeployOnSaveIntegrationTest extends AbstractIntegrationTest {
         assertThat(result.deployment()).isNull();
         assertThat(result.site().spec().upstreams().getFirst().port()).isEqualTo(9090);
         assertThat(jdbc.queryForObject("select count(*) from deployments", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("deleting a site its host serves deploys, and the site leaves the host")
+    void deletingAServedSiteDeploys() {
+        dispatcher.drainOnce();
+        assertThat(served()).isTrue();
+
+        Deployment removal = changes.delete(siteId, null);
+        assertThat(removal).isNotNull();
+        dispatcher.drainOnce();
+
+        assertThat(served()).isFalse();
+    }
+
+    @Test
+    @DisplayName("deleting a site its host never served deploys nothing")
+    void deletingAnUnservedSiteDoesNotDeploy() {
+        // The site's first deployment is still pending: the host has nothing of it.
+        assertThat(changes.delete(siteId, null)).isNull();
+    }
+
+    @Test
+    @DisplayName("a site disabled without deploying is still served, so deleting it deploys")
+    void deletingADisabledSiteStillServedDeploys() {
+        dispatcher.drainOnce();
+        service.disable(siteId);
+
+        assertThat(changes.delete(siteId, null)).isNotNull();
+    }
+
+    private boolean served() {
+        return bundles.findActiveForInstance(instanceId).orElseThrow().files().stream()
+                .anyMatch(file -> file.path().equals("conf.d/" + DOMAIN + ".conf"));
     }
 
     private ProxySiteChanges.Result update(ProxySiteSpec spec, ProtectionInput protection) {
