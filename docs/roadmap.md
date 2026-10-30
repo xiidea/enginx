@@ -1,7 +1,8 @@
 # Roadmap
 
-**Phases 9 through 14 are complete.** The roadmap is finished. Its two open decisions were closed
-for v0.1.0 — see below.
+**Phases 9 through 14 are complete, and Phase 15 is planned.** What is still open is in the
+[backlog](#backlog), in the order it is meant to ship. Its two open decisions were closed for
+v0.1.0 — see below.
 
 Phases 1–8 are complete. What follows is everything named as outstanding in
 [`../docs/architecture.md`](architecture.md) §11, plus the Phase 1 open questions that were
@@ -188,12 +189,15 @@ certificates, which in turn makes the wildcard grants of 11.1 useful in practice
 `EnvironmentKekProvider` is still the only implementation. Add Vault or a cloud KMS. The seam was
 the expensive part and it is already paid for; this is the phase that makes the envelope
 encryption story true for an organisation that will not accept a key in an environment file.
+*Done:* `VaultTransitKekProvider` wraps data keys in Vault's transit engine (`CRYPTO_PROVIDER=vault`,
+[production guide](admin/production.md)). A cloud KMS is not implemented.
 
 **12.3 — Agent PKI rotation.** Today agent certificates come from `generate-dev-certs.sh` or your
 own CA, and the platform neither issues nor rotates them — rotation means re-registering an
 instance and copying a fingerprint by hand. At minimum, a re-registration flow that does not
 involve copying a fingerprint by hand. Ideally the platform issues and rotates them, which was
-Phase 1 open question 4 and is still unanswered.
+Phase 1 open question 4 and is still unanswered. *Not done:* rotation is still a re-registration;
+it is in the [backlog](#backlog).
 
 *The external dependencies turned out to be avoidable for verification: Pebble's challtestsrv
 provides real DNS-01 against a real authority, and Vault runs locally in dev mode. Both were
@@ -297,6 +301,33 @@ so it belongs to a minor release.
 
 ---
 
+## Backlog
+
+Everything known to be open, in the order it is meant to ship. Non-breaking work, features
+included, ships in 0.2.x patch releases; breaking changes are held for a later minor release and
+each comes with an upgrade note ([versioning](releases.md#versioning-and-compatibility)).
+
+**Non-breaking — 0.2.x**
+
+| # | Item | Notes |
+|---|---|---|
+| 1 | Deleting a site deploys | **Done for 0.2.2.** `DELETE /proxy-sites/{id}?deploy=auto`, used by the console |
+| 2 | Roadmap brought up to date | **Done for 0.2.2** |
+| 3 | Gate sign-ins in the audit trail | Sign-ins, failures and refusals are logged on the host only; batch them through the signed relay |
+| 4 | VERIFY on pull hosts | The agent runs the loopback and protection probes and reports them with the job result |
+| 5 | Public paths on a protected site (15.3) | `auth_request off` / `auth_basic off` per location; the probe and the bypass warning skip them |
+| 6 | An upstream and proxy settings per location (15.1, 15.2) | Locations that route |
+| 7 | IP allow and deny lists, rate limits | Structured options rendered as plain directives; no gate |
+| 8 | A cloud DNS-01 provider | Cloudflare or Route 53 behind `DnsChallengePublisher`; needs a real account to verify |
+| 9 | Agent certificate rotation without re-registering (12.3) | |
+
+**Breaking — next minor release, with an upgrade note**
+
+| # | Item | Notes |
+|---|---|---|
+| 10 | The root location required by the model (15.4) | An API client sending locations without `/` is refused |
+| 11 | A site on more than one host (R9) | `nginxInstanceId` becomes a list; a join table |
+
 ## Sequencing at a glance
 
 | Phase | Theme | Closes | Blocked by |
@@ -309,7 +340,7 @@ so it belongs to a minor release.
 | 13 | Delivery | Improvement 7 | **Complete** |
 | 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
 | — | Site form drops custom locations | Known issue | **Fixed** (0.2.0) |
-| 15 | Per-location routing | Locations that route | Planned |
+| 15 | Per-location routing | Locations that route | Planned; 15.1–15.3 in 0.2.x, 15.4 in a minor |
 
 Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
 in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than

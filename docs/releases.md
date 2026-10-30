@@ -25,8 +25,11 @@ git tag v1.2.0 && git push origin v1.2.0
 
 - **A minor release (`0.x.0`) may break** the REST API, configuration or the agent protocol. Every
   break is listed under *Breaking changes* in the changelog, with what to do about it.
-- **A patch release (`0.x.y`) never breaks.** Fixes only; a host or client that worked keeps
-  working.
+- **A patch release (`0.x.y`) never breaks.** Fixes, and new features that are additive: an
+  opt-in parameter, a new optional field, a new option that defaults to the old behaviour, a new
+  forward-only migration. A host or client that worked keeps working, without changing anything.
+- **Breaking changes wait for the next minor release**, gathered there rather than spread across
+  several, each with an upgrade note.
 - **Agents before the management server**, on every upgrade
   ([production guide §2.3](admin/production.md)). Done the other way round, an agent older than the
   server reports a job type it does not know as a failed job rather than ignoring it, so the
