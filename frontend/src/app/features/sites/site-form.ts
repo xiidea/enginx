@@ -56,7 +56,11 @@ export class SiteForm implements OnInit {
   readonly maxBodySizeMb = signal(1);
   readonly upstreams = signal<Upstream[]>([{ scheme: 'http', host: '', port: 8080 }]);
   readonly headers = signal<HeaderRule[]>([]);
-  /** In order: NGINX's own matching decides which wins, but the order is what the operator sees. */
+  /**
+   * The site's paths besides the root, in order. The root, `/` by prefix, is never edited here: it
+   * is always sent first whenever there are others, so every request matches a location. Without
+   * it NGINX answers paths no location matches from its own document root, not the upstream.
+   */
   readonly locations = signal<LocationRule[]>([]);
   readonly protectionMode = signal<ProtectionMode>('NONE');
   readonly basicUsers = signal<BasicUserRow[]>([]);
@@ -154,8 +158,7 @@ export class SiteForm implements OnInit {
     this.upstreams.set(site.upstreams.length ? [...site.upstreams] : [{ scheme: 'http', host: '', port: 8080 }]);
     this.headers.set([...site.headers]);
     // A site with only the root location has none of its own to show.
-    const own = site.locations.filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX'));
-    this.locations.set(own.length ? [...site.locations] : []);
+    this.locations.set(site.locations.filter((l) => !isRoot(l)));
     this.protectionMode.set(site.protection.mode as ProtectionMode);
     this.savedMode.set(site.protection.mode as ProtectionMode);
     // The server never returns a password or its hash, so an existing user starts with an empty
@@ -222,14 +225,7 @@ export class SiteForm implements OnInit {
   }
 
   addLocation(): void {
-    this.locations.update((all) =>
-      all.length ? [...all, { pathPattern: '', matchType: 'PREFIX' }] : [
-        // The root keeps serving everything the new path does not; without it the site would
-        // answer only that path.
-        { pathPattern: '/', matchType: 'PREFIX' },
-        { pathPattern: '', matchType: 'PREFIX' },
-      ],
-    );
+    this.locations.update((all) => [...all, { pathPattern: '', matchType: 'PREFIX' }]);
   }
 
   removeLocation(index: number): void {
@@ -275,10 +271,7 @@ export class SiteForm implements OnInit {
       maxBodySizeBytes: this.maxBodySizeMb() * 1048576,
       upstreams: this.upstreams().filter((upstream) => upstream.host.trim()),
       headers: this.headers().filter((header) => header.name.trim()),
-      // Always sent, so what the form shows is what is saved. Empty means the root location alone.
-      locations: this.locations()
-        .filter((location) => location.pathPattern.trim())
-        .map((location) => ({ pathPattern: location.pathPattern.trim(), matchType: location.matchType })),
+      locations: locationsToSave(this.locations()),
       protection: {
         mode: this.protectionMode(),
         basicUsers:
@@ -354,6 +347,23 @@ interface BasicUserRow {
   username: string;
   password: string;
   existing: boolean;
+}
+
+/**
+ * What a site's locations are saved as. Always sent, so what the form shows is what is saved:
+ * nothing for the root alone, otherwise the root first and then the paths entered. A row left
+ * empty is dropped, and so is a root entered by hand, which is already there.
+ */
+export function locationsToSave(rows: LocationRule[]): LocationRule[] {
+  const extra = rows
+    .map((location) => ({ pathPattern: location.pathPattern.trim(), matchType: location.matchType }))
+    .filter((location) => location.pathPattern && !isRoot(location));
+  return extra.length ? [{ pathPattern: '/', matchType: 'PREFIX' }, ...extra] : [];
+}
+
+/** The root location: every path, by prefix. */
+export function isRoot(location: LocationRule): boolean {
+  return location.pathPattern.trim() === '/' && location.matchType === 'PREFIX';
 }
 
 /** Non-empty trimmed lines. */

@@ -397,14 +397,17 @@
       <button class="btn btn-sm" type="button" (click)="addLocation()">Add location</button>
     </div>
     <div class="card-body stack">
-      @if (!locations().length) {
-        <p class="hint">Everything under <code>/</code> is proxied to the upstreams.</p>
-      }
+      <p class="hint">
+        Everything is proxied to the upstreams under <code>/</code>, which every site keeps. Paths
+        added here get their own <code>location</code> block, but for now each uses the site's same
+        upstreams, headers, timeouts and protection: they do not route anywhere different yet.
+        Per-path routing is planned.
+      </p>
       @for (location of locations(); track $index) {
         <div class="location-row">
           <div class="field">
             <label [for]="'loc-path-' + $index">Path</label>
-            <input [id]="'loc-path-' + $index" class="mono" placeholder="/api"
+            <input [id]="'loc-path-' + $index" class="mono" placeholder="e.g. /api"
               [ngModel]="location.pathPattern" (ngModelChange)="updateLocation($index, { pathPattern: $event })" />
           </div>
           <div class="field">
@@ -422,9 +425,8 @@
       }
       @if (locations().length) {
         <p class="hint">
-          Each gets its own <code>location</code> block with the site's proxy settings. Paths start
-          with <code>/</code> and use letters, digits and <code>. _ ~ / * -</code>. Remove every row
-          to go back to <code>/</code> alone.
+          Paths start with <code>/</code> and use letters, digits and <code>. _ ~ / * -</code>. An
+          empty row is ignored.
         </p>
       }
     </div>

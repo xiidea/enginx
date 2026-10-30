@@ -7,6 +7,16 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## Unreleased
+
+- **The Locations card no longer suggests that locations route.** A location is a path and a match
+  type, and every location block uses the site's same upstreams, headers, timeouts and protection,
+  so adding one changes nothing about where requests go. The card now says so; per-location routing
+  is planned ([roadmap, Phase 15](docs/roadmap.md)).
+- **The root location can no longer be removed in the console.** It is kept automatically whenever a
+  site has other paths. Before, removing `/` left every other path to NGINX's own document root
+  rather than the upstream. "Add location" adds one row, not the root and an empty row.
+
 ## 0.2.0
 
 Protected sites: a site can now require a sign-in before anything reaches its upstream, by basic

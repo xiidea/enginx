@@ -268,6 +268,33 @@ Most sites only ever have the root location, which is why it has not shown.
 All four were done before 0.2.0. The API took the second option: an update that omits `locations`
 keeps the site's current ones, as with `protection`; an empty list still means the root location.
 
+## Phase 15 — Per-location routing — **planned**
+
+A site's locations exist in the data model, the API and, since 0.2.0, the console, but they do not
+yet route anything. A location is only a path and a match type; the renderer gives every location
+block the site's one upstream pool, headers, timeouts and protection. A site with `/` and `/api`
+proxies exactly as one with `/` alone. The console says so on the Locations card until this phase
+makes locations mean something.
+
+**15.1 — An upstream per location.** A location may name its own upstream pool, so `/api` reaches
+the API servers and `/` the web servers, each with its own load balancing and health settings. Pools
+render as separate `upstream` blocks; a location without one keeps the site's.
+
+**15.2 — Per-location proxy settings.** Timeouts, the body size limit, WebSocket upgrade and
+request headers, each inheriting the site's when unset. Response headers stay site-wide.
+
+**15.3 — Public paths on a protected site.** A location can opt out of the site's protection, for a
+webhook or a health endpoint that a third party calls without signing in. Rendered as
+`auth_request off` or `auth_basic off` in that block alone; VERIFY's protection probe then has to
+avoid asking for an opted-out path, and the custom-file bypass warning must not report one.
+
+**15.4 — The root stays.** The root location becomes an invariant of the model rather than a
+convention of the console: a site with locations always has `/`, so no request falls through to
+NGINX's own document root. A breaking change for an API client that sends locations without it,
+so it belongs to a minor release.
+
+*Rough size: a week. Most of it is 15.1 and the console, not the renderer.*
+
 ---
 
 ## Sequencing at a glance
@@ -282,6 +309,7 @@ keeps the site's current ones, as with `protection`; an empty list still means t
 | 13 | Delivery | Improvement 7 | **Complete** |
 | 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
 | — | Site form drops custom locations | Known issue | **Fixed** (0.2.0) |
+| 15 | Per-location routing | Locations that route | Planned |
 
 Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
 in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than
