@@ -97,6 +97,12 @@ export class SiteDetail implements OnInit {
     (this.site()?.locations ?? []).filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX')),
   );
 
+  /** Whether visitors hold sessions the gate issued: email and identity provider sign-in, and basic authentication on a login page. */
+  readonly hasSessions = computed(() => {
+    const protection = this.site()?.protection;
+    return !!protection && (protection.mode === 'EMAIL_OTP' || protection.mode === 'OIDC' || !!protection.basicLoginPage);
+  });
+
   /** How the site is protected, in a word or two, for the summary. */
   readonly protectionLabel = computed(() => {
     const protection = this.site()?.protection;
@@ -368,7 +374,7 @@ export class SiteDetail implements OnInit {
   /** Rotates the gate key, then deploys, since sessions only end once the host has the new key. */
   signOutEveryone(): void {
     const site = this.site();
-    if (!site || !confirm(`Sign everyone out of ${site.domain}? Everyone will need a new code to get back in.`)) {
+    if (!site || !confirm(`Sign everyone out of ${site.domain}? Everyone will have to sign in again once the site is redeployed, which happens now.`)) {
       return;
     }
     this.api.signOutEveryone(site.id).subscribe({

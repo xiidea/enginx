@@ -70,7 +70,12 @@ site's domain instead, for the same users and passwords:
   basic authentication cannot do. An unknown username takes as long to refuse as a wrong password.
 - **Scripts keep working.** A request carrying `Authorization: Basic` with valid credentials is let
   through without a session, so `curl -u user:pass` is unaffected. Its failures count against the
-  same limits as the form's.
+  same limits as the form's. Scripts only: a browser that once used the site's prompt keeps sending
+  the credentials it cached there, and accepting them would put it past the login page for good,
+  out of reach of signing out. Browsers mark every request with `Sec-Fetch-Mode`, which a page
+  cannot remove and scripts do not send, so a request carrying it is sent to the login page.
+  Credentials are not sessions: *Sign everyone out* does not stop a script that has them; changing
+  the password does.
 - **It needs the gate**, like email and identity provider sign-in: the agent image runs it, and a host
   whose service manager runs NGINX runs `enginx-gate` too. The browser's prompt needs NGINX alone.
 

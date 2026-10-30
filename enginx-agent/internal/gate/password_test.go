@@ -99,3 +99,27 @@ func TestGuessesAreLimitedThroughTheHeaderAsThroughTheForm(t *testing.T) {
 		t.Fatalf("after ten guesses at alice, the right password got %d, want 429", res.Code)
 	}
 }
+
+// What the console's own testing found: a browser that had used the site's basic-auth prompt kept
+// sending the cached credentials, so it was let in by the header and never needed a session — and
+// signing everyone out could not reach it. Browsers are now sent to the login page; scripts are not.
+func TestCachedBrowserCredentialsDoNotBypassTheLoginPage(t *testing.T) {
+	server, _ := basicServer(t)
+
+	browser := request("GET", "/check", nil)
+	browser.SetBasicAuth("alice", "secret")
+	browser.Header.Set("Sec-Fetch-Mode", "navigate")
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, browser)
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("a browser with cached credentials got %d, want 401 (the login page)", res.Code)
+	}
+
+	script := request("GET", "/check", nil)
+	script.SetBasicAuth("alice", "secret")
+	res = httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, script)
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("a script with credentials got %d, want 204", res.Code)
+	}
+}

@@ -9,6 +9,13 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 
 ## Unreleased
 
+- **Signing out works for a browser that used a basic-auth site's prompt.** On a site with a login
+  page, the gate also accepts basic credentials so scripts keep working, and a browser that had
+  used the site's prompt sent its cached credentials on every request: it was let in by them, past
+  the login page, and *Sign everyone out* could not reach it. Basic credentials are now accepted
+  from scripts only; a browser, which marks its requests with `Sec-Fetch-Mode`, is sent to sign in.
+- **Sign everyone out is in the Protection card's header**, shown wherever visitors hold sessions,
+  and its confirmation no longer speaks of codes on sites that do not send any.
 - **The site page is organised in tabs.** A summary of status, TLS, protection and the last
   deployment sits at the top, each tile opening the tab that explains it: Overview (status, TLS,
   routing, headers and locations), Access (protection, domain groups), Deployments and

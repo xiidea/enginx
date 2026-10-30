@@ -59,7 +59,6 @@
 .note { margin-top: -0.6rem; margin-bottom: 1rem; }
 
 .facts { display: grid; gap: 0.5rem; }
-.facts + .btn { margin-top: 1rem; }
 .facts > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0.6rem; align-items: center; font-size: 0.87rem; }
 .key { color: var(--ink-3); font-size: 0.78rem; }
 

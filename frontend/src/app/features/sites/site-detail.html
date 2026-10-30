@@ -213,7 +213,13 @@
     @case ('access') {
       <div class="panel pair" role="tabpanel" id="panel-access" aria-labelledby="tab-access">
         <section class="card">
-          <div class="card-head"><h2>Protection</h2></div>
+          <div class="card-head">
+            <h2>Protection</h2>
+            <!-- Only where there are sessions to end: a site whose visitors sign in through the gate. -->
+            @if (hasSessions() && canManage()) {
+              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+            }
+          </div>
           <div class="card-body">
             @if (site.protection.mode === 'BASIC') {
               <div class="facts">
@@ -227,18 +233,12 @@
                   <span class="mono small">{{ basicAuthUsernames() }}</span>
                 </div>
               </div>
-              @if (site.protection.basicLoginPage && canManage()) {
-                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-              }
             } @else if (site.protection.emailOtp; as emailOtp) {
               <div class="facts">
                 <div><span class="key">Access</span><span>email one-time code</span></div>
                 <div><span class="key">Allowed</span><span class="mono small">{{ emailOtp.allowedEmails.join(', ') }}</span></div>
                 <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(emailOtp.sessionTtlSeconds) }}</span></div>
               </div>
-              @if (canManage()) {
-                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-              }
             } @else if (site.protection.oidc; as oidc) {
               <div class="facts">
                 <div><span class="key">Access</span><span>identity provider sign-in</span></div>
@@ -249,9 +249,6 @@
                 <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(oidc.sessionTtlSeconds) }}</span></div>
                 <div><span class="key">Redirect URI</span><span class="mono small">{{ oidc.redirectUri }}</span></div>
               </div>
-              @if (canManage()) {
-                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-              }
             } @else {
               <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
             }

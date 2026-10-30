@@ -64,7 +64,16 @@ func (s *Server) handlePasswordLogin(w http.ResponseWriter, r *http.Request, sit
 // basicHeader accepts an Authorization: Basic header on a site whose users sign in on a login
 // page, so a script with credentials keeps working without a cookie. Its failures count against
 // the same limits as the form's; a header checked a moment ago is not checked again.
+//
+// From scripts only. A browser that ever saw the site's basic-auth prompt keeps sending the
+// credentials it was given there, unasked, on every request; accepting them would let it past the
+// login page for good, out of reach of sign-out and of signing everyone out. Every current browser
+// marks its requests with Sec-Fetch-Mode, which a page cannot remove; curl, wget and the HTTP
+// clients scripts use do not send it. A browser is therefore sent to sign in, like any other.
 func (s *Server) basicHeader(site *Site, r *http.Request) (identity, bool) {
+	if r.Header.Get("Sec-Fetch-Mode") != "" {
+		return identity{}, false
+	}
 	username, password, ok := r.BasicAuth()
 	if !ok || username == "" {
 		return identity{}, false
