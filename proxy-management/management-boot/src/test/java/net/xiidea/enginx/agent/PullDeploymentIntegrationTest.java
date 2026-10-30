@@ -15,6 +15,8 @@ import net.xiidea.enginx.domain.deployment.ConfigBundle;
 import net.xiidea.enginx.domain.deployment.ConfigBundleRepository;
 import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.deployment.DeploymentStatus;
+import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
+import net.xiidea.enginx.domain.deployment.SiteVerification;
 import net.xiidea.enginx.domain.proxy.AdminState;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.proxy.LoadBalancingMethod;
@@ -135,22 +137,93 @@ class PullDeploymentIntegrationTest extends AbstractIntegrationTest {
         assertThat(active.status()).isEqualTo(BundleStatus.ACTIVE);
     }
 
+    @Test
+    @DisplayName("after activation the host is sent the sites to probe, and its answer becomes VERIFY")
+    void verificationIsAJob() {
+        jdbc.update("update nginx_instances set agent_version = '0.2.2' where id = ?", instanceId);
+        Deployment started = deploy();
+        report(queue.claimNext(instanceId).orElseThrow(), AgentJobResult.ok());
+        AgentJob activate = queue.claimNext(instanceId).orElseThrow();
+        report(activate, new AgentJobResult(true, false, "ok", "1.27.5", null, false, false, null));
+
+        // Succeeded at activation, as a push deployment does; the probe only adds to the record.
+        assertThat(deployments.get(started.id()).status()).isEqualTo(DeploymentStatus.SUCCESS);
+        AgentJob verify = queue.claimNext(instanceId).orElseThrow();
+        assertThat(verify.type()).isEqualTo(AgentJobType.VERIFY_SITES);
+        assertThat(verify.payload().bundleId()).isEqualTo(activate.payload().bundleId());
+
+        String marker = NginxConfigRenderer.siteMarkers(bundles.findById(verify.payload().bundleId())
+                .orElseThrow()).get("app.example.com");
+        report(verify, new AgentJobResult(true, false, null, null, null, false, false, null,
+                List.of(new SiteVerification("app.example.com", true, 200, true, marker, marker, null))));
+
+        Deployment verified = deployments.get(started.id());
+        assertThat(verified.events()).filteredOn(event -> event.phase().name().equals("VERIFY"))
+                .singleElement().satisfies(event -> {
+                    assertThat(event.result().name()).isEqualTo("SUCCESS");
+                    assertThat(event.detail()).contains("app.example.com");
+                });
+        assertThat(verified.verificationFailed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a site the host does not serve from the new bundle fails VERIFY, never the deployment")
+    void anUnservedSiteFailsVerification() {
+        jdbc.update("update nginx_instances set agent_version = '0.2.2' where id = ?", instanceId);
+        Deployment started = deploy();
+        report(queue.claimNext(instanceId).orElseThrow(), AgentJobResult.ok());
+        report(queue.claimNext(instanceId).orElseThrow(),
+                new AgentJobResult(true, false, "ok", "1.27.5", null, false, false, null));
+        AgentJob verify = queue.claimNext(instanceId).orElseThrow();
+        report(verify, new AgentJobResult(true, false, null, null, null, false, false, null,
+                List.of(new SiteVerification("app.example.com", true, 200, false, "enginx old", "expected", null))));
+
+        Deployment done = deployments.get(started.id());
+        assertThat(done.status()).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(done.verificationFailed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a probe the host could not run is recorded as skipped, not as a failed deployment")
+    void aProbeThatCannotRunIsSkipped() {
+        jdbc.update("update nginx_instances set agent_version = '0.2.2' where id = ?", instanceId);
+        Deployment started = deploy();
+        report(queue.claimNext(instanceId).orElseThrow(), AgentJobResult.ok());
+        report(queue.claimNext(instanceId).orElseThrow(),
+                new AgentJobResult(true, false, "ok", "1.27.5", null, false, false, null));
+        report(queue.claimNext(instanceId).orElseThrow(),
+                new AgentJobResult(false, false, null, null, null, false, false, "at most 64 sites"));
+
+        Deployment done = deployments.get(started.id());
+        assertThat(done.status()).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(done.events()).filteredOn(event -> event.phase().name().equals("VERIFY"))
+                .singleElement().satisfies(event -> {
+                    assertThat(event.result().name()).isEqualTo("SKIPPED");
+                    assertThat(event.detail()).contains("at most 64 sites");
+                });
+    }
+
     /**
-     * VERIFY asks the host a question, and questions are not queued work yet. Recorded as skipped
+     * An agent before 0.2.2 would report a job type it does not know as failed. Recorded as skipped
      * rather than passed over: the phase exists to say whether the host answers for what was
      * deployed, and omitting it silently would let a deployment claim a guarantee nobody checked.
      */
     @Test
-    @DisplayName("verification is recorded as skipped, not quietly dropped")
-    void verificationIsVisiblySkipped() {
+    @DisplayName("an older agent is not sent the probe, and verification is recorded as skipped")
+    void anOlderAgentSkipsVerification() {
+        jdbc.update("update nginx_instances set agent_version = '0.2.1' where id = ?", instanceId);
         Deployment started = deploy();
         report(queue.claimNext(instanceId).orElseThrow(), AgentJobResult.ok());
         report(queue.claimNext(instanceId).orElseThrow(),
                 new AgentJobResult(true, false, "ok", "1.27.5", null, false, false, null));
 
+        assertThat(queue.claimNext(instanceId)).isEmpty();
         assertThat(deployments.get(started.id()).events())
-                .extracting(event -> event.phase().name())
-                .contains("VERIFY");
+                .filteredOn(event -> event.phase().name().equals("VERIFY"))
+                .singleElement().satisfies(event -> {
+                    assertThat(event.result().name()).isEqualTo("SKIPPED");
+                    assertThat(event.detail()).contains("0.2.2");
+                });
     }
 
     @Test

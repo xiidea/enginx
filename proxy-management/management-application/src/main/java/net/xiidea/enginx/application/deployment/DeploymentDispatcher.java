@@ -318,11 +318,7 @@ public class DeploymentDispatcher {
             // files: a response from anything else on the port, or from an earlier render of the
             // same site, does not count as this deployment being served.
             // And, for a protected site, whether it refuses a visitor who has not signed in.
-            java.util.Map<String, String> protections = NginxConfigRenderer.siteProtections(bundle);
-            List<NginxAgentPort.VerifyTarget> targets = NginxConfigRenderer.siteMarkers(bundle).entrySet().stream()
-                    .map(entry -> new NginxAgentPort.VerifyTarget(entry.getKey(), entry.getValue(),
-                            protections.get(entry.getKey())))
-                    .toList();
+            List<NginxAgentPort.VerifyTarget> targets = NginxConfigRenderer.verifyTargets(bundle);
 
             if (targets.isEmpty()) {
                 return;

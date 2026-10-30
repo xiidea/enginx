@@ -37,6 +37,16 @@ public final class GateKeyDerivation {
         return HexFormat.of().formatHex(hmac(relayKey(siteKey), message.getBytes(StandardCharsets.UTF_8)));
     }
 
+    /**
+     * An events section's signature: hex HMAC-SHA256 under the relay key over {@code events \n payload},
+     * the payload exactly as sent. The prefix keeps it apart from a code request's signature,
+     * whose message starts with the site id.
+     */
+    public static String eventsSignature(byte[] siteKey, String payload) {
+        String message = "events\n" + payload;
+        return HexFormat.of().formatHex(hmac(relayKey(siteKey), message.getBytes(StandardCharsets.UTF_8)));
+    }
+
     /** Constant-time, so a signature cannot be found a byte at a time by timing the refusal. */
     public static boolean signatureMatches(String expected, String presented) {
         if (presented == null) {

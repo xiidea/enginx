@@ -14,6 +14,18 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   the host was serving the site; one never deployed deploys nothing. Through the API, add
   `?deploy=auto` to `DELETE /proxy-sites/{id}`: the reply is then 200 with the `deploymentId`,
   rather than 204 ([managing sites](docs/admin/managing-sites.md#deploying-on-save)).
+- **Sign-ins at protected sites are in the audit trail.** The gate reports who signed in, wrong
+  passwords and codes, visitors turned away and sign-outs, in batches every 30 seconds, signed with
+  each site's relay key; each becomes an audit row against the site, with the visitor and their
+  address ([protected sites](docs/admin/protected-sites.md#the-audit-trail)). It needs
+  `GATE_RELAY_URL`, which basic and identity-provider sites now carry too: **deploy those sites once
+  after upgrading**, and the site page shows them as having undeployed changes until then.
+- **Pull hosts verify their deployments.** VERIFY used to be skipped on a host that collects its
+  own work. The platform now sends it the probe as a job after the activation, and the answer is
+  recorded as the deployment's VERIFY phase, protection probe included. Agents before 0.2.2 are not
+  sent the job and keep the old "skipped" note.
+- **The job a pull host collects is in the published API spec**, as `AgentJobAssignment`. It shared a
+  schema name with the console's job list and was hidden behind it. Nothing changes on the wire.
 - **Patch releases may add features.** Non-breaking features now ship in 0.2.x; breaking changes
   wait for a minor release with an upgrade note ([versioning](docs/releases.md#versioning-and-compatibility)).
   The roadmap lists what is open, in that order ([backlog](docs/roadmap.md#backlog)).

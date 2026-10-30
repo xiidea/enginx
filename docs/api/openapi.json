@@ -89,6 +89,46 @@
         ],
         "type": "object"
       },
+      "AgentJobAssignment": {
+        "properties": {
+          "acmeAuthorization": {
+            "type": "string"
+          },
+          "acmeToken": {
+            "type": "string"
+          },
+          "bundleId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "jobId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reload": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "verifyTargets": {
+            "items": {
+              "$ref": "#/components/schemas/AgentVerifyTarget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundleId",
+          "idempotencyKey",
+          "jobId",
+          "type"
+        ],
+        "type": "object"
+      },
       "AgentJobResponse": {
         "description": "One unit of work for a host that collects it.",
         "properties": {
@@ -164,6 +204,14 @@
           },
           "validationFailed": {
             "type": "boolean"
+          },
+          "verifications": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSiteVerification"
+            },
+            "maxItems": 256,
+            "minItems": 0,
+            "type": "array"
           }
         },
         "required": [
@@ -278,6 +326,57 @@
           "id",
           "usable",
           "uses"
+        ],
+        "type": "object"
+      },
+      "AgentSiteVerification": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "identified": {
+            "type": "boolean"
+          },
+          "marker": {
+            "type": "string"
+          },
+          "protectionDetail": {
+            "type": "string"
+          },
+          "protectionEnforced": {
+            "type": "boolean"
+          },
+          "responded": {
+            "type": "boolean"
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serverName"
+        ],
+        "type": "object"
+      },
+      "AgentVerifyTarget": {
+        "properties": {
+          "marker": {
+            "type": "string"
+          },
+          "protection": {
+            "type": "string"
+          },
+          "serverName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "marker",
+          "serverName"
         ],
         "type": "object"
       },
@@ -1069,6 +1168,46 @@
           "signature",
           "siteId",
           "timestamp"
+        ],
+        "type": "object"
+      },
+      "GateEventSection": {
+        "properties": {
+          "payload": {
+            "maxLength": 262144,
+            "minLength": 0,
+            "type": "string"
+          },
+          "signature": {
+            "maxLength": 128,
+            "minLength": 0,
+            "type": "string"
+          },
+          "siteId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payload",
+          "signature",
+          "siteId"
+        ],
+        "type": "object"
+      },
+      "GateEventsRequest": {
+        "properties": {
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/GateEventSection"
+            },
+            "maxItems": 200,
+            "minItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "sites"
         ],
         "type": "object"
       },
@@ -2588,6 +2727,41 @@
         ]
       }
     },
+    "/api/v1/agents/gate/events": {
+      "post": {
+        "description": "Sign-ins, failures, refusals and sign-outs at protected sites, for the audit trail. Each section is signed by the gate with its site's relay key, and checked on its own: a section that is not authentic is skipped, and 204 is the answer either way, since sending it again would not make it authentic.",
+        "operationId": "gateRelay_recordEvents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GateEventsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Record what a gate saw",
+        "tags": [
+          "Gate"
+        ]
+      }
+    },
     "/api/v1/agents/gate/otp-mail": {
       "post": {
         "description": "Signed by the gate with the site's relay key. 204 when sent; 403 when the address is not allowed or the request is not authentic; 429 when rate limited; 503 when mail is not configured.",
@@ -2703,7 +2877,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentJobResponse"
+                  "$ref": "#/components/schemas/AgentJobAssignment"
                 }
               }
             },
@@ -6083,7 +6257,7 @@
       "name": "Deployments"
     },
     {
-      "description": "Calls from the host-local gate that protects sites with email sign-in",
+      "description": "Calls from the host-local gate that protects sites with a sign-in",
       "name": "Gate"
     },
     {

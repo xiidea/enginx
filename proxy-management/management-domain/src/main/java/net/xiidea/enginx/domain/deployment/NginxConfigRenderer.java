@@ -367,6 +367,12 @@ public final class NginxConfigRenderer {
         out.append("  \"mode\": \"").append(spec.protection().mode().name()).append("\",\n");
         out.append("  \"key\": \"").append(key).append("\",\n");
         out.append("  \"sessionTtlSeconds\": ").append(spec.protection().sessionTtl().toSeconds()).append(",\n");
+        if (spec.protection().mode() != ProtectionMode.EMAIL_OTP) {
+            // Optional here, where email sign-in requires it: the gate reports sign-ins to the
+            // platform's audit trail at its sibling address, and without one keeps them in its log.
+            gates.relayUrl().filter(value -> RELAY_URL.matcher(value).matches()).ifPresent(relayUrl ->
+                    out.append("  \"relayUrl\": \"").append(relayUrl).append("\",\n"));
+        }
         switch (spec.protection().mode()) {
             case OIDC -> appendOidc(out, site, gates);
             case BASIC -> appendBasicUsers(out, site);
@@ -542,6 +548,19 @@ public final class NginxConfigRenderer {
      * <p>Read from the files rather than recomputed, so the expectation is always the bundle that
      * was actually deployed — a rollback included — and never a fresh interpretation of current state.
      */
+    /**
+     * What VERIFY asks the host about a bundle: each site with the marker this bundle renders for
+     * it, read from the bundle's own files, and for a protected site how it must refuse a visitor
+     * who has not signed in. The same for a push host, asked at once, and a pull host, sent a job.
+     */
+    public static List<NginxAgentPort.VerifyTarget> verifyTargets(ConfigBundle bundle) {
+        java.util.Map<String, String> protections = siteProtections(bundle);
+        return siteMarkers(bundle).entrySet().stream()
+                .map(entry -> new NginxAgentPort.VerifyTarget(entry.getKey(), entry.getValue(),
+                        protections.get(entry.getKey())))
+                .toList();
+    }
+
     public static java.util.Map<String, String> siteMarkers(ConfigBundle bundle) {
         java.util.Map<String, String> markers = new java.util.LinkedHashMap<>();
         for (BundleFile file : bundle.files()) {

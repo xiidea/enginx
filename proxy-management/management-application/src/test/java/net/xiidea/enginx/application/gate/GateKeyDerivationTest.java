@@ -24,6 +24,13 @@ class GateKeyDerivationTest {
     }
 
     @Test
+    @DisplayName("signs an events section exactly as the gate does")
+    void eventsMatchTheGate() {
+        assertThat(GateKeyDerivation.eventsSignature(KEY, "{\"siteId\":\"aaaaaaaa-0000-0000-0000-000000000001\"}"))
+                .isEqualTo("6bf9ed01167328bfa0145c307a2bfb9f7a959a54e0b4c197ed8edc1b0d90ffa7");
+    }
+
+    @Test
     void sessionAndRelayKeysDiffer() {
         assertThat(GateKeyDerivation.sessionKey(KEY)).isNotEqualTo(GateKeyDerivation.relayKey(KEY));
     }

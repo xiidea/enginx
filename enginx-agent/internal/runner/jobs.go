@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/xiidea/enginx/enginx-agent/internal/api"
 	"github.com/xiidea/enginx/enginx-agent/internal/bundle"
 	"github.com/xiidea/enginx/enginx-agent/internal/client"
 )
@@ -78,6 +79,8 @@ func (r *Runner) execute(ctx context.Context, authenticated *client.Client, job 
 			return failed(fmt.Sprintf("publishing the ACME challenge: %v", err))
 		}
 		return client.JobResult{Succeeded: true}
+	case "VERIFY_SITES":
+		return r.verify(ctx, job)
 	case "REMOVE_ACME_CHALLENGE":
 		if err := r.api.RemoveAcmeChallenge(job.AcmeToken); err != nil {
 			return failed(fmt.Sprintf("removing the ACME challenge: %v", err))
@@ -88,6 +91,28 @@ func (r *Runner) execute(ctx context.Context, authenticated *client.Client, job 
 		// sees a host that cannot do what it was asked, instead of a job that never comes back.
 		return failed("this agent does not understand job type " + job.Type)
 	}
+}
+
+// verify probes the sites of the bundle just activated, as the platform asks a push host to: the
+// answers are reported with the result, and the platform adds them to the deployment's record.
+func (r *Runner) verify(ctx context.Context, job client.Job) client.JobResult {
+	targets := make([]api.VerifyTarget, 0, len(job.VerifyTargets))
+	for _, target := range job.VerifyTargets {
+		targets = append(targets, api.VerifyTarget{ServerName: target.ServerName, Marker: target.Marker,
+			Protection: target.Protection})
+	}
+	results, err := r.api.VerifySites(ctx, targets)
+	if err != nil {
+		return failed(err.Error())
+	}
+	verifications := make([]client.SiteVerification, 0, len(results))
+	for _, result := range results {
+		verifications = append(verifications, client.SiteVerification{ServerName: result.ServerName,
+			Responded: result.Responded, StatusCode: result.StatusCode, Identified: result.Identified,
+			Marker: result.Marker, Error: result.Error, ProtectionEnforced: result.ProtectionEnforced,
+			ProtectionDetail: result.ProtectionDetail})
+	}
+	return client.JobResult{Succeeded: true, Verifications: verifications}
 }
 
 func (r *Runner) stage(ctx context.Context, authenticated *client.Client, job client.Job) client.JobResult {

@@ -100,7 +100,8 @@ func (s *codeStore) verify(flowID, siteID, code string, now time.Time) (*pending
 	if flow.attempts >= maxCodeAttempt {
 		delete(s.flows, flowID)
 	}
-	return nil, false
+	// The flow, so the caller can say whose code was wrong; not a sign-in.
+	return flow, false
 }
 
 // evictOldest removes the entry that would expire first.

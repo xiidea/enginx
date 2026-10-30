@@ -14,6 +14,8 @@ import net.xiidea.enginx.domain.deployment.Deployment;
 import net.xiidea.enginx.domain.deployment.DeploymentPhase;
 import net.xiidea.enginx.domain.deployment.DeploymentRepository;
 import net.xiidea.enginx.domain.deployment.DeploymentTrigger;
+import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
+import net.xiidea.enginx.domain.deployment.RenderTarget;
 import net.xiidea.enginx.domain.nginx.InstanceStatus;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.nginx.NginxInstanceRepository;
@@ -93,6 +95,12 @@ public class PullDeploymentCoordinator {
             return;
         }
         Deployment deployment = deployments.findById(job.deploymentId()).orElse(null);
+        if (deployment != null && job.type() == AgentJobType.VERIFY_SITES) {
+            // After the deployment succeeded, as VERIFY is for a push host: its answer adds to the
+            // record and never changes the outcome.
+            recordVerification(deployment, result);
+            return;
+        }
         if (deployment == null || deployment.status().isTerminal()) {
             return;
         }
@@ -111,7 +119,7 @@ public class PullDeploymentCoordinator {
                         new AgentJobPayload(job.payload().bundleId(), job.payload().idempotencyKey(), true));
             }
             case ACTIVATE_BUNDLE -> complete(deployment, job, result);
-            case DISCARD_BUNDLE -> {
+            default -> {
                 // Housekeeping, and no part of the deployment's own outcome.
             }
         }
@@ -127,18 +135,13 @@ public class PullDeploymentCoordinator {
         deployment.reloaded(result.nginxVersion(), now);
         deployment.succeeded(now);
 
-        // Verify is a question asked of the host, and questions are not queued work yet. Recorded
-        // as skipped rather than passed over: the phase exists to say whether the host actually
-        // answers for what was deployed, and quietly omitting it would let a deployment claim a
-        // guarantee nobody checked.
-        deployment.verificationSkipped(
-                "Not supported on a host that collects its own work", now);
-
         UUID bundleId = job.payload().bundleId();
+        Optional<NginxInstance> instance = instances.findById(job.nginxInstanceId());
+        requestVerification(deployment, job, instance.orElse(null), now);
+
         bundles.markActive(job.nginxInstanceId(), bundleId);
         deployments.save(deployment);
 
-        Optional<NginxInstance> instance = instances.findById(job.nginxInstanceId());
         instance.ifPresent(host -> {
             host.observed(InstanceStatus.ONLINE, result.nginxVersion(), host.agentVersion(), now);
             instances.save(host);
@@ -152,6 +155,41 @@ public class PullDeploymentCoordinator {
                         "bundleId", String.valueOf(bundleId),
                         "noop", String.valueOf(result.noop()),
                         "transport", "PULL"));
+    }
+
+    /**
+     * Queues the probe VERIFY runs on a push host, for the host to run when it collects it. Jobs
+     * are collected one at a time, oldest first, so it runs before any later deployment's work and
+     * probes the bundle just activated.
+     *
+     * <p>An agent before 0.2.2 does not know the job and would report it failed, which reads as a
+     * probe of a working host gone wrong; for it the phase is recorded as skipped, as it always was,
+     * rather than passed over: quietly omitting it would let a deployment claim a guarantee nobody
+     * checked.
+     */
+    private void requestVerification(Deployment deployment, AgentJob job, NginxInstance instance, Instant now) {
+        ConfigBundle bundle = bundles.findById(job.payload().bundleId()).orElse(null);
+        if (bundle == null || NginxConfigRenderer.verifyTargets(bundle).isEmpty()) {
+            return;
+        }
+        if (instance == null || !RenderTarget.of(instance).supportsVerifyJobs()) {
+            deployment.verificationSkipped("The host's agent is older than 0.2.2, the first to probe its sites "
+                    + "when it collects its own work. Upgrade it to have them verified.", now);
+            return;
+        }
+        queue.enqueue(job.nginxInstanceId(), deployment.id(), AgentJobType.VERIFY_SITES,
+                AgentJobPayload.forBundle(bundle.id(), job.payload().idempotencyKey()));
+    }
+
+    private void recordVerification(Deployment deployment, AgentJobResult result) {
+        Instant now = clock.instant();
+        if (result.succeeded() && result.verifications() != null) {
+            deployment.verified(result.verifications(), now);
+        } else {
+            deployment.verificationSkipped("The host could not run the probe: "
+                    + (result.error() == null ? "no reason given" : result.error()), now);
+        }
+        deployments.save(deployment);
     }
 
     private void fail(Deployment deployment, AgentJob job, AgentJobResult result) {

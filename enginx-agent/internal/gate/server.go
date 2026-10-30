@@ -40,6 +40,11 @@ type Server struct {
 	passwordByUser *limiter
 	checkedHeaders *headerCache
 
+	// events waits to be shipped to the platform's audit trail; oldPlatform says once that the
+	// platform cannot take them.
+	events      *eventLog
+	oldPlatform sync.Once
+
 	// background tracks codes still being handed to the platform, so a shutdown, or a test, can
 	// wait for them.
 	background sync.WaitGroup
@@ -66,6 +71,7 @@ func NewServer(relay Relay) *Server {
 
 		providers: newProviders(nil),
 		oidcFlows: newOIDCFlows(),
+		events:    newEventLog(),
 	}
 }
 
@@ -183,7 +189,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// An address that is not allowed gets a flow that can never succeed, and the same page, so
 	// the form cannot be used to learn who is on the list.
 	code := ""
-	if site.Admits(email) {
+	if !site.Admits(email) {
+		s.record(site, r, Event{Kind: EventAccessDenied, Method: MethodCode, Email: email, Reason: "not-on-list"})
+	} else {
 		generated, err := randomCode()
 		if err != nil {
 			s.unavailable(w)
@@ -234,6 +242,9 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	flow, ok := s.codes.verify(cookie.Value, site.ID, strings.TrimSpace(r.PostFormValue("code")), now)
 	if !ok {
+		if flow != nil {
+			s.record(site, r, Event{Kind: EventSignInFailed, Method: MethodCode, Email: flow.email, Reason: "wrong-code"})
+		}
 		render(w, http.StatusOK, page{Domain: site.Domain, Step: "code", Redirect: "/", Email: "your address",
 			Note: "That code is not right, or has expired. After five wrong codes, ask for a new one."})
 		return
@@ -244,6 +255,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		MaxAge: int(site.SessionTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: FlowCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true})
 	slog.Info("signed in", "site", site.Domain, "email", flow.email)
+	s.record(site, r, Event{Kind: EventSignedIn, Method: MethodCode, Email: flow.email})
 	http.Redirect(w, r, flow.redirect, http.StatusSeeOther)
 }
 
@@ -253,8 +265,23 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.unavailable(w)
 		return
 	}
+	if who, ok := s.sessionOf(site, r); ok {
+		s.record(site, r, Event{Kind: EventSignedOut, Method: methodOf(site), User: who.User, Email: who.Email})
+	}
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true})
 	render(w, http.StatusOK, page{Domain: site.Domain, Step: "signed-out"})
+}
+
+// methodOf is how visitors sign in to a site, for an event that is not itself a sign-in.
+func methodOf(site *Site) string {
+	switch site.Mode {
+	case ModeBasic:
+		return MethodPassword
+	case ModeOIDC:
+		return MethodOIDC
+	default:
+		return MethodCode
+	}
 }
 
 // redirectFromQuery reads rd from the login URL NGINX built: `login?rd=$request_uri`, where the

@@ -59,3 +59,28 @@ func TestChallengeJobsRefuseATokenThatIsNotOne(t *testing.T) {
 		t.Fatalf("nothing should have been written, found %d entries", len(entries))
 	}
 }
+
+// A pull host probes the sites it was given, as a dialled one does when asked, and reports each.
+func TestVerifyJobsReportEverySite(t *testing.T) {
+	r, _ := acmeRunner(t)
+	result := r.execute(context.Background(), nil, client.Job{Type: "VERIFY_SITES",
+		VerifyTargets: []client.VerifyTarget{{ServerName: "not-served.invalid", Marker: "enginx v1 0000"}}})
+
+	if !result.Succeeded || len(result.Verifications) != 1 {
+		t.Fatalf("result: %+v", result)
+	}
+	if got := result.Verifications[0]; got.ServerName != "not-served.invalid" || got.Identified {
+		t.Fatalf("a site nothing serves was identified: %+v", got)
+	}
+}
+
+func TestVerifyJobsRefuseMoreSitesThanAProbeTakes(t *testing.T) {
+	r, _ := acmeRunner(t)
+	targets := make([]client.VerifyTarget, 65)
+	for i := range targets {
+		targets[i] = client.VerifyTarget{ServerName: "site.invalid"}
+	}
+	if result := r.execute(context.Background(), nil, client.Job{Type: "VERIFY_SITES", VerifyTargets: targets}); result.Succeeded {
+		t.Fatal("65 sites were probed")
+	}
+}

@@ -143,6 +143,27 @@ type Job struct {
 	// Set for ACME challenge jobs only.
 	AcmeToken         string `json:"acmeToken,omitempty"`
 	AcmeAuthorization string `json:"acmeAuthorization,omitempty"`
+	// Set for VERIFY_SITES jobs only: the sites of the bundle just activated.
+	VerifyTargets []VerifyTarget `json:"verifyTargets,omitempty"`
+}
+
+// VerifyTarget is one site to probe, as the push path's verify request carries it.
+type VerifyTarget struct {
+	ServerName string `json:"serverName"`
+	Marker     string `json:"marker"`
+	Protection string `json:"protection,omitempty"`
+}
+
+// SiteVerification is what one site answered, as the push path's verify response reports it.
+type SiteVerification struct {
+	ServerName         string `json:"serverName"`
+	Responded          bool   `json:"responded"`
+	StatusCode         int    `json:"statusCode,omitempty"`
+	Identified         bool   `json:"identified"`
+	Marker             string `json:"marker,omitempty"`
+	Error              string `json:"error,omitempty"`
+	ProtectionEnforced *bool  `json:"protectionEnforced,omitempty"`
+	ProtectionDetail   string `json:"protectionDetail,omitempty"`
 }
 
 // JobResult is what this host reports back.
@@ -155,6 +176,8 @@ type JobResult struct {
 	Noop             bool   `json:"noop"`
 	RolledBack       bool   `json:"rolledBack"`
 	Error            string `json:"error,omitempty"`
+	// For a VERIFY_SITES job, what each site answered.
+	Verifications []SiteVerification `json:"verifications,omitempty"`
 }
 
 // BundleFile mirrors one file in a configuration bundle.

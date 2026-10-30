@@ -313,8 +313,8 @@ each comes with an upgrade note ([versioning](releases.md#versioning-and-compati
 |---|---|---|
 | 1 | Deleting a site deploys | **Done for 0.2.2.** `DELETE /proxy-sites/{id}?deploy=auto`, used by the console |
 | 2 | Roadmap brought up to date | **Done for 0.2.2** |
-| 3 | Gate sign-ins in the audit trail | Sign-ins, failures and refusals are logged on the host only; batch them through the signed relay |
-| 4 | VERIFY on pull hosts | The agent runs the loopback and protection probes and reports them with the job result |
+| 3 | Gate sign-ins in the audit trail | **Done for 0.2.2.** Batched through the signed relay ([protected sites](admin/protected-sites.md#the-audit-trail)) |
+| 4 | VERIFY on pull hosts | **Done for 0.2.2.** A `VERIFY_SITES` job after activation; agent 0.2.2 and later |
 | 5 | Public paths on a protected site (15.3) | `auth_request off` / `auth_basic off` per location; the probe and the bypass warning skip them |
 | 6 | An upstream and proxy settings per location (15.1, 15.2) | Locations that route |
 | 7 | IP allow and deny lists, rate limits | Structured options rendered as plain directives; no gate |

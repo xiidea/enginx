@@ -1,5 +1,6 @@
 package net.xiidea.enginx.proxy;
 
+import net.xiidea.enginx.api.gate.GateRelayController;
 import net.xiidea.enginx.application.certificate.CertificateCommands;
 import net.xiidea.enginx.application.certificate.CertificateService;
 import net.xiidea.enginx.application.deployment.DeploymentService;
@@ -80,6 +81,8 @@ class GateIntegrationTest extends AbstractIntegrationTest {
     private TestSubjectProvider caller;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private GateRelayController gateEndpoint;
 
     private UUID instanceId;
     private UUID certificateId;
@@ -216,4 +219,92 @@ class GateIntegrationTest extends AbstractIntegrationTest {
                 LoadBalancingMethod.ROUND_ROBIN, ProxyTimeouts.defaults(),
                 List.of(UpstreamTarget.of("http", "10.10.10.20", 8080)), List.of(), List.of());
     }
+
+    // ---- events from the gate -------------------------------------------------------------
+
+    private String eventsPayload(String batchId, long sentAt, String events) {
+        return "{\"siteId\":\"" + site.id() + "\",\"batchId\":\"" + batchId + "\",\"sentAt\":" + sentAt
+                + ",\"dropped\":0,\"events\":[" + events + "]}";
+    }
+
+    private void sendEvents(String payload, String signature) {
+        gateEndpoint.recordEvents(new GateRelayController.EventsRequest(
+                List.of(new GateRelayController.EventSection(site.id(), payload, signature))));
+    }
+
+    private String sign(String payload) {
+        return GateKeyDerivation.eventsSignature(keys.reveal(site.id()).orElseThrow(), payload);
+    }
+
+    private List<java.util.Map<String, Object>> gateRows() {
+        return jdbc.queryForList("select action, actor_subject, actor_username, ip_address, result, occurred_at, "
+                + "after_state::text as after_state from audit_logs where action like 'GATE_%' "
+                + "and action <> 'GATE_CODE_SENT' and resource_id = ? order by occurred_at", site.id());
+    }
+
+    @Test
+    @DisplayName("what the gate saw is audited, each event as the visitor who did it, when it happened")
+    void gateEventsAreAudited() {
+        long now = Instant.now().getEpochSecond();
+        long at = (now - 60) * 1000;
+        String payload = eventsPayload("batch-0001", now,
+                "{\"at\":" + at + ",\"kind\":\"sign-in-failed\",\"method\":\"code\",\"email\":\"bob@example.com\","
+                        + "\"ip\":\"203.0.113.9\",\"reason\":\"wrong-code\"},"
+                        + "{\"at\":" + (at + 1000) + ",\"kind\":\"signed-in\",\"method\":\"code\",\"email\":\"bob@example.com\","
+                        + "\"ip\":\"203.0.113.9\"},"
+                        + "{\"at\":" + (at + 2000) + ",\"kind\":\"access-denied\",\"method\":\"code\",\"email\":\"eve@evil.example\","
+                        + "\"ip\":\"198.51.100.7\",\"reason\":\"not-on-list\"}");
+        sendEvents(payload, sign(payload));
+
+        List<java.util.Map<String, Object>> rows = gateRows();
+        assertThat(rows).extracting(row -> row.get("action"))
+                .containsExactly("GATE_SIGN_IN_FAILED", "GATE_SIGNED_IN", "GATE_ACCESS_DENIED");
+        assertThat(rows).extracting(row -> row.get("result")).containsExactly("FAILURE", "SUCCESS", "DENIED");
+        assertThat(rows).extracting(row -> row.get("actor_subject")).containsOnly("gate");
+        assertThat(rows.get(1).get("actor_username")).isEqualTo("bob@example.com");
+        assertThat(rows.get(1).get("ip_address")).isEqualTo("203.0.113.9");
+        assertThat(((java.sql.Timestamp) rows.get(0).get("occurred_at")).toInstant()).isEqualTo(Instant.ofEpochMilli(at));
+        assertThat((String) rows.get(2).get("after_state")).contains("not-on-list").contains(DOMAIN);
+    }
+
+    @Test
+    @DisplayName("a section not signed with the site's key, stale, or replayed records nothing")
+    void forgedStaleAndReplayedEventsAreSkipped() {
+        long now = Instant.now().getEpochSecond();
+        String event = "{\"at\":" + now * 1000 + ",\"kind\":\"signed-in\",\"method\":\"code\",\"email\":\"mallory@example.com\"}";
+
+        String forged = eventsPayload("batch-forged", now, event);
+        sendEvents(forged, GateKeyDerivation.eventsSignature(new byte[32], forged));
+        String stale = eventsPayload("batch-stale1", now - 3600, event);
+        sendEvents(stale, sign(stale));
+        // A code request's signature is not an events signature.
+        String crossed = eventsPayload("batch-cross", now, event);
+        sendEvents(crossed, GateKeyDerivation.relaySignature(keys.reveal(site.id()).orElseThrow(),
+                site.id().toString(), "mallory@example.com", "123456", now));
+        assertThat(gateRows()).isEmpty();
+
+        String once = eventsPayload("batch-once1", now, event);
+        sendEvents(once, sign(once));
+        sendEvents(once, sign(once));
+        assertThat(gateRows()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("what a visitor typed is bounded and cleaned, and an address that is not one is dropped")
+    void visitorTextIsCleaned() {
+        long now = Instant.now().getEpochSecond();
+        String payload = eventsPayload("batch-clean", now,
+                "{\"at\":" + now * 1000 + ",\"kind\":\"sign-in-failed\",\"method\":\"password\","
+                        + "\"user\":\"al\\u0000ice\\n" + "x".repeat(300) + "\",\"ip\":\"<script>\",\"reason\":\"Wrong Password!\"},"
+                        + "{\"at\":" + now * 1000 + ",\"kind\":\"made-up\",\"method\":\"code\"}");
+        sendEvents(payload, sign(payload));
+
+        List<java.util.Map<String, Object>> rows = gateRows();
+        assertThat(rows).hasSize(1);
+        String user = (String) rows.getFirst().get("actor_username");
+        assertThat(user).startsWith("alicexxx").hasSizeLessThanOrEqualTo(128).doesNotContain("\u0000");
+        assertThat(rows.getFirst().get("ip_address")).isNull();
+        assertThat((String) rows.getFirst().get("after_state")).doesNotContain("Wrong Password");
+    }
+
 }

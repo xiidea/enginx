@@ -285,7 +285,8 @@ class NginxConfigRendererTest {
                     .contains("\"realmRoles\": [\n      \"auditor\"\n    ]")
                     .contains("{\"client\": \"reports\", \"role\": \"viewer\"}")
                     .doesNotContain("clientSecret")
-                    .doesNotContain("relayUrl");
+                    // Where the gate reports sign-ins for the audit trail; optional for this mode.
+                    .contains("\"relayUrl\": \"https://enginx.example.com/api/v1/agents/gate/otp-mail\"");
         }
 
         @Test

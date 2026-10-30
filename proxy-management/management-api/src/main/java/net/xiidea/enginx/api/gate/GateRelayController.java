@@ -7,7 +7,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import net.xiidea.enginx.application.gate.GateEventService;
 import net.xiidea.enginx.application.gate.GateRelayService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -15,11 +18,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
- * Where a host's gate asks for a sign-in code to be mailed.
+ * Where a host's gate asks for a sign-in code to be mailed, and reports who came to the door.
  *
  * <p>Under {@code /api/v1/agents}, so it shares the agent filter chain: no bearer token, because
  * the request is authenticated by its signature with the site's relay key instead, which every
@@ -27,13 +33,19 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/agents/gate")
-@Tag(name = "Gate", description = "Calls from the host-local gate that protects sites with email sign-in")
+@Tag(name = "Gate", description = "Calls from the host-local gate that protects sites with a sign-in")
 public class GateRelayController {
 
-    private final GateRelayService relay;
+    private static final Logger log = LoggerFactory.getLogger(GateRelayController.class);
 
-    public GateRelayController(GateRelayService relay) {
+    private final GateRelayService relay;
+    private final GateEventService events;
+    private final JsonMapper json;
+
+    public GateRelayController(GateRelayService relay, GateEventService events, JsonMapper json) {
         this.relay = relay;
+        this.events = events;
+        this.json = json;
     }
 
     @Schema(name = "GateCodeRequest", requiredProperties = {"siteId", "email", "code", "timestamp", "signature"})
@@ -66,6 +78,49 @@ public class GateRelayController {
             case MAIL_UNAVAILABLE -> problem(HttpStatus.SERVICE_UNAVAILABLE, "Mail is not configured",
                     "The platform has no mail server configured, so no code can be sent.");
         };
+    }
+
+    /**
+     * One site's events, signed by the gate over {@code payload} exactly as sent, so the signature
+     * is checked against the bytes that are then parsed rather than against a re-serialisation.
+     */
+    @Schema(name = "GateEventSection", requiredProperties = {"siteId", "payload", "signature"})
+    public record EventSection(
+            @NotNull UUID siteId,
+            @NotBlank @Size(max = 262_144) String payload,
+            @NotBlank @Size(max = 128) String signature) {
+    }
+
+    @Schema(name = "GateEventsRequest", requiredProperties = {"sites"})
+    public record EventsRequest(@NotNull @Size(max = 200) List<@Valid EventSection> sites) {
+    }
+
+    /** A section's payload, as the gate writes it. */
+    record EventPayload(UUID siteId, String batchId, long sentAt, int dropped, List<GateEventService.Event> events) {
+    }
+
+    @PostMapping("/events")
+    @Operation(summary = "Record what a gate saw",
+            description = "Sign-ins, failures, refusals and sign-outs at protected sites, for the audit trail. Each "
+                    + "section is signed by the gate with its site's relay key, and checked on its own: a section "
+                    + "that is not authentic is skipped, and 204 is the answer either way, since sending it again "
+                    + "would not make it authentic.")
+    public ResponseEntity<Void> recordEvents(@Valid @RequestBody EventsRequest request) {
+        for (EventSection section : request.sites()) {
+            GateEventService.Outcome outcome;
+            try {
+                EventPayload payload = json.readValue(section.payload(), EventPayload.class);
+                outcome = events.record(section.siteId(), section.payload(), section.signature(),
+                        new GateEventService.Batch(payload.siteId(), payload.batchId(), payload.sentAt(),
+                                payload.dropped(), payload.events()));
+            } catch (JacksonException e) {
+                outcome = GateEventService.Outcome.REFUSED;
+            }
+            if (outcome == GateEventService.Outcome.REFUSED) {
+                log.debug("Skipped a gate events section for site {}", section.siteId());
+            }
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String title, String detail) {

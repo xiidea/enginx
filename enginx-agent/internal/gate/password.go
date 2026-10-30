@@ -49,6 +49,7 @@ func (s *Server) handlePasswordLogin(w http.ResponseWriter, r *http.Request, sit
 	}
 	if username == "" || !checkPassword(site, username, password) {
 		slog.Info("basic sign-in refused", "site", site.Domain, "user", username)
+		s.record(site, r, Event{Kind: EventSignInFailed, Method: MethodPassword, User: username, Reason: "wrong-password"})
 		render(w, http.StatusUnauthorized, page{Domain: site.Domain, Step: "password", Redirect: redirect,
 			Username: username, Note: "That username and password do not match."})
 		return
@@ -58,6 +59,7 @@ func (s *Server) handlePasswordLogin(w http.ResponseWriter, r *http.Request, sit
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: value, Path: "/", Expires: expires,
 		MaxAge: int(site.SessionTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	slog.Info("signed in", "site", site.Domain, "user", username)
+	s.record(site, r, Event{Kind: EventSignedIn, Method: MethodPassword, User: username})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
@@ -83,7 +85,13 @@ func (s *Server) basicHeader(site *Site, r *http.Request) (identity, bool) {
 	if s.checkedHeaders.valid(key, now) && passwordProofStill(site, username, s.checkedHeaders.proof(key)) {
 		return identity{User: username}, true
 	}
-	if !s.allowPasswordAttempt(site, r, username, now) || !checkPassword(site, username, password) {
+	if !s.allowPasswordAttempt(site, r, username, now) {
+		return identity{}, false
+	}
+	if !checkPassword(site, username, password) {
+		// Failures only: a script that succeeds would add an event every minute it runs. Bounded
+		// by the attempt limits above, which stop the check, and with it the event.
+		s.record(site, r, Event{Kind: EventSignInFailed, Method: MethodHeader, User: username, Reason: "wrong-password"})
 		return identity{}, false
 	}
 	s.checkedHeaders.remember(key, passwordProof(site, username), now)

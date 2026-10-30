@@ -348,6 +348,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	if problem := query.Get("error"); problem != "" {
 		slog.Info("the identity provider refused the sign-in", "site", site.Domain, "error", problem)
+		s.record(site, r, Event{Kind: EventSignInFailed, Method: MethodOIDC, Reason: "provider-refused"})
 		render(w, http.StatusUnauthorized, page{Domain: site.Domain, Step: "retry",
 			Note: "Signing in did not complete. Try again."})
 		return
@@ -378,6 +379,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	if !site.OIDC.admits(who.Email, who.User, realm, clients) {
 		slog.Info("signed in at the provider, but not allowed here", "site", site.Domain, "user", who.User, "email", who.Email)
+		s.record(site, r, Event{Kind: EventAccessDenied, Method: MethodOIDC, User: who.User, Email: who.Email, Reason: "not-allowed"})
 		name := who.Email
 		if name == "" {
 			name = who.User
@@ -390,6 +392,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: value, Path: "/", Expires: expires,
 		MaxAge: int(site.SessionTTL.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	slog.Info("signed in", "site", site.Domain, "user", who.User, "email", who.Email)
+	s.record(site, r, Event{Kind: EventSignedIn, Method: MethodOIDC, User: who.User, Email: who.Email})
 	http.Redirect(w, r, flow.redirect, http.StatusSeeOther)
 }
 

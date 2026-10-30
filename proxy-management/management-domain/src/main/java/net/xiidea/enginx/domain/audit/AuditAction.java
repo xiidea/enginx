@@ -13,6 +13,15 @@ public enum AuditAction {
     PROXY_SITE_CLONED,
     PROXY_SITE_SESSIONS_REVOKED,
     GATE_CODE_SENT,
+    /** A visitor signed in to a protected site, as reported by its host's gate. */
+    GATE_SIGNED_IN,
+    /** A wrong password or code at a protected site, or a sign-in the provider refused. */
+    GATE_SIGN_IN_FAILED,
+    /** Signed in, or asked for a code, but not on the site's list. */
+    GATE_ACCESS_DENIED,
+    GATE_SIGNED_OUT,
+    /** A gate could not reach the platform for long enough to drop events; how many is recorded. */
+    GATE_EVENTS_DROPPED,
     NGINX_INSTANCE_REGISTERED,
     /**
      * The host is serving a configuration the platform did not put there. Recorded, never acted

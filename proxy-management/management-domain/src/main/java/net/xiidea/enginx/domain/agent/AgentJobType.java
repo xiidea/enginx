@@ -3,10 +3,12 @@ package net.xiidea.enginx.domain.agent;
 /**
  * The operations a pull host collects.
  *
- * <p>The ones that change the host, plus HTTP-01 challenges. A push host is also asked questions —
- * verify, upstream checks — and those stay push-only: each needs an answer, not just an effect.
- * A challenge needs only to be in place within seconds, and long-polling delivers a queued job in
- * about the time of one request, so it travels as a job and the publisher waits for the result.
+ * <p>The ones that change the host, plus HTTP-01 challenges and the probe after a deployment. A
+ * push host is also asked questions on demand — upstream checks — and those stay push-only:
+ * someone is waiting on the page for the answer. A challenge needs only to be in place within
+ * seconds, and long-polling delivers a queued job in about the time of one request, so it travels
+ * as a job and the publisher waits for the result. The probe after a deployment has nobody
+ * waiting: its answer is added to the deployment's record whenever it comes.
  */
 public enum AgentJobType {
 
@@ -23,5 +25,12 @@ public enum AgentJobType {
     PUBLISH_ACME_CHALLENGE,
 
     /** Remove a challenge response once validation has finished. */
-    REMOVE_ACME_CHALLENGE
+    REMOVE_ACME_CHALLENGE,
+
+    /**
+     * Probe the sites of the bundle just activated, as VERIFY does for a push host: whether each is
+     * served by that bundle, and whether a protected one refuses a visitor who has not signed in.
+     * Agent 0.2.2 and later; an older agent reports a job type it does not know as failed.
+     */
+    VERIFY_SITES
 }

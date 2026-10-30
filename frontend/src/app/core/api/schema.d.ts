@@ -68,6 +68,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/gate/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record what a gate saw
+         * @description Sign-ins, failures, refusals and sign-outs at protected sites, for the audit trail. Each section is signed by the gate with its site's relay key, and checked on its own: a section that is not authentic is skipped, and 204 is the answer either way, since sending it again would not make it authentic.
+         */
+        post: operations["gateRelay_recordEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/gate/otp-mail": {
         parameters: {
             query?: never;
@@ -1243,6 +1263,18 @@ export interface components {
             nginxRunning: boolean;
             nginxVersion?: string;
         };
+        AgentJobAssignment: {
+            acmeAuthorization?: string;
+            acmeToken?: string;
+            /** Format: uuid */
+            bundleId: string;
+            idempotencyKey: string;
+            /** Format: uuid */
+            jobId: string;
+            reload?: boolean;
+            type: string;
+            verifyTargets?: components["schemas"]["AgentVerifyTarget"][];
+        };
         /** @description One unit of work for a host that collects it. */
         AgentJobResponse: {
             /** Format: int32 */
@@ -1272,6 +1304,7 @@ export interface components {
             succeeded: boolean;
             testOutput?: string;
             validationFailed?: boolean;
+            verifications?: components["schemas"]["AgentSiteVerification"][];
         };
         AgentRegisterRequest: {
             environment?: string;
@@ -1305,6 +1338,22 @@ export interface components {
             usable: boolean;
             /** Format: int32 */
             uses: number;
+        };
+        AgentSiteVerification: {
+            error?: string;
+            identified?: boolean;
+            marker?: string;
+            protectionDetail?: string;
+            protectionEnforced?: boolean;
+            responded?: boolean;
+            serverName: string;
+            /** Format: int32 */
+            statusCode?: number;
+        };
+        AgentVerifyTarget: {
+            marker: string;
+            protection?: string;
+            serverName: string;
         };
         AuditResponse: {
             action: string;
@@ -1574,6 +1623,15 @@ export interface components {
             siteId: string;
             /** Format: int64 */
             timestamp: number;
+        };
+        GateEventSection: {
+            payload: string;
+            signature: string;
+            /** Format: uuid */
+            siteId: string;
+        };
+        GateEventsRequest: {
+            sites: components["schemas"]["GateEventSection"][];
         };
         /** @description What a grant would reach, before it is created. */
         GrantPreviewResponse: {
@@ -2146,6 +2204,37 @@ export interface operations {
             };
         };
     };
+    gateRelay_recordEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GateEventsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     gateRelay_sendCode: {
         parameters: {
             query?: never;
@@ -2231,7 +2320,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AgentJobResponse"];
+                    "*/*": components["schemas"]["AgentJobAssignment"];
                 };
             };
             /** @description Unauthorized */

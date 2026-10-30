@@ -156,6 +156,13 @@ on: it does not change the deployment's status and nothing is rolled back, becau
 are a dead upstream or a DNS name pointing elsewhere, and reverting fixes neither while discarding
 the operator's change. A host that cannot be probed is recorded as SKIPPED rather than FAILED.
 
+A pull host runs the same probe as a job. The deployment succeeds when the host reports the
+activation, as a push deployment does, and the platform then queues `VERIFY_SITES` with the sites of
+the bundle just activated; the host collects it next, before any later deployment's work, and the
+answer is added to the deployment as its VERIFY phase. The expected markers come from the bundle,
+never from what the host reports. An agent before 0.2.2 is not sent the job, and its deployments
+record VERIFY as skipped with a note to upgrade.
+
 **Upstream checks** are on demand, via `GET /api/v1/proxy-sites/{id}/upstream-check` or the
 **Check upstreams** button on a site. The agent opens a TCP connection to each upstream and closes
 it. Advisory only: NGINX Open Source resolves upstream names once when the configuration loads, so

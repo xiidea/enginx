@@ -298,4 +298,37 @@ warning: private.example.com is protected, but /etc/nginx/enginx/custom/sites/pr
 
 A warning does not fail the deployment: the file is root's on the host, and its author may mean
 it. Directives in custom files remain root's responsibility, as they always were. VERIFY runs on
-push hosts; pull hosts are not probed, but do report the warnings.
+push hosts, and since 0.2.2 on pull hosts too, as a job the host collects after the activation
+([managing sites](managing-sites.md#deployment-verification-and-drift)).
+
+## The audit trail
+
+The gate reports what happens at a protected site's door, and each event becomes a row in the
+platform's audit trail, against the site, with the visitor as the actor (subject `gate`), their
+address, and the time the gate saw it:
+
+| Event | Audit action | Result |
+|---|---|---|
+| Signed in, with a password, a code or the identity provider | `GATE_SIGNED_IN` | SUCCESS |
+| A wrong password or code, or a sign-in the provider refused | `GATE_SIGN_IN_FAILED` | FAILURE |
+| Signed in at the provider but not allowed, or a code asked for an address not on the list | `GATE_ACCESS_DENIED` | DENIED |
+| Signed out | `GATE_SIGNED_OUT` | SUCCESS |
+
+A script's basic credentials are recorded only when they are wrong: one that works would add a row
+every minute it runs.
+
+- **Batched.** Every 30 seconds (`GATE_EVENTS_INTERVAL`), one request per host, to the relay
+  address's sibling `…/api/v1/agents/gate/events`. Each site's events are signed with that site's
+  relay key, as code requests are, so it needs no new credential and works for push and pull hosts.
+- **Needs `enginx.gate.relay-url`** (`GATE_RELAY_URL`), and outbound HTTPS from the host to the
+  platform, as email sign-in does. Without a relay address, events stay in the gate's own log.
+  Basic and identity-provider sites carry the address from 0.2.2: deploy them once after upgrading,
+  and the site page will say they have undeployed changes until you do.
+- **Kept while the platform is away.** Up to 1,000 events a site wait on the host; past that, and
+  past 6,000 rows a site an hour on the platform, events are counted instead, and the count is
+  recorded as `GATE_EVENTS_DROPPED`.
+- **What a visitor typed is bounded**: names and addresses are cut to 128 characters and stripped of
+  control characters, and an address that is not one is dropped.
+- A batch is accepted once; a section not signed with its site's key, or stamped more than five
+  minutes from the platform's clock, is skipped. Events signed with a key that *Sign everyone out*
+  has just replaced are skipped too, until the new key is deployed.

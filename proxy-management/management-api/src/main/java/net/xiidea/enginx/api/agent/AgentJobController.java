@@ -4,14 +4,19 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import net.xiidea.enginx.application.agent.AgentAuthenticationService;
 import net.xiidea.enginx.application.agent.AgentJobQueue;
 import net.xiidea.enginx.application.deployment.PullDeploymentCoordinator;
 import net.xiidea.enginx.domain.agent.AgentJob;
 import net.xiidea.enginx.domain.agent.AgentJobResult;
+import net.xiidea.enginx.domain.agent.AgentJobType;
 import net.xiidea.enginx.domain.deployment.BundleFile;
 import net.xiidea.enginx.domain.deployment.ConfigBundle;
 import net.xiidea.enginx.domain.deployment.ConfigBundleRepository;
+import net.xiidea.enginx.domain.deployment.NginxAgentPort;
+import net.xiidea.enginx.domain.deployment.NginxConfigRenderer;
+import net.xiidea.enginx.domain.deployment.SiteVerification;
 import net.xiidea.enginx.domain.nginx.NginxInstance;
 import net.xiidea.enginx.domain.shared.NotFoundException;
 import org.slf4j.Logger;
@@ -32,7 +37,9 @@ import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -122,7 +129,7 @@ public class AgentJobController {
         }
         Optional<AgentJob> claimed = queue.claimNext(instanceId);
         if (claimed.isPresent()) {
-            result.setResult(ResponseEntity.ok(JobResponse.of(claimed.get())));
+            result.setResult(ResponseEntity.ok(JobResponse.of(claimed.get(), verifyTargets(claimed.get()))));
             return;
         }
         if (Instant.now().isAfter(deadline)) {
@@ -146,7 +153,7 @@ public class AgentJobController {
                 .filter(candidate -> candidate.nginxInstanceId().equals(instance.id()))
                 .orElseThrow(() -> new NotFoundException("AGENT_JOB", id));
 
-        AgentJobResult result = request.toDomain();
+        AgentJobResult result = request.toDomain(verifyTargets(job));
         if (result.succeeded()) {
             job.succeeded(result, Instant.now());
         } else {
@@ -209,27 +216,83 @@ public class AgentJobController {
                 .orElseThrow(() -> new AccessDeniedException("That agent token is not recognised"));
     }
 
-    @Schema(name = "AgentJobResponse", requiredProperties = {"jobId", "type", "bundleId", "idempotencyKey"})
-    public record JobResponse(UUID jobId, String type, UUID bundleId, String idempotencyKey, boolean reload,
-                              String acmeToken, String acmeAuthorization) {
+    /**
+     * The sites a VERIFY_SITES job probes, read from the bundle it names when the job is collected:
+     * the queue row holds a reference, as it does for every bundle job.
+     */
+    private List<NginxAgentPort.VerifyTarget> verifyTargets(AgentJob job) {
+        if (job.type() != AgentJobType.VERIFY_SITES || job.payload().bundleId() == null) {
+            return null;
+        }
+        return bundles.findById(job.payload().bundleId())
+                .map(NginxConfigRenderer::verifyTargets)
+                .orElse(List.of());
+    }
 
-        static JobResponse of(AgentJob job) {
+    @Schema(name = "AgentVerifyTarget", requiredProperties = {"serverName", "marker"})
+    public record VerifyTargetResponse(String serverName, String marker, String protection) {
+    }
+
+    /**
+     * @param verifyTargets for a VERIFY_SITES job, the sites to probe, in the shape the push
+     *                      path's verify request carries them
+     */
+    @Schema(name = "AgentJobAssignment", requiredProperties = {"jobId", "type", "bundleId", "idempotencyKey"})
+    public record JobResponse(UUID jobId, String type, UUID bundleId, String idempotencyKey, boolean reload,
+                              String acmeToken, String acmeAuthorization, List<VerifyTargetResponse> verifyTargets) {
+
+        static JobResponse of(AgentJob job, List<NginxAgentPort.VerifyTarget> targets) {
             return new JobResponse(job.id(), job.type().name(), job.payload().bundleId(),
                     job.payload().idempotencyKey(), job.payload().reload(),
-                    job.payload().acmeToken(), job.payload().acmeAuthorization());
+                    job.payload().acmeToken(), job.payload().acmeAuthorization(),
+                    targets == null ? null : targets.stream()
+                            .map(t -> new VerifyTargetResponse(t.serverName(), t.marker(), t.protection()))
+                            .toList());
         }
     }
 
-    /** @param validationFailed nginx -t rejected it, which is never retried and never a 5xx */
+    /** What one site answered, as the push path's verify response reports it. */
+    @Schema(name = "AgentSiteVerification", requiredProperties = {"serverName"})
+    public record VerificationResult(String serverName, Boolean responded, Integer statusCode, Boolean identified,
+                                     String marker, String error, Boolean protectionEnforced,
+                                     String protectionDetail) {
+    }
+
+    /**
+     * @param validationFailed nginx -t rejected it, which is never retried and never a 5xx
+     * @param verifications    for a VERIFY_SITES job, what each site answered
+     */
     @Schema(name = "AgentJobResultRequest", requiredProperties = {"succeeded"})
     public record ResultRequest(Boolean succeeded, Boolean validationFailed, String testOutput,
                                 String nginxVersion, String previousBundleId, Boolean noop,
-                                Boolean rolledBack, String error) {
+                                Boolean rolledBack, String error,
+                                @Size(max = 256) List<VerificationResult> verifications) {
 
-        AgentJobResult toDomain() {
+        /**
+         * The expected marker and protection come from the job's own targets, never from the host:
+         * a host reporting what it was supposed to see would make the check meaningless.
+         */
+        AgentJobResult toDomain(List<NginxAgentPort.VerifyTarget> targets) {
+            List<SiteVerification> sites = null;
+            if (verifications != null) {
+                Map<String, NginxAgentPort.VerifyTarget> expected = new HashMap<>();
+                if (targets != null) {
+                    targets.forEach(target -> expected.put(target.serverName(), target));
+                }
+                sites = verifications.stream()
+                        .filter(v -> v != null && v.serverName() != null && expected.containsKey(v.serverName()))
+                        .map(v -> {
+                            NginxAgentPort.VerifyTarget target = expected.get(v.serverName());
+                            return new SiteVerification(v.serverName(), Boolean.TRUE.equals(v.responded()),
+                                    v.statusCode() == null ? 0 : v.statusCode(), Boolean.TRUE.equals(v.identified()),
+                                    v.marker(), target.marker(), v.error(), target.protection(),
+                                    v.protectionEnforced(), v.protectionDetail());
+                        })
+                        .toList();
+            }
             return new AgentJobResult(Boolean.TRUE.equals(succeeded), Boolean.TRUE.equals(validationFailed),
                     testOutput, nginxVersion, previousBundleId, Boolean.TRUE.equals(noop),
-                    Boolean.TRUE.equals(rolledBack), error);
+                    Boolean.TRUE.equals(rolledBack), error, sites);
         }
     }
 

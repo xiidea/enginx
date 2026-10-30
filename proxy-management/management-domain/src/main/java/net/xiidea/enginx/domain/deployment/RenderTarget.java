@@ -26,6 +26,8 @@ public record RenderTarget(String nginxVersion, boolean defaultServerManaged, St
 
     /** The first agent release that writes {@code 0640} files group-readable by the NGINX workers. */
     static final int[] WORKER_READABLE_AGENT = {0, 2, 0};
+    /** The first agent that probes its sites when it collects its own work. */
+    static final int[] VERIFY_JOB_AGENT = {0, 2, 2};
 
     /** A host nothing is known about yet: the most widely accepted grammar, and the catch-all. */
     public static final RenderTarget UNKNOWN = new RenderTarget(null, true, null);
@@ -49,6 +51,19 @@ public record RenderTarget(String nginxVersion, boolean defaultServerManaged, St
      * build is assumed current.
      */
     public boolean supportsWorkerReadableFiles() {
+        return agentAtLeast(WORKER_READABLE_AGENT);
+    }
+
+    /**
+     * Whether a host that collects its own work can be sent a
+     * {@link net.xiidea.enginx.domain.agent.AgentJobType#VERIFY_SITES} job. An older agent would
+     * report it as a job type it does not know, which reads as a failed probe of a working host.
+     */
+    public boolean supportsVerifyJobs() {
+        return agentAtLeast(VERIFY_JOB_AGENT);
+    }
+
+    private boolean agentAtLeast(int[] minimum) {
         if (agentVersion == null) {
             return false;
         }
@@ -60,10 +75,10 @@ public record RenderTarget(String nginxVersion, boolean defaultServerManaged, St
         if (!matcher.find()) {
             return false;
         }
-        for (int i = 0; i < WORKER_READABLE_AGENT.length; i++) {
+        for (int i = 0; i < minimum.length; i++) {
             int part = Integer.parseInt(matcher.group(i + 1));
-            if (part != WORKER_READABLE_AGENT[i]) {
-                return part > WORKER_READABLE_AGENT[i];
+            if (part != minimum[i]) {
+                return part > minimum[i];
             }
         }
         return true;

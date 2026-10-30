@@ -63,6 +63,20 @@ func main() {
 	defer stop()
 	go server.Watch(ctx, sitesDir, 2*time.Second)
 
+	// Sign-ins, refusals and sign-outs go to the platform's audit trail in batches, and once more
+	// on the way out, so a restart loses none it could still send.
+	every, err := time.ParseDuration(env("GATE_EVENTS_INTERVAL", "30s"))
+	if err != nil || every < time.Second {
+		slog.Error("GATE_EVENTS_INTERVAL must be a duration of at least 1s", "value", os.Getenv("GATE_EVENTS_INTERVAL"))
+		os.Exit(1)
+	}
+	shipped := make(chan struct{})
+	go func() {
+		defer close(shipped)
+		server.ShipEvents(ctx, client, every)
+	}()
+	defer func() { <-shipped }()
+
 	httpServer := &http.Server{
 		Handler:           server.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,

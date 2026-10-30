@@ -119,7 +119,25 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("At most %d names may be verified in one request", maxProbeTargets))
 		return
 	}
-	port := req.Port
+	writeJSON(w, http.StatusOK, verifyResponse{Results: s.verify(r.Context(), targets, req.Port)})
+}
+
+// VerifyTarget and VerifyResult are the probe's request and answer for one site, for the pull
+// runner, which is sent the same targets in a job and reports the same answers with its result.
+type (
+	VerifyTarget = verifyTarget
+	VerifyResult = verifyResult
+)
+
+// VerifySites probes as handleVerify does, for a host that collected the request as a job.
+func (s *Server) VerifySites(ctx context.Context, targets []VerifyTarget) ([]VerifyResult, error) {
+	if len(targets) > maxProbeTargets {
+		return nil, fmt.Errorf("at most %d sites may be verified at once, and the bundle has %d", maxProbeTargets, len(targets))
+	}
+	return s.verify(ctx, targets, 0), nil
+}
+
+func (s *Server) verify(ctx context.Context, targets []verifyTarget, port int) []verifyResult {
 	if port == 0 {
 		port = 80
 	}
@@ -141,7 +159,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	results := runConcurrently(r.Context(), targets, func(ctx context.Context, target verifyTarget) verifyResult {
+	return runConcurrently(ctx, targets, func(ctx context.Context, target verifyTarget) verifyResult {
 		result := probeSite(ctx, client, target, port)
 		if target.Protection != "" && result.Identified {
 			enforced, detail := probeProtection(ctx, target, s.protectedPort)
@@ -150,8 +168,6 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		return result
 	})
-
-	writeJSON(w, http.StatusOK, verifyResponse{Results: results})
 }
 
 // markerSettle is how long a probe keeps asking before accepting that the marker is absent.
