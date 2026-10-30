@@ -220,8 +220,14 @@
                 </div>
               }
               @for (location of ownLocations(); track location.matchType + location.pathPattern) {
-                <div class="mono small">
-                  <span class="muted">{{ location.matchType }}</span> {{ location.pathPattern }}
+                <div class="small">
+                  <span class="mono"><span class="muted">{{ location.matchType }}</span> {{ location.pathPattern }}</span>
+                  @if (location.upstreams?.length) {
+                    <span class="mono"> → {{ upstreamList(location.upstreams!) }}</span>
+                  }
+                  @if (locationSummary(location); as summary) {
+                    <span class="muted"> · {{ summary }}</span>
+                  }
                 </div>
               }
             </div>
@@ -270,6 +276,19 @@
               </div>
             } @else {
               <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
+            }
+            @if (publicPaths().length) {
+              <!-- Said here, beside who may sign in, because it is the exception to it. -->
+              <div class="facts public-paths">
+                <div>
+                  <span class="key">Without sign-in</span>
+                  <span class="mono small">
+                    @for (location of publicPaths(); track location.matchType + location.pathPattern; let last = $last) {
+                      {{ location.matchType === 'EXACT' ? '= ' : '' }}{{ location.pathPattern }}{{ last ? '' : ', ' }}
+                    }
+                  </span>
+                </div>
+              </div>
             }
           </div>
         </section>

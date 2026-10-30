@@ -8,6 +8,8 @@ import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import net.xiidea.enginx.domain.proxy.ProxySiteSpec;
 import net.xiidea.enginx.domain.proxy.ProtectionMode;
+import net.xiidea.enginx.domain.proxy.ProxyTimeouts;
+import net.xiidea.enginx.domain.proxy.LocationProxySettings;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.ValidationException;
 
@@ -600,11 +602,25 @@ public final class NginxConfigRenderer {
         return protections;
     }
 
+    /** The site's pool, then one for each location that has its own, in the site's order. */
     private void appendUpstream(StringBuilder out, ProxySite site) {
         ProxySiteSpec spec = site.spec();
-        out.append("upstream ").append(upstreamName(site)).append(" {\n");
+        appendUpstreamBlock(out, upstreamName(site), spec.loadBalancingMethod(), spec.upstreams());
+        for (LocationRule location : spec.locations()) {
+            if (location.hasOwnUpstreams()) {
+                appendUpstreamBlock(out, upstreamName(site, location),
+                        location.loadBalancingMethod() == null ? LoadBalancingMethod.ROUND_ROBIN
+                                : location.loadBalancingMethod(),
+                        location.upstreams());
+            }
+        }
+    }
 
-        switch (spec.loadBalancingMethod()) {
+    private void appendUpstreamBlock(StringBuilder out, String name, LoadBalancingMethod method,
+                                     List<UpstreamTarget> upstreams) {
+        out.append("upstream ").append(name).append(" {\n");
+
+        switch (method) {
             case LEAST_CONN -> out.append("    least_conn;\n");
             case IP_HASH -> out.append("    ip_hash;\n");
             case ROUND_ROBIN -> {
@@ -614,7 +630,6 @@ public final class NginxConfigRenderer {
             }
         }
 
-        List<UpstreamTarget> upstreams = spec.upstreams();
         for (UpstreamTarget upstream : upstreams) {
             out.append("    server ").append(upstream.authority());
             if (upstream.weight() != 1) {
@@ -815,10 +830,26 @@ public final class NginxConfigRenderer {
     private void appendLocation(StringBuilder out, ProxySite site, LocationRule location) {
         ProxySiteSpec spec = site.spec();
         String matcher = location.matchType() == LocationMatchType.EXACT ? "= " : "";
+        LocationProxySettings settings = location.settings();
+        ProxyTimeouts timeouts = settings.timeoutsOver(spec.timeouts());
+        boolean open = location.publicAccess() && spec.protection().isProtected();
 
         out.append("    location ").append(matcher).append(location.pathPattern()).append(" {\n");
-        out.append("        proxy_pass ").append(spec.upstreams().getFirst().scheme())
-                .append("://").append(upstreamName(site)).append(";\n\n");
+        if (open) {
+            // Opted out of the site's protection, for a caller that cannot sign in. Only this
+            // block: the root can never be public, and VERIFY's probe paths never land here.
+            if (spec.protection().usesGate()) {
+                out.append("        auth_request off;\n");
+            } else {
+                out.append("        auth_basic off;\n");
+            }
+        }
+        if (timeouts.maxBodySizeBytes() != spec.timeouts().maxBodySizeBytes()) {
+            out.append("        client_max_body_size ").append(timeouts.maxBodySizeBytes()).append(";\n");
+        }
+        out.append("        proxy_pass ").append(location.upstreamsOver(spec.upstreams()).getFirst().scheme())
+                .append("://").append(location.hasOwnUpstreams() ? upstreamName(site, location) : upstreamName(site))
+                .append(";\n\n");
 
         out.append("        proxy_set_header Host              $host;\n");
         out.append("        proxy_set_header X-Real-IP         $remote_addr;\n");
@@ -831,15 +862,14 @@ public final class NginxConfigRenderer {
         // header must then be managed explicitly: cleared normally, so it is not forwarded and
         // does not close the pooled connection, or mapped for a WebSocket upgrade.
         out.append("        proxy_http_version 1.1;\n");
-        if (spec.websocketEnabled()) {
+        if (settings.websocketOver(spec.websocketEnabled())) {
             out.append("        proxy_set_header Upgrade    $http_upgrade;\n");
             out.append("        proxy_set_header Connection $connection_upgrade;\n");
         } else {
             out.append("        proxy_set_header Connection \"\";\n");
         }
 
-        List<ProxySiteHeader> requestHeaders = spec.headers().stream()
-                .filter(header -> header.direction() == HeaderDirection.REQUEST)
+        List<ProxySiteHeader> requestHeaders = settings.requestHeadersOver(spec.headers()).stream()
                 .sorted(Comparator.comparing(ProxySiteHeader::name))
                 .toList();
         if (!requestHeaders.isEmpty()) {
@@ -850,16 +880,21 @@ public final class NginxConfigRenderer {
             }
         }
 
-        if (spec.protection().usesGate()) {
+        if (spec.protection().usesGate() && open) {
+            // Nobody signed in here, but still cleared: a client sending its own is overwritten,
+            // so the upstream can trust these headers wherever it receives them.
+            out.append("        proxy_set_header X-Enginx-Email    \"\";\n");
+            out.append("        proxy_set_header X-Enginx-User     \"\";\n");
+        } else if (spec.protection().usesGate()) {
             // Always set, so the upstream can trust it: a client sending its own is overwritten.
             out.append("        proxy_set_header X-Enginx-Email    $enginx_email;\n");
             out.append("        proxy_set_header X-Enginx-User     $enginx_user;\n");
         }
 
         out.append('\n');
-        out.append("        proxy_connect_timeout ").append(spec.timeouts().connectSeconds()).append("s;\n");
-        out.append("        proxy_send_timeout    ").append(spec.timeouts().sendSeconds()).append("s;\n");
-        out.append("        proxy_read_timeout    ").append(spec.timeouts().readSeconds()).append("s;\n");
+        out.append("        proxy_connect_timeout ").append(timeouts.connectSeconds()).append("s;\n");
+        out.append("        proxy_send_timeout    ").append(timeouts.sendSeconds()).append("s;\n");
+        out.append("        proxy_read_timeout    ").append(timeouts.readSeconds()).append("s;\n");
         out.append("    }\n");
     }
 
@@ -876,6 +911,15 @@ public final class NginxConfigRenderer {
         String domain = site.domain().value();
         String sanitised = domain.replace('.', '_').replace('-', '_').toLowerCase(Locale.ROOT);
         return "enginx_" + sanitised + "_" + BundleFile.digest(domain).substring(0, 6);
+    }
+
+    /**
+     * A location's own pool: the site's name and a digest of the location's match type and path,
+     * which together are unique within a site, so the name stays the same while the location does.
+     */
+    static String upstreamName(ProxySite site, LocationRule location) {
+        return upstreamName(site) + "_" + BundleFile.digest(location.matchType() + " " + location.pathPattern())
+                .substring(0, 8);
     }
 
     private static void requireUniqueDomains(List<ProxySite> sites) {

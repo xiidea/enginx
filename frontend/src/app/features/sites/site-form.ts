@@ -61,7 +61,9 @@ export class SiteForm implements OnInit {
    * is always sent first whenever there are others, so every request matches a location. Without
    * it NGINX answers paths no location matches from its own document root, not the upstream.
    */
-  readonly locations = signal<LocationRule[]>([]);
+  readonly locations = signal<LocationRow[]>([]);
+  /** The root as loaded, sent back as it was: the form edits only the other paths. */
+  private readonly rootLocation = signal<LocationRule | null>(null);
   readonly protectionMode = signal<ProtectionMode>('NONE');
   readonly basicUsers = signal<BasicUserRow[]>([]);
   /** Basic authentication on the gate's login page rather than the browser's prompt. */
@@ -158,7 +160,8 @@ export class SiteForm implements OnInit {
     this.upstreams.set(site.upstreams.length ? [...site.upstreams] : [{ scheme: 'http', host: '', port: 8080 }]);
     this.headers.set([...site.headers]);
     // A site with only the root location has none of its own to show.
-    this.locations.set(site.locations.filter((l) => !isRoot(l)));
+    this.locations.set(site.locations.filter((l) => !isRoot(l)).map((l) => ({ ...l, open: false })));
+    this.rootLocation.set(site.locations.find(isRoot) ?? null);
     this.protectionMode.set(site.protection.mode as ProtectionMode);
     this.savedMode.set(site.protection.mode as ProtectionMode);
     // The server never returns a password or its hash, so an existing user starts with an empty
@@ -232,8 +235,53 @@ export class SiteForm implements OnInit {
     this.locations.update((all) => all.filter((_, i) => i !== index));
   }
 
-  updateLocation(index: number, patch: Partial<LocationRule>): void {
+  updateLocation(index: number, patch: Partial<LocationRow>): void {
     this.locations.update((all) => all.map((location, i) => (i === index ? { ...location, ...patch } : location)));
+  }
+
+  /** Gives a location a pool of its own, starting from one empty server. */
+  addLocationUpstream(index: number): void {
+    const location = this.locations()[index];
+    this.updateLocation(index, { upstreams: [...(location.upstreams ?? []), { scheme: 'http', host: '', port: 8080 }] });
+  }
+
+  updateLocationUpstream(index: number, at: number, patch: Partial<Upstream>): void {
+    const upstreams = (this.locations()[index].upstreams ?? []).map((u, i) => (i === at ? { ...u, ...patch } : u));
+    this.updateLocation(index, { upstreams });
+  }
+
+  /** The last server removed, the location is back on the site's pool and its balancing. */
+  removeLocationUpstream(index: number, at: number): void {
+    const upstreams = (this.locations()[index].upstreams ?? []).filter((_, i) => i !== at);
+    this.updateLocation(index, upstreams.length ? { upstreams } : { upstreams, loadBalancingMethod: undefined });
+  }
+
+  addLocationHeader(index: number): void {
+    const location = this.locations()[index];
+    this.updateLocation(index, { requestHeaders: [...(location.requestHeaders ?? []), { name: '', value: '' }] });
+  }
+
+  updateLocationHeader(index: number, at: number, patch: Partial<{ name: string; value: string }>): void {
+    const requestHeaders = (this.locations()[index].requestHeaders ?? []).map((h, i) => (i === at ? { ...h, ...patch } : h));
+    this.updateLocation(index, { requestHeaders });
+  }
+
+  removeLocationHeader(index: number, at: number): void {
+    this.updateLocation(index, { requestHeaders: (this.locations()[index].requestHeaders ?? []).filter((_, i) => i !== at) });
+  }
+
+  /** The body limit is edited in MB; empty is the site's. */
+  bodyMb(location: LocationRow): number | null {
+    return location.maxBodySizeBytes == null ? null : Math.round(location.maxBodySizeBytes / 1048576);
+  }
+
+  setBodyMb(index: number, mb: number | null): void {
+    this.updateLocation(index, { maxBodySizeBytes: mb == null || (mb as unknown) === '' ? undefined : mb * 1048576 });
+  }
+
+  /** What a location changes, for its collapsed header. */
+  locationSummary(location: LocationRow): string {
+    return summariseLocation(location);
   }
 
   /** Mirrors the server's rule so the impossible combination cannot be submitted. */
@@ -275,7 +323,7 @@ export class SiteForm implements OnInit {
       maxBodySizeBytes: this.maxBodySizeMb() * 1048576,
       upstreams: this.upstreams().filter((upstream) => upstream.host.trim()),
       headers: this.headers().filter((header) => header.name.trim()),
-      locations: locationsToSave(this.locations()),
+      locations: locationsToSave(this.locations(), this.rootLocation()),
       protection: {
         mode: this.protectionMode(),
         basicUsers:
@@ -363,16 +411,63 @@ interface BasicUserRow {
   existing: boolean;
 }
 
+/** A location as the form edits it: open shows its routing and settings. */
+export type LocationRow = LocationRule & { open?: boolean };
+
 /**
  * What a site's locations are saved as. Always sent, so what the form shows is what is saved:
  * nothing for the root alone, otherwise the root first and then the paths entered. A row left
- * empty is dropped, and so is a root entered by hand, which is already there.
+ * empty is dropped, and so is a root entered by hand, which is already there. The root goes back
+ * as it was loaded, so settings an API client gave it survive an edit in the console.
  */
-export function locationsToSave(rows: LocationRule[]): LocationRule[] {
+export function locationsToSave(rows: LocationRow[], root: LocationRule | null = null): LocationRule[] {
   const extra = rows
-    .map((location) => ({ pathPattern: location.pathPattern.trim(), matchType: location.matchType }))
+    .map(toLocation)
     .filter((location) => location.pathPattern && !isRoot(location));
-  return extra.length ? [{ pathPattern: '/', matchType: 'PREFIX' }, ...extra] : [];
+  return extra.length ? [root ?? { pathPattern: '/', matchType: 'PREFIX' }, ...extra] : [];
+}
+
+/**
+ * One row as the API takes it: only what the location sets of its own, everything else left out
+ * so it is the site's. Empty servers and headers are dropped, and balancing goes only with a pool.
+ */
+function toLocation(row: LocationRow): LocationRule {
+  const upstreams = (row.upstreams ?? []).filter((u) => u.host.trim()).map((u) => ({ ...u, host: u.host.trim() }));
+  const requestHeaders = (row.requestHeaders ?? []).filter((h) => h.name.trim()).map((h) => ({ name: h.name.trim(), value: h.value }));
+  const location: LocationRule = { pathPattern: row.pathPattern.trim(), matchType: row.matchType };
+  if (row.publicAccess) location.publicAccess = true;
+  if (upstreams.length) {
+    location.upstreams = upstreams;
+    if (row.loadBalancingMethod) location.loadBalancingMethod = row.loadBalancingMethod;
+  }
+  for (const key of ['connectTimeoutSeconds', 'readTimeoutSeconds', 'sendTimeoutSeconds', 'maxBodySizeBytes'] as const) {
+    const value = row[key];
+    if (value != null && (value as unknown) !== '') location[key] = Number(value);
+  }
+  if (row.websocketEnabled != null) location.websocketEnabled = row.websocketEnabled;
+  if (requestHeaders.length) location.requestHeaders = requestHeaders;
+  return location;
+}
+
+/** Whether a location differs from its site in anything but its path. */
+export function hasOwnSettings(location: LocationRule): boolean {
+  return summariseLocation(location) !== '';
+}
+
+/** What a location changes from its site, in a few words; empty when nothing. */
+export function summariseLocation(location: LocationRule): string {
+  const parts: string[] = [];
+  if (location.publicAccess) parts.push('public');
+  const servers = (location.upstreams ?? []).filter((u) => u.host.trim()).length;
+  if (servers) parts.push(`own upstreams (${servers})`);
+  if (location.readTimeoutSeconds != null || location.connectTimeoutSeconds != null || location.sendTimeoutSeconds != null) {
+    parts.push('own timeouts');
+  }
+  if (location.maxBodySizeBytes != null) parts.push(`body ${Math.round(location.maxBodySizeBytes / 1048576)} MB`);
+  if (location.websocketEnabled != null) parts.push(location.websocketEnabled ? 'WebSocket' : 'no WebSocket');
+  const headers = (location.requestHeaders ?? []).filter((h) => h.name.trim()).length;
+  if (headers) parts.push(`${headers} header${headers > 1 ? 's' : ''}`);
+  return parts.join(' · ');
 }
 
 /** The root location: every path, by prefix. */

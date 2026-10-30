@@ -2,8 +2,9 @@ import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CertificatesApi, DeploymentsApi, GroupsApi, PermissionsApi, SitesApi } from '../../core/api/resources';
-import { Certificate, Deployment, DomainGroup, EffectivePermission, Preview, Site, SiteNotificationSettings, UpstreamCheck } from '../../core/api/models';
+import { Certificate, Deployment, DomainGroup, EffectivePermission, LocationRule, Preview, Site, SiteNotificationSettings, Upstream, UpstreamCheck } from '../../core/api/models';
 import { groupSource } from '../../core/api/suggestions';
+import { summariseLocation } from './site-form';
 import { Notifications } from '../../shared/notifications';
 import { PageHeader } from '../../shared/page';
 import { StatusPill } from '../../shared/status-pill';
@@ -112,6 +113,19 @@ export class SiteDetail implements OnInit {
   readonly ownLocations = computed(() =>
     (this.site()?.locations ?? []).filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX')),
   );
+
+  /** Paths reached without signing in on a protected site, for the Protection card. */
+  readonly publicPaths = computed(() =>
+    this.site()?.protection.mode === 'NONE' ? [] : this.ownLocations().filter((l) => l.publicAccess),
+  );
+
+  locationSummary(location: LocationRule): string {
+    return summariseLocation(location);
+  }
+
+  upstreamList(upstreams: Upstream[]): string {
+    return upstreams.map((u) => `${u.scheme}://${u.host}:${u.port}`).join(', ');
+  }
 
   /** Whether visitors hold sessions the gate issued: email and identity provider sign-in, and basic authentication on a login page. */
   readonly hasSessions = computed(() => {

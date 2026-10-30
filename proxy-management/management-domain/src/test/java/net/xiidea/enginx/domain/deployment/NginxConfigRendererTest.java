@@ -7,6 +7,10 @@ import net.xiidea.enginx.domain.proxy.ProxySite;
 import net.xiidea.enginx.domain.proxy.ProxyTimeouts;
 import net.xiidea.enginx.domain.proxy.UpstreamTarget;
 import net.xiidea.enginx.domain.shared.ValidationException;
+import net.xiidea.enginx.domain.proxy.LocationProxySettings;
+import net.xiidea.enginx.domain.proxy.LocationRule;
+import net.xiidea.enginx.domain.proxy.HeaderDirection;
+import net.xiidea.enginx.domain.proxy.ProxySiteHeader;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -438,6 +442,68 @@ class NginxConfigRendererTest {
             assertThat(first).isNotEqualTo(second);
             assertThat(first).matches("^[a-z0-9_]+$");
             assertThat(second).matches("^[a-z0-9_]+$");
+        }
+    }
+
+    @Nested
+    @DisplayName("locations that route")
+    class LocationRouting {
+
+        private final LocationRule api = new LocationRule("/api/", LocationMatchType.PREFIX, 1, false,
+                List.of(UpstreamTarget.of("http", "10.0.0.30", 9000), UpstreamTarget.of("http", "10.0.0.31", 9000)),
+                LoadBalancingMethod.LEAST_CONN,
+                new LocationProxySettings(null, 300, null, null, null,
+                        List.of(new ProxySiteHeader(HeaderDirection.REQUEST, "X-Service", "api"))));
+        private final LocationRule health = new LocationRule("/health", LocationMatchType.EXACT, 2, true,
+                List.of(), null, LocationProxySettings.none());
+        private final LocationRule socket = new LocationRule("/ws/", LocationMatchType.PREFIX, 3, false,
+                List.of(), null, new LocationProxySettings(null, null, null, null, true, List.of()));
+        private final LocationRule upload = new LocationRule("/upload/", LocationMatchType.PREFIX, 4, false,
+                List.of(), null, new LocationProxySettings(null, null, null, 52_428_800L, null, List.of()));
+
+        @Test
+        @DisplayName("each location proxies to its own pool with its own settings, and a public one skips the password")
+        void locationsRoute() {
+            ProxySite site = spec("private.example.com").ssl(true, false)
+                    .basicAuth(new BasicAuthUser("alice", SECRET_HASH))
+                    .locations(LocationRule.root(), api, health, socket, upload)
+                    .site(SITE_ID);
+            assertMatchesGolden("location-routing.conf", renderer.renderSitePreview(site, TEST_CERTIFICATE, MODERN));
+        }
+
+        @Test
+        @DisplayName("a public location of a gated site skips the gate, and clears the identity headers it would set")
+        void aPublicLocationSkipsTheGate() {
+            ProxySite site = spec("private.example.com").ssl(true, false)
+                    .emailOtp("*@example.com")
+                    .locations(LocationRule.root(), health)
+                    .site(SITE_ID);
+            String conf = renderer.renderSitePreview(site, TEST_CERTIFICATE, TEST_GATE, MODERN);
+            String block = conf.substring(conf.indexOf("location = /health {"));
+            block = block.substring(0, block.indexOf("\n    }\n"));
+            assertThat(block).contains("auth_request off;")
+                    .contains("proxy_set_header X-Enginx-Email    \"\";")
+                    .doesNotContain("$enginx_email");
+            // The root is still behind the gate.
+            assertThat(conf).contains("    auth_request /.enginx/auth/check;");
+        }
+
+        @Test
+        @DisplayName("public means nothing on a site that is not protected")
+        void publicOnAnOpenSiteRendersNothingExtra() {
+            ProxySite site = spec("open.example.com").locations(LocationRule.root(), health).site(SITE_ID);
+            assertThat(renderer.renderSitePreview(site, NO_CERTIFICATES, MODERN))
+                    .doesNotContain("auth_basic off").doesNotContain("auth_request off");
+        }
+
+        @Test
+        @DisplayName("a location's pool is named for the location, the same on every render")
+        void poolNamesAreStable() {
+            ProxySite site = spec("private.example.com").locations(LocationRule.root(), api).site(SITE_ID);
+            String first = NginxConfigRenderer.upstreamName(site, api);
+            assertThat(first).startsWith(NginxConfigRenderer.upstreamName(site) + "_").matches("^[a-z0-9_]+$");
+            assertThat(NginxConfigRenderer.upstreamName(site, api)).isEqualTo(first);
+            assertThat(NginxConfigRenderer.upstreamName(site, upload)).isNotEqualTo(first);
         }
     }
 

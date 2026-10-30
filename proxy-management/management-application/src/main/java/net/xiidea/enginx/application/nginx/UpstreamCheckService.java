@@ -60,8 +60,13 @@ public class UpstreamCheckService {
         NginxInstance instance = instances.findById(site.spec().nginxInstanceId())
                 .orElseThrow(() -> new NotFoundException("NGINX_INSTANCE", site.spec().nginxInstanceId()));
 
-        List<NginxAgentPort.UpstreamTarget> targets = site.spec().upstreams().stream()
+        // The site's pool and every location's own, each address once: a location routing to a
+        // dead pool is as broken as a site that does.
+        List<NginxAgentPort.UpstreamTarget> targets = java.util.stream.Stream.concat(
+                        site.spec().upstreams().stream(),
+                        site.spec().locations().stream().flatMap(location -> location.upstreams().stream()))
                 .map(UpstreamCheckService::toTarget)
+                .distinct()
                 .toList();
 
         return agent.checkUpstreams(instance, targets);

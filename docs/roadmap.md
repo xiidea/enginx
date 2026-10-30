@@ -272,13 +272,17 @@ Most sites only ever have the root location, which is why it has not shown.
 All four were done before 0.2.0. The API took the second option: an update that omits `locations`
 keeps the site's current ones, as with `protection`; an empty list still means the root location.
 
-## Phase 15 — Per-location routing — **planned**
+## Phase 15 — Per-location routing — **15.1–15.3 done for 0.2.2; 15.4 planned for a minor release**
 
 A site's locations exist in the data model, the API and, since 0.2.0, the console, but they do not
 yet route anything. A location is only a path and a match type; the renderer gives every location
 block the site's one upstream pool, headers, timeouts and protection. A site with `/` and `/api`
 proxies exactly as one with `/` alone. The console says so on the Locations card until this phase
 makes locations mean something.
+
+*Status: 15.1, 15.2 and 15.3 shipped in 0.2.2, all as optional fields, so no client had to change
+([locations](admin/managing-sites.md#locations), [public paths](admin/protected-sites.md#public-paths)).
+15.4 is a breaking change and waits for the next minor release.*
 
 **15.1 — An upstream per location.** A location may name its own upstream pool, so `/api` reaches
 the API servers and `/` the web servers, each with its own load balancing and health settings. Pools
@@ -315,8 +319,8 @@ each comes with an upgrade note ([versioning](releases.md#versioning-and-compati
 | 2 | Roadmap brought up to date | **Done for 0.2.2** |
 | 3 | Gate sign-ins in the audit trail | **Done for 0.2.2.** Batched through the signed relay ([protected sites](admin/protected-sites.md#the-audit-trail)) |
 | 4 | VERIFY on pull hosts | **Done for 0.2.2.** A `VERIFY_SITES` job after activation; agent 0.2.2 and later |
-| 5 | Public paths on a protected site (15.3) | `auth_request off` / `auth_basic off` per location; the probe and the bypass warning skip them |
-| 6 | An upstream and proxy settings per location (15.1, 15.2) | Locations that route |
+| 5 | Public paths on a protected site (15.3) | **Done for 0.2.2** ([public paths](admin/protected-sites.md#public-paths)) |
+| 6 | An upstream and proxy settings per location (15.1, 15.2) | **Done for 0.2.2** ([locations](admin/managing-sites.md#locations)) |
 | 7 | IP allow and deny lists, rate limits | Structured options rendered as plain directives; no gate |
 | 8 | A cloud DNS-01 provider | Cloudflare or Route 53 behind `DnsChallengePublisher`; needs a real account to verify |
 | 9 | Agent certificate rotation without re-registering (12.3) | |
@@ -340,7 +344,7 @@ each comes with an upgrade note ([versioning](releases.md#versioning-and-compati
 | 13 | Delivery | Improvement 7 | **Complete** |
 | 14 | Local accounts, optional OIDC | Keycloak as a hard dependency | **Complete** |
 | — | Site form drops custom locations | Known issue | **Fixed** (0.2.0) |
-| 15 | Per-location routing | Locations that route | Planned; 15.1–15.3 in 0.2.x, 15.4 in a minor |
+| 15 | Per-location routing | Locations that route | 15.1–15.3 done (0.2.2); 15.4 in a minor |
 
 Phase 11 depended on nothing and could have been pulled forward if the wildcard grants were already
 in use. Phase 14 was added after the roadmap was written, in response to the dependency rather than

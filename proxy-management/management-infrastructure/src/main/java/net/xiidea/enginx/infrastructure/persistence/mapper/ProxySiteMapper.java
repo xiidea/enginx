@@ -4,6 +4,8 @@ import net.xiidea.enginx.domain.proxy.AllowedEmail;
 import net.xiidea.enginx.domain.proxy.BasicAuthUser;
 import net.xiidea.enginx.domain.proxy.BasicLoginPage;
 import net.xiidea.enginx.domain.proxy.EmailOtpPolicy;
+import net.xiidea.enginx.domain.proxy.HeaderDirection;
+import net.xiidea.enginx.domain.proxy.LocationProxySettings;
 import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.OidcAccessPolicy;
 import net.xiidea.enginx.domain.proxy.OidcRole;
@@ -21,6 +23,8 @@ import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteBasicAuthUse
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteHeaderEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteLocationEntity;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteLocationHeaderEntity;
+import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteLocationUpstreamEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteOidcRoleEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteOidcUserEntity;
 import net.xiidea.enginx.infrastructure.persistence.entity.ProxySiteUpstreamEntity;
@@ -50,7 +54,7 @@ public class ProxySiteMapper {
 
         List<LocationRule> locations = entity.locations().stream()
                 .sorted(Comparator.comparingInt(ProxySiteLocationEntity::getSortOrder))
-                .map(l -> new LocationRule(l.getPathPattern(), l.getMatchType(), l.getSortOrder()))
+                .map(ProxySiteMapper::toLocation)
                 .toList();
 
         java.time.Duration sessionTtl = entity.getGateSessionTtlSeconds() == null ? null
@@ -195,8 +199,67 @@ public class ProxySiteMapper {
             } else {
                 row.update(order);
             }
+            LocationProxySettings settings = location.settings();
+            row.updateSettings(location.publicAccess(), location.loadBalancingMethod(), settings.connectSeconds(),
+                    settings.readSeconds(), settings.sendSeconds(), settings.maxBodySizeBytes(),
+                    settings.websocketEnabled());
+            mergeLocationUpstreams(row, location.upstreams());
+            mergeLocationHeaders(row, settings.requestHeaders());
         }
         entity.locations().removeAll(existing.values());
+    }
+
+    private static LocationRule toLocation(ProxySiteLocationEntity row) {
+        List<UpstreamTarget> upstreams = row.upstreams().stream()
+                .sorted(Comparator.comparingInt(ProxySiteLocationUpstreamEntity::getSortOrder))
+                .map(u -> new UpstreamTarget(u.getScheme(), u.getHost(), u.getPort(), u.getWeight(),
+                        u.getMaxFails(), u.getFailTimeoutSeconds(), u.isBackup()))
+                .toList();
+        List<ProxySiteHeader> headers = row.headers().stream()
+                .sorted(Comparator.comparing(ProxySiteLocationHeaderEntity::getHeaderName))
+                .map(h -> new ProxySiteHeader(HeaderDirection.REQUEST, h.getHeaderName(), h.getHeaderValue()))
+                .toList();
+        return new LocationRule(row.getPathPattern(), row.getMatchType(), row.getSortOrder(), row.isPublicAccess(),
+                upstreams, row.getLoadBalancingMethod(),
+                new LocationProxySettings(row.getConnectTimeoutSeconds(), row.getReadTimeoutSeconds(),
+                        row.getSendTimeoutSeconds(), row.getMaxBodySizeBytes(), row.getWebsocketEnabled(), headers));
+    }
+
+    /** By natural key, as the site's own upstreams are. */
+    private void mergeLocationUpstreams(ProxySiteLocationEntity location, List<UpstreamTarget> desired) {
+        Map<String, ProxySiteLocationUpstreamEntity> existing =
+                index(location.upstreams(), ProxySiteLocationUpstreamEntity::naturalKey);
+        for (int order = 0; order < desired.size(); order++) {
+            UpstreamTarget target = desired.get(order);
+            ProxySiteLocationUpstreamEntity row = existing.remove(
+                    ProxySiteUpstreamEntity.naturalKey(target.scheme(), target.host(), target.port()));
+            if (row == null) {
+                row = new ProxySiteLocationUpstreamEntity(UUID.randomUUID(), target.scheme(), target.host(),
+                        target.port(), target.weight(), target.maxFails(), target.failTimeoutSeconds(),
+                        target.backup(), order);
+                location.attach(row);
+                location.upstreams().add(row);
+            } else {
+                row.update(target.weight(), target.maxFails(), target.failTimeoutSeconds(), target.backup(), order);
+            }
+        }
+        location.upstreams().removeAll(existing.values());
+    }
+
+    private void mergeLocationHeaders(ProxySiteLocationEntity location, List<ProxySiteHeader> desired) {
+        Map<String, ProxySiteLocationHeaderEntity> existing =
+                index(location.headers(), ProxySiteLocationHeaderEntity::naturalKey);
+        for (ProxySiteHeader header : desired) {
+            ProxySiteLocationHeaderEntity row = existing.remove(header.name());
+            if (row == null) {
+                row = new ProxySiteLocationHeaderEntity(UUID.randomUUID(), header.name(), header.value());
+                location.attach(row);
+                location.headers().add(row);
+            } else {
+                row.update(header.value());
+            }
+        }
+        location.headers().removeAll(existing.values());
     }
 
     private void mergeBasicAuthUsers(ProxySiteEntity entity, List<BasicAuthUser> desired) {

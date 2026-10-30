@@ -268,6 +268,26 @@ for, or to a page saying their account may not enter.
 - **The redirect back keeps the port the browser used**, from `X-Forwarded-Host`, trusted only when
   it names the site itself.
 
+## Public paths
+
+A location of a protected site can be marked **public**: it is reached without signing in, for a
+webhook, a health check, or anything else a third party calls and cannot sign in to. Everything
+else on the site still asks. It applies to that `location` block alone, rendered as
+`auth_basic off;` or, for the two gate modes, `auth_request off;`. On a gated site a public path
+still clears `X-Enginx-Email` and `X-Enginx-User`, so the upstream can trust them wherever they
+arrive: nobody signed in there, so they are empty.
+
+- **Prefer an exact match, or end a prefix with `/`.** NGINX matches a prefix by characters, so a
+  public `/hooks` also opens `/hooks-admin`; `/hooks/` does not.
+- **The root cannot be public.** Making `/` public is turning protection off, which is the
+  protection setting's job. The platform's own paths (`/.enginx…`, `/.well-known/enginx…`) cannot
+  be public either.
+- **Verification still asks for protection.** VERIFY's probe requests `/` and a random path under
+  `/.enginx-verify-`, neither of which a public location can match, so a site whose public paths
+  are as intended still verifies, and one whose protection is lost elsewhere still fails.
+- The site page lists the public paths in the Protection card, beside who may sign in, and the
+  audit trail marks a location `[public]` when it changes.
+
 ## Verification
 
 After each deployment, VERIFY asks the host, as a visitor who has not signed in, for `/` and for a

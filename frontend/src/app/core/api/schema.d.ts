@@ -1690,8 +1690,42 @@ export interface components {
         };
         /** @description A location rule. */
         LocationDto: {
+            /**
+             * Format: int32
+             * @description Absent: the site's.
+             */
+            connectTimeoutSeconds?: number;
+            /** @description How its own pool is balanced. Only with upstreams of its own. */
+            loadBalancingMethod?: string;
             matchType: string;
+            /**
+             * Format: int64
+             * @description Absent: the site's.
+             */
+            maxBodySizeBytes?: number;
             pathPattern: string;
+            /** @description Reached without signing in on a protected site, for a webhook or a health endpoint. Not allowed for the root location. */
+            publicAccess?: boolean;
+            /**
+             * Format: int32
+             * @description Absent: the site's.
+             */
+            readTimeoutSeconds?: number;
+            /** @description Request headers added to the site's; one with the same name replaces the site's. */
+            requestHeaders?: components["schemas"]["LocationHeaderDto"][];
+            /**
+             * Format: int32
+             * @description Absent: the site's.
+             */
+            sendTimeoutSeconds?: number;
+            /** @description An upstream pool of its own. Absent or empty: the site's. */
+            upstreams?: components["schemas"]["UpstreamDto"][];
+            /** @description Absent: the site's. */
+            websocketEnabled?: boolean;
+        };
+        LocationHeaderDto: {
+            name: string;
+            value: string;
         };
         LoginRequest: {
             password: string;

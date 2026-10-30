@@ -29,10 +29,7 @@ final class ProxySiteSnapshot {
                 .toList());
         map.put("upstreamCount", site.spec().upstreams().size());
         // Recorded so a change to them is visible after the fact, as an unnoticed reset once was not.
-        map.put("locations", site.spec().locations().stream()
-                .map(l -> (l.matchType() == net.xiidea.enginx.domain.proxy.LocationMatchType.EXACT ? "= " : "")
-                        + l.pathPattern())
-                .toList());
+        map.put("locations", site.spec().locations().stream().map(ProxySiteSnapshot::describe).toList());
         // Who may sign in, never how: hashes stay out of the audit trail.
         map.put("protectionMode", site.spec().protection().mode().name());
         map.put("basicAuthUsers", site.spec().protection().basicUsers().stream()
@@ -57,6 +54,29 @@ final class ProxySiteSnapshot {
             map.put("sessionTtlSeconds", oidc.sessionTtl().toSeconds());
         }
         return Map.copyOf(map);
+    }
+
+    /**
+     * A location as a line: its path, then what makes it differ from the site, so opening one to
+     * the public or pointing it elsewhere reads as a change in the trail.
+     */
+    static String describe(net.xiidea.enginx.domain.proxy.LocationRule location) {
+        StringBuilder line = new StringBuilder();
+        if (location.matchType() == net.xiidea.enginx.domain.proxy.LocationMatchType.EXACT) {
+            line.append("= ");
+        }
+        line.append(location.pathPattern());
+        if (location.publicAccess()) {
+            line.append(" [public]");
+        }
+        if (location.hasOwnUpstreams()) {
+            line.append(" -> ").append(String.join(", ",
+                    location.upstreams().stream().map(ProxySiteSnapshot::describe).toList()));
+        }
+        if (!location.settings().isEmpty()) {
+            line.append(" [own proxy settings]");
+        }
+        return line.toString();
     }
 
     static String describe(UpstreamTarget upstream) {

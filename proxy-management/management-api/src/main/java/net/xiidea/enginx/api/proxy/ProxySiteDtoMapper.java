@@ -13,6 +13,7 @@ import net.xiidea.enginx.domain.proxy.AdminState;
 import net.xiidea.enginx.domain.proxy.HeaderDirection;
 import net.xiidea.enginx.domain.proxy.LoadBalancingMethod;
 import net.xiidea.enginx.domain.proxy.LocationMatchType;
+import net.xiidea.enginx.domain.proxy.LocationProxySettings;
 import net.xiidea.enginx.domain.proxy.LocationRule;
 import net.xiidea.enginx.domain.proxy.ProtectionMode;
 import net.xiidea.enginx.domain.proxy.ProxySite;
@@ -49,16 +50,7 @@ public class ProxySiteDtoMapper {
 
     public ProxySiteSpec toSpec(ProxySiteRequest request) {
         AtomicInteger order = new AtomicInteger();
-        List<UpstreamTarget> upstreams = request.upstreams().stream()
-                .map(u -> new UpstreamTarget(
-                        u.scheme(),
-                        u.host(),
-                        u.port(),
-                        u.weight() == null ? 1 : u.weight(),
-                        u.maxFails() == null ? 3 : u.maxFails(),
-                        u.failTimeoutSeconds() == null ? 10 : u.failTimeoutSeconds(),
-                        Boolean.TRUE.equals(u.backup())))
-                .toList();
+        List<UpstreamTarget> upstreams = toUpstreams(request.upstreams());
 
         List<ProxySiteHeader> headers = request.headers() == null ? List.of() : request.headers().stream()
                 .map(h -> new ProxySiteHeader(
@@ -73,7 +65,17 @@ public class ProxySiteDtoMapper {
                         l.matchType() == null
                                 ? LocationMatchType.PREFIX
                                 : parseEnum(LocationMatchType.class, l.matchType(), "locations.matchType"),
-                        order.getAndIncrement()))
+                        order.getAndIncrement(),
+                        Boolean.TRUE.equals(l.publicAccess()),
+                        toUpstreams(l.upstreams()),
+                        l.loadBalancingMethod() == null ? null
+                                : parseEnum(LoadBalancingMethod.class, l.loadBalancingMethod(), "locations.loadBalancingMethod"),
+                        new LocationProxySettings(l.connectTimeoutSeconds(), l.readTimeoutSeconds(),
+                                l.sendTimeoutSeconds(), l.maxBodySizeBytes(), l.websocketEnabled(),
+                                l.requestHeaders() == null ? List.of() : l.requestHeaders().stream()
+                                        .map(h -> new ProxySiteHeader(HeaderDirection.REQUEST, h.name(),
+                                                h.value() == null ? "" : h.value()))
+                                        .toList())))
                 .toList();
 
         return new ProxySiteSpec(
@@ -125,6 +127,39 @@ public class ProxySiteDtoMapper {
                 emailOtp, oidc, loginPage);
     }
 
+    private static List<UpstreamTarget> toUpstreams(List<UpstreamDto> dtos) {
+        return dtos == null ? List.of() : dtos.stream()
+                .map(u -> new UpstreamTarget(
+                        u.scheme(),
+                        u.host(),
+                        u.port(),
+                        u.weight() == null ? 1 : u.weight(),
+                        u.maxFails() == null ? 3 : u.maxFails(),
+                        u.failTimeoutSeconds() == null ? 10 : u.failTimeoutSeconds(),
+                        Boolean.TRUE.equals(u.backup())))
+                .toList();
+    }
+
+    private static List<UpstreamDto> toUpstreamDtos(List<UpstreamTarget> upstreams) {
+        return upstreams.stream()
+                .map(u -> new UpstreamDto(u.scheme(), u.host(), u.port(), u.weight(),
+                        u.maxFails(), u.failTimeoutSeconds(), u.backup()))
+                .toList();
+    }
+
+    /** What the location sets of its own; the rest is absent, meaning the site's. */
+    private static LocationDto toLocationDto(LocationRule location) {
+        LocationProxySettings settings = location.settings();
+        return new LocationDto(location.pathPattern(), location.matchType().name(), location.publicAccess(),
+                toUpstreamDtos(location.upstreams()),
+                location.loadBalancingMethod() == null ? null : location.loadBalancingMethod().name(),
+                settings.connectSeconds(), settings.readSeconds(), settings.sendSeconds(), settings.maxBodySizeBytes(),
+                settings.websocketEnabled(),
+                settings.requestHeaders().stream()
+                        .map(h -> new LocationDto.LocationHeaderDto(h.name(), h.value()))
+                        .toList());
+    }
+
     public AdminState toAdminState(Boolean enabled) {
         return Boolean.FALSE.equals(enabled) ? AdminState.DISABLED : AdminState.ENABLED;
     }
@@ -151,15 +186,12 @@ public class ProxySiteDtoMapper {
                 spec.timeouts().readSeconds(),
                 spec.timeouts().sendSeconds(),
                 spec.timeouts().maxBodySizeBytes(),
-                spec.upstreams().stream()
-                        .map(u -> new UpstreamDto(u.scheme(), u.host(), u.port(), u.weight(),
-                                u.maxFails(), u.failTimeoutSeconds(), u.backup()))
-                        .toList(),
+                toUpstreamDtos(spec.upstreams()),
                 spec.headers().stream()
                         .map(h -> new HeaderDto(h.direction().name(), h.name(), h.value()))
                         .toList(),
                 spec.locations().stream()
-                        .map(l -> new LocationDto(l.pathPattern(), l.matchType().name()))
+                        .map(ProxySiteDtoMapper::toLocationDto)
                         .toList(),
                 new ProtectionResponse(spec.protection().mode().name(),
                         spec.protection().basicUsers().stream()

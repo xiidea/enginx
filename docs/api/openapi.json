@@ -1396,17 +1396,79 @@
       "LocationDto": {
         "description": "A location rule.",
         "properties": {
+          "connectTimeoutSeconds": {
+            "description": "Absent: the site's.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "loadBalancingMethod": {
+            "description": "How its own pool is balanced. Only with upstreams of its own.",
+            "type": "string"
+          },
           "matchType": {
             "type": "string"
+          },
+          "maxBodySizeBytes": {
+            "description": "Absent: the site's.",
+            "format": "int64",
+            "type": "integer"
           },
           "pathPattern": {
             "minLength": 1,
             "type": "string"
+          },
+          "publicAccess": {
+            "description": "Reached without signing in on a protected site, for a webhook or a health endpoint. Not allowed for the root location.",
+            "type": "boolean"
+          },
+          "readTimeoutSeconds": {
+            "description": "Absent: the site's.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "requestHeaders": {
+            "description": "Request headers added to the site's; one with the same name replaces the site's.",
+            "items": {
+              "$ref": "#/components/schemas/LocationHeaderDto"
+            },
+            "type": "array"
+          },
+          "sendTimeoutSeconds": {
+            "description": "Absent: the site's.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "upstreams": {
+            "description": "An upstream pool of its own. Absent or empty: the site's.",
+            "items": {
+              "$ref": "#/components/schemas/UpstreamDto"
+            },
+            "type": "array"
+          },
+          "websocketEnabled": {
+            "description": "Absent: the site's.",
+            "type": "boolean"
           }
         },
         "required": [
           "matchType",
           "pathPattern"
+        ],
+        "type": "object"
+      },
+      "LocationHeaderDto": {
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
         ],
         "type": "object"
       },

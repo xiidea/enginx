@@ -402,29 +402,177 @@
     </div>
     <div class="card-body stack">
       <p class="hint">
-        Everything is proxied to the upstreams under <code>/</code>, which every site keeps. Paths
-        added here get their own <code>location</code> block, but for now each uses the site's same
-        upstreams, headers, timeouts and protection: they do not route anywhere different yet.
-        Per-path routing is planned.
+        Everything is proxied to the upstreams above under <code>/</code>, which every site keeps. A
+        path added here can route somewhere else, with upstreams of its own, and proxy differently:
+        anything left empty is the site's.
       </p>
-      @for (location of locations(); track $index) {
-        <div class="location-row">
-          <div class="field">
-            <label [for]="'loc-path-' + $index">Path</label>
-            <input [id]="'loc-path-' + $index" class="mono" placeholder="e.g. /api"
-              [ngModel]="location.pathPattern" (ngModelChange)="updateLocation($index, { pathPattern: $event })" />
+      @for (location of locations(); track $index; let li = $index) {
+        <div class="location">
+          <div class="location-row">
+            <div class="field">
+              <label [for]="'loc-path-' + li">Path</label>
+              <input [id]="'loc-path-' + li" class="mono" placeholder="e.g. /api/"
+                [ngModel]="location.pathPattern" (ngModelChange)="updateLocation(li, { pathPattern: $event })" />
+            </div>
+            <div class="field">
+              <label [for]="'loc-match-' + li">Match</label>
+              <select [id]="'loc-match-' + li" [ngModel]="location.matchType"
+                (ngModelChange)="updateLocation(li, { matchType: $event })">
+                <option value="PREFIX">Starts with</option>
+                <option value="EXACT">Exactly</option>
+              </select>
+            </div>
+            <div class="field">
+              <button class="btn btn-sm" type="button" [attr.aria-expanded]="!!location.open"
+                [attr.aria-controls]="'loc-settings-' + li"
+                (click)="updateLocation(li, { open: !location.open })">
+                {{ location.open ? 'Hide settings' : 'Settings' }}
+              </button>
+            </div>
+            <div class="field">
+              <button class="btn btn-sm" type="button" (click)="removeLocation(li)">Remove</button>
+            </div>
           </div>
-          <div class="field">
-            <label [for]="'loc-match-' + $index">Match</label>
-            <select [id]="'loc-match-' + $index" [ngModel]="location.matchType"
-              (ngModelChange)="updateLocation($index, { matchType: $event })">
-              <option value="PREFIX">Starts with</option>
-              <option value="EXACT">Exactly</option>
-            </select>
-          </div>
-          <div class="field">
-            <button class="btn btn-sm" type="button" (click)="removeLocation($index)">Remove</button>
-          </div>
+          @if (!location.open && locationSummary(location)) {
+            <p class="hint location-summary">{{ locationSummary(location) }}</p>
+          }
+
+          @if (location.open) {
+            <div class="location-settings stack" [id]="'loc-settings-' + li">
+              @if (protectionMode() !== 'NONE') {
+                <div class="field check-field">
+                  <input type="checkbox" [id]="'loc-public-' + li" [ngModel]="location.publicAccess ?? false"
+                    (ngModelChange)="updateLocation(li, { publicAccess: $event })" />
+                  <label [for]="'loc-public-' + li">Public: reached without signing in</label>
+                </div>
+                <p class="hint">
+                  For a webhook or a health check a third party calls. Everything else on the site
+                  still asks visitors to sign in.
+                  @if (location.matchType === 'PREFIX') {
+                    Every path that starts with this one is public too, so end it with
+                    <code>/</code>: <code>/hooks/</code>, not <code>/hooks</code>, which also opens
+                    <code>/hooks-admin</code>.
+                  }
+                </p>
+              }
+
+              <h3 class="sub">Upstreams</h3>
+              @if (!(location.upstreams ?? []).length) {
+                <p class="hint">The site's upstreams.</p>
+              }
+              @for (upstream of location.upstreams ?? []; track $index; let at = $index) {
+                <div class="upstream location-upstream">
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-up-scheme-' + at">Scheme</label>
+                    <select [id]="'loc-' + li + '-up-scheme-' + at" [ngModel]="upstream.scheme"
+                      (ngModelChange)="updateLocationUpstream(li, at, { scheme: $event })">
+                      <option value="http">http</option>
+                      <option value="https">https</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-up-host-' + at">Host</label>
+                    <input [id]="'loc-' + li + '-up-host-' + at" class="mono" placeholder="10.10.10.30"
+                      [ngModel]="upstream.host" (ngModelChange)="updateLocationUpstream(li, at, { host: $event })" />
+                  </div>
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-up-port-' + at">Port</label>
+                    <input [id]="'loc-' + li + '-up-port-' + at" type="number" class="mono" placeholder="8080"
+                      [ngModel]="upstream.port" (ngModelChange)="updateLocationUpstream(li, at, { port: +$event })" />
+                  </div>
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-up-weight-' + at">Weight</label>
+                    <input [id]="'loc-' + li + '-up-weight-' + at" type="number" min="1" max="100"
+                      [ngModel]="upstream.weight ?? 1" (ngModelChange)="updateLocationUpstream(li, at, { weight: +$event })" />
+                  </div>
+                  <div class="field check-field">
+                    <input type="checkbox" [id]="'loc-' + li + '-backup-' + at" [ngModel]="upstream.backup ?? false"
+                      (ngModelChange)="updateLocationUpstream(li, at, { backup: $event })" />
+                    <label [for]="'loc-' + li + '-backup-' + at">Backup</label>
+                  </div>
+                  <div class="field">
+                    <button class="btn btn-sm" type="button" (click)="removeLocationUpstream(li, at)">Remove</button>
+                  </div>
+                </div>
+              }
+              <div class="location-actions">
+                <button class="btn btn-sm" type="button" (click)="addLocationUpstream(li)">
+                  {{ (location.upstreams ?? []).length ? 'Add upstream' : 'Use upstreams of its own' }}
+                </button>
+                @if ((location.upstreams ?? []).length) {
+                  <div class="field inline-field">
+                    <label [for]="'loc-lb-' + li">Load balancing</label>
+                    <select [id]="'loc-lb-' + li" [ngModel]="location.loadBalancingMethod ?? ''"
+                      (ngModelChange)="updateLocation(li, { loadBalancingMethod: $event || undefined })">
+                      <option value="">Round robin</option>
+                      <option value="LEAST_CONN">Least connections</option>
+                      <option value="IP_HASH">IP hash</option>
+                    </select>
+                  </div>
+                }
+              </div>
+
+              <h3 class="sub">Proxying</h3>
+              <div class="location-proxy">
+                <div class="field">
+                  <label [for]="'loc-connect-' + li">Connect timeout (s)</label>
+                  <input [id]="'loc-connect-' + li" type="number" min="1" max="3600"
+                    [placeholder]="'site: ' + connectTimeoutSeconds()"
+                    [ngModel]="location.connectTimeoutSeconds" (ngModelChange)="updateLocation(li, { connectTimeoutSeconds: $event })" />
+                </div>
+                <div class="field">
+                  <label [for]="'loc-read-' + li">Read timeout (s)</label>
+                  <input [id]="'loc-read-' + li" type="number" min="1" max="3600"
+                    [placeholder]="'site: ' + readTimeoutSeconds()"
+                    [ngModel]="location.readTimeoutSeconds" (ngModelChange)="updateLocation(li, { readTimeoutSeconds: $event })" />
+                </div>
+                <div class="field">
+                  <label [for]="'loc-send-' + li">Send timeout (s)</label>
+                  <input [id]="'loc-send-' + li" type="number" min="1" max="3600"
+                    [placeholder]="'site: ' + sendTimeoutSeconds()"
+                    [ngModel]="location.sendTimeoutSeconds" (ngModelChange)="updateLocation(li, { sendTimeoutSeconds: $event })" />
+                </div>
+                <div class="field">
+                  <label [for]="'loc-body-' + li">Max body (MB)</label>
+                  <input [id]="'loc-body-' + li" type="number" min="0"
+                    [placeholder]="'site: ' + maxBodySizeMb()"
+                    [ngModel]="bodyMb(location)" (ngModelChange)="setBodyMb(li, $event)" />
+                </div>
+                <div class="field">
+                  <label [for]="'loc-ws-' + li">WebSocket</label>
+                  <select [id]="'loc-ws-' + li" [ngModel]="location.websocketEnabled ?? null"
+                    (ngModelChange)="updateLocation(li, { websocketEnabled: $event ?? undefined })">
+                    <option [ngValue]="null">Site's ({{ websocketEnabled() ? 'on' : 'off' }})</option>
+                    <option [ngValue]="true">On</option>
+                    <option [ngValue]="false">Off</option>
+                  </select>
+                </div>
+              </div>
+
+              <h3 class="sub">Request headers</h3>
+              @for (header of location.requestHeaders ?? []; track $index; let at = $index) {
+                <div class="location-header">
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-h-name-' + at">Name</label>
+                    <input [id]="'loc-' + li + '-h-name-' + at" class="mono" placeholder="X-Service"
+                      [ngModel]="header.name" (ngModelChange)="updateLocationHeader(li, at, { name: $event })" />
+                  </div>
+                  <div class="field">
+                    <label [for]="'loc-' + li + '-h-value-' + at">Value</label>
+                    <input [id]="'loc-' + li + '-h-value-' + at" class="mono"
+                      [ngModel]="header.value" (ngModelChange)="updateLocationHeader(li, at, { value: $event })" />
+                  </div>
+                  <div class="field">
+                    <button class="btn btn-sm" type="button" (click)="removeLocationHeader(li, at)">Remove</button>
+                  </div>
+                </div>
+              }
+              <p class="hint">Sent upstream as well as the site's; one with the same name replaces the site's here.</p>
+              <div>
+                <button class="btn btn-sm" type="button" (click)="addLocationHeader(li)">Add header</button>
+              </div>
+            </div>
+          }
         </div>
       }
       @if (locations().length) {

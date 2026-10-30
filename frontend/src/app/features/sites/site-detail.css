@@ -188,3 +188,5 @@
 .chips button:hover { color: var(--danger); }
 
 .save-row { margin-top: 1rem; align-items: center; gap: 0.75rem; }
+
+.public-paths { margin-top: 0.6rem; }

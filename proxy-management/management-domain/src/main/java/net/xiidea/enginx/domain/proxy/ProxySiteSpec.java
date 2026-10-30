@@ -122,13 +122,22 @@ public record ProxySiteSpec(
         }
         if (protection.usesGate()) {
             for (ProxySiteHeader header : headers) {
-                if (header.direction() == HeaderDirection.REQUEST
-                        && (header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)
-                            || header.name().equalsIgnoreCase(GATE_USER_HEADER))) {
-                    throw new ValidationException("headers",
-                            header.name() + " is set by the gate on a protected site and cannot be overridden");
+                requireNotGateHeader(header, "headers");
+            }
+            for (LocationRule location : locations) {
+                for (ProxySiteHeader header : location.settings().requestHeaders()) {
+                    requireNotGateHeader(header, "locations.requestHeaders");
                 }
             }
+        }
+    }
+
+    private static void requireNotGateHeader(ProxySiteHeader header, String field) {
+        if (header.direction() == HeaderDirection.REQUEST
+                && (header.name().equalsIgnoreCase(GATE_EMAIL_HEADER)
+                    || header.name().equalsIgnoreCase(GATE_USER_HEADER))) {
+            throw new ValidationException(field,
+                    header.name() + " is set by the gate on a protected site and cannot be overridden");
         }
     }
 

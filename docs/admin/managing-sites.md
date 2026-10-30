@@ -79,6 +79,42 @@ attempts and delay the alert. Transport failures back off 5s, 30s, 2m, 10m, 30m 
 release when the *reload* fails — a refusal to leave the host broken, not a decision to change
 version. `nginx -t` cannot catch a port that will not bind, because it does not bind sockets.
 
+## Locations
+
+Every site proxies `/` to its upstreams. A location adds a path, matched by prefix or exactly, and
+gets its own `location` block. Since 0.2.2 it can also proxy differently. Anything it leaves unset
+is the site's, so a location with only a path proxies exactly as the site does.
+
+| Setting | Unset means |
+|---|---|
+| Upstreams, and their load balancing | the site's pool; with servers of its own, an `upstream` block of its own |
+| Connect, read and send timeouts | the site's |
+| Maximum body size | the site's |
+| WebSocket upgrade | the site's |
+| Request headers | the site's; a location's header is added, and one with the same name replaces the site's for that path |
+| Public | asks visitors to sign in, as the rest of a protected site does ([public paths](protected-sites.md#public-paths)) |
+
+Response headers, TLS and protection itself stay site-wide. A location's pool is named for the site
+and the location, `enginx_<domain>_<digest>_<digest>`, so it stays the same while the location does.
+**Check upstreams** probes every location's servers as well as the site's.
+
+In the API, a location carries these as optional fields of `LocationDto`:
+
+```json
+{
+  "pathPattern": "/api/",
+  "matchType": "PREFIX",
+  "upstreams": [{ "scheme": "http", "host": "10.0.0.30", "port": 9000 }],
+  "loadBalancingMethod": "LEAST_CONN",
+  "readTimeoutSeconds": 300,
+  "requestHeaders": [{ "name": "X-Service", "value": "api" }]
+}
+```
+
+A client that sends only `pathPattern` and `matchType`, as every client did before, gets what it
+always got. Sending a location without a field it had removes that setting, as for every other
+field of a site.
+
 ## Lifecycle
 
 A site is served when its operator has enabled it **and** its activation window is open. Expiry

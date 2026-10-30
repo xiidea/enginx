@@ -26,6 +26,16 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   sent the job and keep the old "skipped" note.
 - **The job a pull host collects is in the published API spec**, as `AgentJobAssignment`. It shared a
   schema name with the console's job list and was hidden behind it. Nothing changes on the wire.
+- **Locations route.** A location can have upstreams of its own, with their own load balancing,
+  and its own timeouts, body size limit, WebSocket upgrade and request headers; whatever it leaves
+  unset is the site's. The Locations card edits them, collapsed to a one-line summary per location,
+  and **Check upstreams** probes every location's servers
+  ([managing sites](docs/admin/managing-sites.md#locations)). In the API these are optional fields
+  of a location: a client that sends only a path and a match type gets what it always got.
+- **Public paths on a protected site.** A location can be reached without signing in, for a
+  webhook or a health check, while the rest of the site still asks. Not for the root, and never a
+  path VERIFY probes, so verification keeps checking protection
+  ([public paths](docs/admin/protected-sites.md#public-paths)).
 - **Patch releases may add features.** Non-breaking features now ship in 0.2.x; breaking changes
   wait for a minor release with an upgrade note ([versioning](docs/releases.md#versioning-and-compatibility)).
   The roadmap lists what is open, in that order ([backlog](docs/roadmap.md#backlog)).

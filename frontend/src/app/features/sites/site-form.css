@@ -67,7 +67,48 @@
 .upstream { grid-template-columns: 7rem minmax(8rem, 2fr) 6rem 6rem auto auto; }
 .header-row { grid-template-columns: 10rem minmax(8rem, 1fr) minmax(8rem, 1.4fr) auto; }
 .user-row { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) auto; }
-.location-row { grid-template-columns: minmax(8rem, 2fr) 10rem auto; }
+.location-row { grid-template-columns: minmax(8rem, 2fr) 10rem auto auto; }
+.location-header { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1.4fr) auto; }
+.location-proxy {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+
+/* A location and, when open, everything it sets: one bordered block, the settings indented under
+   the path so it is clear whose they are. */
+.location {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.location > .location-row { border: 0; background: none; }
+.location-summary { margin: -0.4rem 0.75rem 0.6rem; }
+.location-settings {
+  padding: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+.location-settings .sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+.location-upstream,
+.location-header {
+  display: grid;
+  gap: 0.5rem 0.75rem;
+  align-items: end;
+}
+.location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+.inline-field { min-width: 12rem; }
 
 /*
  * Narrower: two controls per line, flowing in order, so nothing spans and no cell is left empty
@@ -88,6 +129,8 @@
   .header-row,
   .user-row,
   .location-row { grid-template-columns: 1fr; }
+  .location-proxy,
+  .location-header { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Stacked, the button is the last thing in a tall block; full width makes it a clear target. */
   .field > .btn { align-self: stretch; }
 }
