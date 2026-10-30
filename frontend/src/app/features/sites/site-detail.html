@@ -20,345 +20,394 @@
     </p>
   }
 
-  <div class="cols">
-    <div class="stack">
-      <section class="card">
-        <div class="card-head"><h2>Status</h2><app-status-pill [status]="site.status" /></div>
-        <div class="card-body facts">
-          <div><span class="key">Enabled</span><span>{{ site.enabled ? 'Yes' : 'No' }}</span></div>
-          <div>
-            <span class="key">Active from</span>
-            <span [title]="site.activeFrom ?? ''">
-              {{ site.activeFrom ? (site.activeFrom | datetime) : 'immediately' }}
-            </span>
-          </div>
-          <div>
-            <span class="key">Expires</span>
-            <span [title]="site.expiresAt ?? ''">
-              @if (site.expiresAt) {
-                {{ site.expiresAt | datetime }} <span class="muted">({{ site.secondsUntilExpiry | relative }})</span>
-              } @else {
-                never
-              }
-            </span>
-          </div>
-          <div><span class="key">Your access</span><span class="mono">{{ permission()?.level ?? '—' }}</span></div>
-          <div><span class="key">Updated by</span><span>{{ site.updatedBy }}</span></div>
-          <div><span class="key">Version</span><span class="mono num">{{ site.version }}</span></div>
-        </div>
-
-        @if (canOperate()) {
-          <div class="card-body expiry">
-            <label for="renew">Extend expiry</label>
-            <div class="row">
-              <input id="renew" type="datetime-local" [ngModel]="renewUntil()" (ngModelChange)="renewUntil.set($event)" />
-              <button class="btn" type="button" [disabled]="!renewUntil()" (click)="renew()">Renew</button>
-              @if (site.expiresAt) {
-                <button class="btn" type="button" (click)="removeExpiry()">Remove expiry</button>
-              }
-            </div>
-          </div>
-        }
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Routing</h2>
-          <!--
-            The probe runs on the NGINX host, so it answers the question that matters: can the
-            machine that will proxy this actually open a connection? It is advisory — NGINX
-            resolves upstream names once at load time — so it is offered, never run automatically.
-          -->
-          <button class="btn btn-sm" type="button" (click)="checkUpstreams()" [disabled]="checkingUpstreams()">
-            {{ checkingUpstreams() ? 'Checking…' : 'Check upstreams' }}
-          </button>
-        </div>
-
-        @if (upstreamChecks(); as checks) {
-          <div class="card-body">
-            <ul class="checks">
-              @for (check of checks; track check.target) {
-                <li [class.bad]="!check.reachable">
-                  <span class="mono">{{ check.target }}</span>
-                  @if (check.reachable) {
-                    <span class="ok-text small">accepted a connection</span>
-                  } @else {
-                    <span class="bad-text small">{{ check.error || 'unreachable' }}</span>
-                  }
-                </li>
-              }
-            </ul>
-            <p class="muted small note">
-              Checked from the NGINX host just now. NGINX resolves upstream names when the
-              configuration loads, so this is a guide rather than a guarantee.
-            </p>
-          </div>
-        }
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Upstream</th><th>Weight</th><th>Health</th><th>Role</th></tr></thead>
-            <tbody>
-              @for (upstream of site.upstreams; track upstream.host + ':' + upstream.port) {
-                <tr>
-                  <td class="primary mono">{{ upstream.scheme }}://{{ upstream.host }}:{{ upstream.port }}</td>
-                  <td class="num">{{ upstream.weight ?? 1 }}</td>
-                  <td class="small mono">{{ upstream.maxFails ?? 3 }} fails / {{ upstream.failTimeoutSeconds ?? 10 }}s</td>
-                  <td class="small">{{ upstream.backup ? 'backup' : 'primary' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        <div class="card-body facts">
-          <div><span class="key">Balancing</span><span class="mono">{{ site.loadBalancingMethod }}</span></div>
-          <div><span class="key">WebSocket</span><span>{{ site.websocketEnabled ? 'enabled' : 'disabled' }}</span></div>
-          <div><span class="key">Max body</span><span class="mono">{{ site.maxBodySizeBytes | bytes }}</span></div>
-          <div>
-            <span class="key">Timeouts</span>
-            <span class="mono small">
-              connect {{ site.connectTimeoutSeconds }}s · read {{ site.readTimeoutSeconds }}s ·
-              send {{ site.sendTimeoutSeconds }}s
-            </span>
-          </div>
-        </div>
-      </section>
-
-      @if (site.headers.length || site.locations.length) {
-        <section class="card">
-          <div class="card-head"><h2>Headers and locations</h2></div>
-          <div class="card-body stack-sm">
-            @for (header of site.headers; track header.direction + header.name) {
-              <div class="mono small">
-                <span class="muted">{{ header.direction }}</span> {{ header.name }}: "{{ header.value }}"
-              </div>
-            }
-            @for (location of site.locations; track location.pathPattern) {
-              <div class="mono small">
-                <span class="muted">{{ location.matchType }}</span> {{ location.pathPattern }}
-              </div>
-            }
-          </div>
-        </section>
+  <!-- The four answers someone opening a site wants first, each a way into the tab that explains it. -->
+  <div class="summary">
+    <button type="button" class="tile" (click)="select('overview')">
+      <span class="key">Status</span>
+      <app-status-pill [status]="site.status" />
+      <span class="muted small">{{ site.expiresAt ? 'expires ' + (site.secondsUntilExpiry | relative) : 'no expiry' }}</span>
+    </button>
+    <button type="button" class="tile" (click)="select('overview')">
+      <span class="key">TLS</span>
+      @if (!site.sslEnabled) {
+        <strong>Plain HTTP</strong><span class="muted small">no certificate</span>
+      } @else if (certificate(); as certificate) {
+        <app-status-pill [status]="certificate.status" />
+        <span class="muted small">until {{ certificate.expiresAt | datetime }}</span>
+      } @else {
+        <strong class="danger">Unreadable</strong><span class="muted small">certificate missing</span>
       }
-    </div>
+    </button>
+    <button type="button" class="tile" (click)="select('access')">
+      <span class="key">Protection</span>
+      <strong>{{ protectionLabel() }}</strong>
+      <span class="muted small">{{ protectionDetail() }}</span>
+    </button>
+    <button type="button" class="tile" (click)="select('deployments')">
+      <span class="key">Last deployment</span>
+      @if (deployments()[0]; as last) {
+        <app-status-pill [status]="last.status" [title]="last.errorMessage" />
+        <span class="muted small">{{ last.createdAt | datetime }}</span>
+      } @else {
+        <strong>Never</strong><span class="muted small">not deployed yet</span>
+      }
+    </button>
+  </div>
 
-    <div class="stack">
-      <section class="card">
-        <div class="card-head"><h2>Notifications</h2></div>
-        <div class="card-body">
-          @if (!notificationSettings()) {
-            <p class="muted small">Could not load the notification settings.</p>
-          } @else {
-            <label for="notify-expiry" class="toggle">
-              <input id="notify-expiry" type="checkbox" [checked]="expiryNotifications()"
-                (change)="expiryNotifications.set(!expiryNotifications())" />
-              <span>
-                <strong>Warn before this site expires</strong>
-                <span class="muted small">
+  <div class="tabs" role="tablist" aria-label="Site sections" (keydown)="onTabKey($event)">
+    @for (t of tabs; track t.id) {
+      <button type="button" role="tab" [id]="'tab-' + t.id" [attr.aria-selected]="activeTab() === t.id"
+        [attr.aria-controls]="'panel-' + t.id" [tabindex]="activeTab() === t.id ? 0 : -1"
+        [class.active]="activeTab() === t.id" (click)="select(t.id)">{{ t.label }}</button>
+    }
+  </div>
+
+  @switch (activeTab()) {
+    @case ('overview') {
+      <div class="panel stack" role="tabpanel" id="panel-overview" aria-labelledby="tab-overview">
+        <div class="pair">
+          <section class="card">
+            <div class="card-head"><h2>Status</h2><app-status-pill [status]="site.status" /></div>
+            <div class="card-body facts">
+              <div><span class="key">Enabled</span><span>{{ site.enabled ? 'Yes' : 'No' }}</span></div>
+              <div>
+                <span class="key">Active from</span>
+                <span [title]="site.activeFrom ?? ''">
+                  {{ site.activeFrom ? (site.activeFrom | datetime) : 'immediately' }}
+                </span>
+              </div>
+              <div>
+                <span class="key">Expires</span>
+                <span [title]="site.expiresAt ?? ''">
                   @if (site.expiresAt) {
-                    Sent at each configured threshold before {{ site.expiresAt | datetime }}, and
-                    again when it comes off the air.
+                    {{ site.expiresAt | datetime }} <span class="muted">({{ site.secondsUntilExpiry | relative }})</span>
                   } @else {
-                    This site has no expiry, so nothing is sent until one is set.
+                    never
                   }
                 </span>
-              </span>
-            </label>
-
-            <div class="subscribers">
-              <label for="notify-add">Also tell these addresses</label>
-              <!-- "Also", not "instead": the platform's operator addresses are told regardless,
-                   and a list here that silently replaced them would quietly cut off whoever
-                   configured the estate. -->
-              <p class="hint">
-                In addition to the platform's operator addresses, which are always told.
-              </p>
-
-              @if (subscribers().length) {
-                <ul class="chips">
-                  @for (address of subscribers(); track address) {
-                    <li>
-                      <span class="mono">{{ address }}</span>
-                      <button type="button" (click)="removeSubscriber(address)"
-                        [attr.aria-label]="'Remove ' + address">×</button>
-                    </li>
-                  }
-                </ul>
-              }
-
-              <div class="row">
-                <input id="notify-add" type="email" placeholder="team@example.com"
-                  [ngModel]="newSubscriber()" (ngModelChange)="newSubscriber.set($event)"
-                  (keydown.enter)="addSubscriber()" />
-                <button class="btn btn-sm" type="button" [disabled]="!newSubscriber().trim()"
-                  (click)="addSubscriber()">Add</button>
               </div>
+              <div><span class="key">Your access</span><span class="mono">{{ permission()?.level ?? '—' }}</span></div>
+              <div><span class="key">Updated by</span><span>{{ site.updatedBy }}</span></div>
+              <div><span class="key">Version</span><span class="mono num">{{ site.version }}</span></div>
             </div>
 
-            @if (notificationsChanged()) {
-              <div class="row save-row">
-                <button class="btn btn-primary btn-sm" type="button"
-                  [disabled]="savingNotifications()" (click)="saveNotifications()">
-                  {{ savingNotifications() ? 'Saving…' : 'Save' }}
-                </button>
-                <span class="muted small">Changing this never redeploys the site.</span>
+            @if (canOperate()) {
+              <div class="card-body expiry">
+                <label for="renew">Extend expiry</label>
+                <div class="row">
+                  <input id="renew" type="datetime-local" [ngModel]="renewUntil()" (ngModelChange)="renewUntil.set($event)" />
+                  <button class="btn" type="button" [disabled]="!renewUntil()" (click)="renew()">Renew</button>
+                  @if (site.expiresAt) {
+                    <button class="btn" type="button" (click)="removeExpiry()">Remove expiry</button>
+                  }
+                </div>
               </div>
             }
-
-            @if (notificationSettings(); as saved) {
-              @if (saved.updatedBy) {
-                <p class="hint">Last changed by {{ saved.updatedBy }}, {{ saved.updatedAt | datetime }}.</p>
+          </section>
+          <section class="card">
+            <div class="card-head"><h2>TLS</h2></div>
+            <div class="card-body">
+              @if (!site.sslEnabled) {
+                <p class="muted small">
+                  This site serves plain HTTP. Attach a certificate to enable TLS.
+                </p>
+              } @else if (certificate(); as certificate) {
+                <div class="facts">
+                  <div><span class="key">Certificate</span><a [routerLink]="'/certificates'">{{ certificate.name }}</a></div>
+                  <div><span class="key">Status</span><app-status-pill [status]="certificate.status" /></div>
+                  <div><span class="key">Expires</span><span>{{ certificate.expiresAt | datetime }}</span></div>
+                  <div><span class="key">Renewal</span><span>{{ certificate.autoRenew ? 'automatic' : 'manual' }}</span></div>
+                  <div><span class="key">Redirect</span><span>{{ site.forceHttps ? 'HTTP → HTTPS' : 'none · serves HTTP and HTTPS' }}</span></div>
+                  <div><span class="key">HSTS</span><span>{{ site.hstsEnabled ? 'enabled' : 'disabled' }}</span></div>
+                </div>
+              } @else {
+                <p class="small danger">
+                  SSL is enabled but the certificate could not be read. The site will fail to render
+                  until this is resolved.
+                </p>
               }
-            }
-          }
+            </div>
+          </section>
         </div>
-      </section>
+        <section class="card">
+          <div class="card-head">
+            <h2>Routing</h2>
+            <!--
+              The probe runs on the NGINX host, so it answers the question that matters: can the
+              machine that will proxy this actually open a connection? It is advisory — NGINX
+              resolves upstream names once at load time — so it is offered, never run automatically.
+            -->
+            <button class="btn btn-sm" type="button" (click)="checkUpstreams()" [disabled]="checkingUpstreams()">
+              {{ checkingUpstreams() ? 'Checking…' : 'Check upstreams' }}
+            </button>
+          </div>
 
-      <section class="card">
-        <div class="card-head"><h2>Domain groups</h2></div>
-        <div class="card-body">
-          <!-- Here because a grant made over a group reaches this site: "which groups is it in"
-               is the same question as "who else can reach it". -->
-          @if (groupsLoading()) {
-            <p class="muted small">Loading…</p>
-          } @else if (!groups().length) {
-            <p class="muted small">
-              Not in any group. Groups let one grant cover a set of sites that changes over time.
-            </p>
-          } @else {
-            <ul class="group-list">
-              @for (group of groups(); track group.id) {
-                <li>
-                  <span>
-                    <span class="mono">{{ group.path }}</span>
-                    @if (group.yourLevel) {
-                      <span class="muted small"> · you hold {{ group.yourLevel }}</span>
+          @if (upstreamChecks(); as checks) {
+            <div class="card-body">
+              <ul class="checks">
+                @for (check of checks; track check.target) {
+                  <li [class.bad]="!check.reachable">
+                    <span class="mono">{{ check.target }}</span>
+                    @if (check.reachable) {
+                      <span class="ok-text small">accepted a connection</span>
+                    } @else {
+                      <span class="bad-text small">{{ check.error || 'unreachable' }}</span>
                     }
-                  </span>
-                  @if (canManage() && group.yourLevel && group.yourLevel !== 'READ' && group.yourLevel !== 'OPERATE') {
-                    <button class="btn btn-sm" type="button" (click)="removeFromGroup(group)">Remove</button>
-                  }
-                </li>
-              }
-            </ul>
+                  </li>
+                }
+              </ul>
+              <p class="muted small note">
+                Checked from the NGINX host just now. NGINX resolves upstream names when the
+                configuration loads, so this is a guide rather than a guarantee.
+              </p>
+            </div>
           }
 
-          @if (canManage()) {
-            <div class="add-group">
-              <app-typeahead
-                inputId="site-add-group"
-                placeholder="Search groups by path"
-                [noun]="['group', 'groups']"
-                [source]="groupChoices"
-                [value]="groupToAdd()"
-                (selected)="groupToAdd.set($event?.ref ?? '')" />
-              <button class="btn btn-primary btn-sm" type="button"
-                [disabled]="addingGroup() || !groupToAdd()" (click)="addToGroup()">
-                {{ addingGroup() ? 'Adding…' : 'Add to group' }}
-              </button>
-            </div>
-            <!-- The server requires MANAGE on the group as well as this site, so this can fail
-                 for a group the reader can see but does not administer. -->
-            <p class="hint">You also need MANAGE on the group.</p>
-          }
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>TLS</h2></div>
-        <div class="card-body">
-          @if (!site.sslEnabled) {
-            <p class="muted small">
-              This site serves plain HTTP. Attach a certificate to enable TLS.
-            </p>
-          } @else if (certificate(); as certificate) {
-            <div class="facts">
-              <div><span class="key">Certificate</span><a [routerLink]="'/certificates'">{{ certificate.name }}</a></div>
-              <div><span class="key">Status</span><app-status-pill [status]="certificate.status" /></div>
-              <div><span class="key">Expires</span><span>{{ certificate.expiresAt | datetime }}</span></div>
-              <div><span class="key">Renewal</span><span>{{ certificate.autoRenew ? 'automatic' : 'manual' }}</span></div>
-              <div><span class="key">Redirect</span><span>{{ site.forceHttps ? 'HTTP → HTTPS' : 'none · serves HTTP and HTTPS' }}</span></div>
-              <div><span class="key">HSTS</span><span>{{ site.hstsEnabled ? 'enabled' : 'disabled' }}</span></div>
-            </div>
-          } @else {
-            <p class="small danger">
-              SSL is enabled but the certificate could not be read. The site will fail to render
-              until this is resolved.
-            </p>
-          }
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>Protection</h2></div>
-        <div class="card-body">
-          @if (site.protection.mode === 'BASIC') {
-            <div class="facts">
-              <div><span class="key">Access</span><span>basic authentication</span></div>
-              <div>
-                <span class="key">Sign-in</span>
-                <span>{{ site.protection.basicLoginPage ? 'login page, lasts ' + sessionLength(site.protection.basicLoginPage.sessionTtlSeconds ?? 86400) : "browser's prompt" }}</span>
-              </div>
-              <div>
-                <span class="key">Users</span>
-                <span class="mono small">{{ basicAuthUsernames() }}</span>
-              </div>
-            </div>
-            @if (site.protection.basicLoginPage && canManage()) {
-              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-            }
-          } @else if (site.protection.emailOtp; as emailOtp) {
-            <div class="facts">
-              <div><span class="key">Access</span><span>email one-time code</span></div>
-              <div><span class="key">Allowed</span><span class="mono small">{{ emailOtp.allowedEmails.join(', ') }}</span></div>
-              <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(emailOtp.sessionTtlSeconds) }}</span></div>
-            </div>
-            @if (canManage()) {
-              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-            }
-          } @else if (site.protection.oidc; as oidc) {
-            <div class="facts">
-              <div><span class="key">Access</span><span>identity provider sign-in</span></div>
-              <div>
-                <span class="key">Who</span>
-                <span class="mono small">{{ oidc.anyUser ? 'anyone who signs in' : oidcWho(oidc) }}</span>
-              </div>
-              <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(oidc.sessionTtlSeconds) }}</span></div>
-              <div><span class="key">Redirect URI</span><span class="mono small">{{ oidc.redirectUri }}</span></div>
-            </div>
-            @if (canManage()) {
-              <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
-            }
-          } @else {
-            <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
-          }
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>Recent deployments</h2><a class="small" routerLink="/deployments">All</a></div>
-        @if (deployments().length) {
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Status</th><th>Trigger</th><th>When</th></tr></thead>
+              <thead><tr><th>Upstream</th><th>Weight</th><th>Health</th><th>Role</th></tr></thead>
               <tbody>
-                @for (deployment of deployments(); track deployment.id) {
+                @for (upstream of site.upstreams; track upstream.host + ':' + upstream.port) {
                   <tr>
-                    <td><app-status-pill [status]="deployment.status" [title]="deployment.errorMessage" /></td>
-                    <td class="mono small">{{ deployment.trigger }}</td>
-                    <td class="nowrap small">{{ deployment.createdAt | datetime }}</td>
+                    <td class="primary mono">{{ upstream.scheme }}://{{ upstream.host }}:{{ upstream.port }}</td>
+                    <td class="num">{{ upstream.weight ?? 1 }}</td>
+                    <td class="small mono">{{ upstream.maxFails ?? 3 }} fails / {{ upstream.failTimeoutSeconds ?? 10 }}s</td>
+                    <td class="small">{{ upstream.backup ? 'backup' : 'primary' }}</td>
                   </tr>
                 }
               </tbody>
             </table>
           </div>
-        } @else {
-          <div class="card-body"><p class="muted small">This instance has not been deployed yet.</p></div>
+          <div class="card-body facts">
+            <div><span class="key">Balancing</span><span class="mono">{{ site.loadBalancingMethod }}</span></div>
+            <div><span class="key">WebSocket</span><span>{{ site.websocketEnabled ? 'enabled' : 'disabled' }}</span></div>
+            <div><span class="key">Max body</span><span class="mono">{{ site.maxBodySizeBytes | bytes }}</span></div>
+            <div>
+              <span class="key">Timeouts</span>
+              <span class="mono small">
+                connect {{ site.connectTimeoutSeconds }}s · read {{ site.readTimeoutSeconds }}s ·
+                send {{ site.sendTimeoutSeconds }}s
+              </span>
+            </div>
+          </div>
+        </section>
+        @if (site.headers.length || ownLocations().length) {
+          <section class="card">
+            <div class="card-head"><h2>Headers and locations</h2></div>
+            <div class="card-body stack-sm">
+              @for (header of site.headers; track header.direction + header.name) {
+                <div class="mono small">
+                  <span class="muted">{{ header.direction }}</span> {{ header.name }}: "{{ header.value }}"
+                </div>
+              }
+              @for (location of ownLocations(); track location.matchType + location.pathPattern) {
+                <div class="mono small">
+                  <span class="muted">{{ location.matchType }}</span> {{ location.pathPattern }}
+                </div>
+              }
+            </div>
+          </section>
         }
-      </section>
-    </div>
-  </div>
+      </div>
+    }
+    @case ('access') {
+      <div class="panel pair" role="tabpanel" id="panel-access" aria-labelledby="tab-access">
+        <section class="card">
+          <div class="card-head"><h2>Protection</h2></div>
+          <div class="card-body">
+            @if (site.protection.mode === 'BASIC') {
+              <div class="facts">
+                <div><span class="key">Access</span><span>basic authentication</span></div>
+                <div>
+                  <span class="key">Sign-in</span>
+                  <span>{{ site.protection.basicLoginPage ? 'login page, lasts ' + sessionLength(site.protection.basicLoginPage.sessionTtlSeconds ?? 86400) : "browser's prompt" }}</span>
+                </div>
+                <div>
+                  <span class="key">Users</span>
+                  <span class="mono small">{{ basicAuthUsernames() }}</span>
+                </div>
+              </div>
+              @if (site.protection.basicLoginPage && canManage()) {
+                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+              }
+            } @else if (site.protection.emailOtp; as emailOtp) {
+              <div class="facts">
+                <div><span class="key">Access</span><span>email one-time code</span></div>
+                <div><span class="key">Allowed</span><span class="mono small">{{ emailOtp.allowedEmails.join(', ') }}</span></div>
+                <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(emailOtp.sessionTtlSeconds) }}</span></div>
+              </div>
+              @if (canManage()) {
+                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+              }
+            } @else if (site.protection.oidc; as oidc) {
+              <div class="facts">
+                <div><span class="key">Access</span><span>identity provider sign-in</span></div>
+                <div>
+                  <span class="key">Who</span>
+                  <span class="mono small">{{ oidc.anyUser ? 'anyone who signs in' : oidcWho(oidc) }}</span>
+                </div>
+                <div><span class="key">Sign-in lasts</span><span>{{ sessionLength(oidc.sessionTtlSeconds) }}</span></div>
+                <div><span class="key">Redirect URI</span><span class="mono small">{{ oidc.redirectUri }}</span></div>
+              </div>
+              @if (canManage()) {
+                <button class="btn btn-sm" type="button" (click)="signOutEveryone()">Sign everyone out</button>
+              }
+            } @else {
+              <p class="muted small">Public: anyone who can reach the host can reach the site.</p>
+            }
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Domain groups</h2></div>
+          <div class="card-body">
+            <!-- Here because a grant made over a group reaches this site: "which groups is it in"
+                 is the same question as "who else can reach it". -->
+            @if (groupsLoading()) {
+              <p class="muted small">Loading…</p>
+            } @else if (!groups().length) {
+              <p class="muted small">
+                Not in any group. Groups let one grant cover a set of sites that changes over time.
+              </p>
+            } @else {
+              <ul class="group-list">
+                @for (group of groups(); track group.id) {
+                  <li>
+                    <span>
+                      <span class="mono">{{ group.path }}</span>
+                      @if (group.yourLevel) {
+                        <span class="muted small"> · you hold {{ group.yourLevel }}</span>
+                      }
+                    </span>
+                    @if (canManage() && group.yourLevel && group.yourLevel !== 'READ' && group.yourLevel !== 'OPERATE') {
+                      <button class="btn btn-sm" type="button" (click)="removeFromGroup(group)">Remove</button>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (canManage()) {
+              <div class="add-group">
+                <app-typeahead
+                  inputId="site-add-group"
+                  placeholder="Search groups by path"
+                  [noun]="['group', 'groups']"
+                  [source]="groupChoices"
+                  [value]="groupToAdd()"
+                  (selected)="groupToAdd.set($event?.ref ?? '')" />
+                <button class="btn btn-primary btn-sm" type="button"
+                  [disabled]="addingGroup() || !groupToAdd()" (click)="addToGroup()">
+                  {{ addingGroup() ? 'Adding…' : 'Add to group' }}
+                </button>
+              </div>
+              <!-- The server requires MANAGE on the group as well as this site, so this can fail
+                   for a group the reader can see but does not administer. -->
+              <p class="hint">You also need MANAGE on the group.</p>
+            }
+          </div>
+        </section>
+      </div>
+    }
+    @case ('deployments') {
+      <div class="panel stack" role="tabpanel" id="panel-deployments" aria-labelledby="tab-deployments">
+        <section class="card">
+          <div class="card-head"><h2>Recent deployments</h2><a class="small" routerLink="/deployments">All</a></div>
+          @if (deployments().length) {
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Status</th><th>Trigger</th><th>When</th></tr></thead>
+                <tbody>
+                  @for (deployment of deployments(); track deployment.id) {
+                    <tr>
+                      <td><app-status-pill [status]="deployment.status" [title]="deployment.errorMessage" /></td>
+                      <td class="mono small">{{ deployment.trigger }}</td>
+                      <td class="nowrap small">{{ deployment.createdAt | datetime }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="card-body"><p class="muted small">This instance has not been deployed yet.</p></div>
+          }
+        </section>
+      </div>
+    }
+    @case ('notifications') {
+      <div class="panel narrow" role="tabpanel" id="panel-notifications" aria-labelledby="tab-notifications">
+        <section class="card">
+          <div class="card-head"><h2>Notifications</h2></div>
+          <div class="card-body">
+            @if (!notificationSettings()) {
+              <p class="muted small">Could not load the notification settings.</p>
+            } @else {
+              <label for="notify-expiry" class="toggle">
+                <input id="notify-expiry" type="checkbox" [checked]="expiryNotifications()"
+                  (change)="expiryNotifications.set(!expiryNotifications())" />
+                <span>
+                  <strong>Warn before this site expires</strong>
+                  <span class="muted small">
+                    @if (site.expiresAt) {
+                      Sent at each configured threshold before {{ site.expiresAt | datetime }}, and
+                      again when it comes off the air.
+                    } @else {
+                      This site has no expiry, so nothing is sent until one is set.
+                    }
+                  </span>
+                </span>
+              </label>
+
+              <div class="subscribers">
+                <label for="notify-add">Also tell these addresses</label>
+                <!-- "Also", not "instead": the platform's operator addresses are told regardless,
+                     and a list here that silently replaced them would quietly cut off whoever
+                     configured the estate. -->
+                <p class="hint">
+                  In addition to the platform's operator addresses, which are always told.
+                </p>
+
+                @if (subscribers().length) {
+                  <ul class="chips">
+                    @for (address of subscribers(); track address) {
+                      <li>
+                        <span class="mono">{{ address }}</span>
+                        <button type="button" (click)="removeSubscriber(address)"
+                          [attr.aria-label]="'Remove ' + address">×</button>
+                      </li>
+                    }
+                  </ul>
+                }
+
+                <div class="row">
+                  <input id="notify-add" type="email" placeholder="team@example.com"
+                    [ngModel]="newSubscriber()" (ngModelChange)="newSubscriber.set($event)"
+                    (keydown.enter)="addSubscriber()" />
+                  <button class="btn btn-sm" type="button" [disabled]="!newSubscriber().trim()"
+                    (click)="addSubscriber()">Add</button>
+                </div>
+              </div>
+
+              @if (notificationsChanged()) {
+                <div class="row save-row">
+                  <button class="btn btn-primary btn-sm" type="button"
+                    [disabled]="savingNotifications()" (click)="saveNotifications()">
+                    {{ savingNotifications() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <span class="muted small">Changing this never redeploys the site.</span>
+                </div>
+              }
+
+              @if (notificationSettings(); as saved) {
+                @if (saved.updatedBy) {
+                  <p class="hint">Last changed by {{ saved.updatedBy }}, {{ saved.updatedAt | datetime }}.</p>
+                }
+              }
+            }
+          </div>
+        </section>
+      </div>
+    }
+  }
 
   @if (previewOpen()) {
     <div class="overlay" (click)="previewOpen.set(false)">

@@ -10,6 +10,9 @@ import { StatusPill } from '../../shared/status-pill';
 import { Typeahead } from '../../shared/typeahead';
 import { BytesPipe, DateTimePipe, RelativePipe } from '../../shared/formatting';
 
+/** The page's tabs, in order. */
+export type SiteTab = 'overview' | 'access' | 'deployments' | 'notifications';
+
 @Component({
   selector: 'app-site-detail',
   standalone: true,
@@ -20,6 +23,16 @@ import { BytesPipe, DateTimePipe, RelativePipe } from '../../shared/formatting';
 export class SiteDetail implements OnInit {
   /** Bound from the route by withComponentInputBinding. */
   readonly id = input.required<string>();
+  /** The `?tab=` query parameter, so a link or the back button lands on the same tab. */
+  readonly tab = input<string | undefined>(undefined);
+
+  readonly tabs: { id: SiteTab; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'access', label: 'Access' },
+    { id: 'deployments', label: 'Deployments' },
+    { id: 'notifications', label: 'Notifications' },
+  ];
+  readonly activeTab = signal<SiteTab>('overview');
 
   private readonly api = inject(SitesApi);
   private readonly certificatesApi = inject(CertificatesApi);
@@ -79,7 +92,79 @@ export class SiteDetail implements OnInit {
 
   readonly renewUntil = signal('');
 
+  /** The site's paths besides the root, which every site has and which says nothing on its own. */
+  readonly ownLocations = computed(() =>
+    (this.site()?.locations ?? []).filter((l) => !(l.pathPattern === '/' && l.matchType === 'PREFIX')),
+  );
+
+  /** How the site is protected, in a word or two, for the summary. */
+  readonly protectionLabel = computed(() => {
+    const protection = this.site()?.protection;
+    switch (protection?.mode) {
+      case 'BASIC':
+        return 'Basic authentication';
+      case 'EMAIL_OTP':
+        return 'Email sign-in';
+      case 'OIDC':
+        return 'Identity provider';
+      default:
+        return 'Public';
+    }
+  });
+
+  readonly protectionDetail = computed(() => {
+    const protection = this.site()?.protection;
+    if (!protection || protection.mode === 'NONE') {
+      return 'anyone who can reach it';
+    }
+    if (protection.mode === 'BASIC') {
+      const users = protection.basicUsers.length;
+      return `${users} user${users === 1 ? '' : 's'} · ${protection.basicLoginPage ? 'login page' : "browser's prompt"}`;
+    }
+    if (protection.emailOtp) {
+      const entries = protection.emailOtp.allowedEmails.length;
+      return `${entries} allowed entr${entries === 1 ? 'y' : 'ies'}`;
+    }
+    if (protection.oidc) {
+      return protection.oidc.anyUser
+        ? 'anyone who signs in'
+        : `${protection.oidc.users.length + protection.oidc.roles.length} rule${protection.oidc.users.length + protection.oidc.roles.length === 1 ? '' : 's'}`;
+    }
+    return '';
+  });
+
+  /** Shows a tab and records it in the URL, replacing rather than adding a history entry. */
+  select(tab: SiteTab): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], {
+      queryParams: { tab: tab === 'overview' ? null : tab },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  /** Left and right move between tabs, Home and End to the first and last: the WAI-ARIA tabs pattern. */
+  onTabKey(event: KeyboardEvent): void {
+    const index = this.tabs.findIndex((t) => t.id === this.activeTab());
+    const next =
+      event.key === 'ArrowRight' ? (index + 1) % this.tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + this.tabs.length) % this.tabs.length
+      : event.key === 'Home' ? 0
+      : event.key === 'End' ? this.tabs.length - 1
+      : -1;
+    if (next < 0) {
+      return;
+    }
+    event.preventDefault();
+    this.select(this.tabs[next].id);
+    document.getElementById('tab-' + this.tabs[next].id)?.focus();
+  }
+
   ngOnInit(): void {
+    const requested = this.tabs.find((t) => t.id === this.tab());
+    if (requested) {
+      this.activeTab.set(requested.id);
+    }
     this.load();
     this.loadGroups();
     this.loadNotifications();

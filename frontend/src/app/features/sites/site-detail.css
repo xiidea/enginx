@@ -1,7 +1,65 @@
-.cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+/* ---------- summary ---------- */
+
+/* Four tiles, one answer each, the same height whatever they hold; each opens the tab behind it. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.8rem 0.95rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tile:hover { border-color: var(--rule-2); }
+.tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tile strong { font-size: 0.92rem; }
+
+/* ---------- tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+.tabs button {
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* ---------- panels ---------- */
+
+/* Two cards of like size side by side, stretched to one height so the row ends evenly. */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+.narrow { max-width: 46rem; }
 .note { margin-top: -0.6rem; margin-bottom: 1rem; }
 
 .facts { display: grid; gap: 0.5rem; }
+.facts + .btn { margin-top: 1rem; }
 .facts > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0.6rem; align-items: center; font-size: 0.87rem; }
 .key { color: var(--ink-3); font-size: 0.78rem; }
 
@@ -39,7 +97,12 @@
 }
 
 @media (max-width: 980px) {
-  .cols { grid-template-columns: 1fr; }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pair { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .summary { grid-template-columns: 1fr; }
 }
 
 /*

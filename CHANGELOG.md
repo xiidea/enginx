@@ -9,6 +9,10 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 
 ## Unreleased
 
+- **The site page is organised in tabs.** A summary of status, TLS, protection and the last
+  deployment sits at the top, each tile opening the tab that explains it: Overview (status, TLS,
+  routing, headers and locations), Access (protection, domain groups), Deployments and
+  Notifications. The two uneven columns are gone, and the tab is kept in the URL (`?tab=access`).
 - **The Locations card no longer suggests that locations route.** A location is a path and a match
   type, and every location block uses the site's same upstreams, headers, timeouts and protection,
   so adding one changes nothing about where requests go. The card now says so; per-location routing
