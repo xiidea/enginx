@@ -7,7 +7,7 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
-## Unreleased
+## 0.2.1
 
 - **Saving deploys, when the change needs it.** A saved change the host did not have yet looked like
   one that did not work, so the console now deploys on save whenever the change alters what the host
@@ -41,6 +41,11 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 - **The root location can no longer be removed in the console.** It is kept automatically whenever a
   site has other paths. Before, removing `/` left every other path to NGINX's own document root
   rather than the upstream. "Add location" adds one row, not the root and an empty row.
+
+Nothing changes in the schema or the configuration. The API only gains: an optional `deploy=auto`
+query parameter on the site-changing requests, and a `deploymentId` in site responses, absent unless
+that parameter was used. Existing scripts behave as before. Upgrade the management, console and
+agent images together: the agent image carries the gate's fix for cached browser credentials.
 
 ## 0.2.0
 
