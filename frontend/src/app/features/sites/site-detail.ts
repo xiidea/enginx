@@ -50,6 +50,12 @@ export class SiteDetail implements OnInit {
   readonly upstreamChecks = signal<UpstreamCheck[] | null>(null);
   readonly checkingUpstreams = signal(false);
   readonly loading = signal(true);
+  /**
+   * This site's files that differ between what is saved and what its host serves: non-empty while
+   * a saved change has not been deployed. From the platform's own preview, so it covers a changed
+   * password or allow-list as well as anything in the site's NGINX configuration.
+   */
+  readonly undeployed = signal<string[]>([]);
 
   /**
    * The groups this site is filed under.
@@ -298,6 +304,7 @@ export class SiteDetail implements OnInit {
             error: () => this.certificate.set(null),
           });
         }
+        this.checkUndeployed(site.domain);
         this.deploymentsApi.list(site.nginxInstanceId, 0, 8).subscribe({
           next: (page) => this.deployments.set(page.content),
           error: () => this.deployments.set([]),
@@ -327,6 +334,25 @@ export class SiteDetail implements OnInit {
         this.notifications.success(`Site ${updated.enabled ? 'enabled' : 'disabled'}`);
       },
       error: (problem) => this.notifications.problem(problem),
+    });
+  }
+
+  /**
+   * Asks the platform whether the host is behind this site's saved state. The preview compares
+   * every file the host would be sent; only this site's own are kept, so another site's pending
+   * change does not show here. A preview that cannot render says nothing rather than alarm.
+   */
+  private checkUndeployed(domain: string): void {
+    this.api.preview(this.id()).subscribe({
+      next: (preview) =>
+        this.undeployed.set(
+          preview.changedPaths.filter((entry) => {
+            const path = entry.slice(entry.indexOf(':') + 1).trim();
+            return path === `conf.d/${domain}.conf` || path.startsWith(`certs/${domain}/`)
+              || path.startsWith(`auth/${domain}/`) || path === `gate/sites/${domain}.json`;
+          }),
+        ),
+      error: () => this.undeployed.set([]),
     });
   }
 

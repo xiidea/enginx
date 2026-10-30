@@ -20,6 +20,20 @@
     </p>
   }
 
+  @if (undeployed().length) {
+    <!-- Saving never deploys. Said where the site is looked at, not only when it is saved, because
+         a saved change the host does not have yet looks exactly like one that did not work. -->
+    <div class="undeployed" role="status">
+      <span>
+        <strong>Saved changes are not on the host yet.</strong>
+        The host still serves this site's previous configuration{{ undeployed().length > 1 ? ' and files' : '' }}.
+      </span>
+      @if (canOperate()) {
+        <button class="btn btn-primary btn-sm" type="button" (click)="deploy()">Deploy now</button>
+      }
+    </div>
+  }
+
   <!-- The four answers someone opening a site wants first, each a way into the tab that explains it. -->
   <div class="summary">
     <button type="button" class="tile" (click)="select('overview')">

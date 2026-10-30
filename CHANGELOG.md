@@ -9,6 +9,10 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 
 ## Unreleased
 
+- **The site page says when saved changes are not deployed.** Saving never deploys, and a saved change
+  the host does not have yet — a new user, a changed password, a narrower access rule — looked
+  exactly like one that did not work. The page now shows a banner, with *Deploy now*, whenever the
+  platform's preview finds this site's files on the host differ from what is saved.
 - **Signing out works for a browser that used a basic-auth site's prompt.** On a site with a login
   page, the gate also accepts basic credentials so scripts keep working, and a browser that had
   used the site's prompt sent its cached credentials on every request: it was let in by them, past

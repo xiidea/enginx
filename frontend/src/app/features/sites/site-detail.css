@@ -1,3 +1,20 @@
+/* ---------- undeployed changes ---------- */
+
+.undeployed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.95rem;
+  background: var(--warn-wash);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+.undeployed .btn { flex: none; }
+
 /* ---------- summary ---------- */
 
 /* Four tiles, one answer each, the same height whatever they hold; each opens the tab behind it. */
