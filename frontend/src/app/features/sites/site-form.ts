@@ -246,7 +246,11 @@ export class SiteForm implements OnInit {
     }
   }
 
-  save(): void {
+  /**
+   * Saves, deploying when the change alters what the host serves. Without deploy, the change waits
+   * for the next deployment, so several edits can go out together.
+   */
+  save(deploy = true): void {
     const request: SiteRequest = {
       name: this.name().trim(),
       domain: this.domain().trim(),
@@ -318,18 +322,13 @@ export class SiteForm implements OnInit {
     this.saving.set(true);
     const existing = this.existing();
     const call = existing
-      ? this.api.update(existing.id, request, existing.version)
-      : this.api.create(request);
+      ? this.api.update(existing.id, request, existing.version, deploy)
+      : this.api.create(request, deploy);
 
     call.subscribe({
       next: (site) => {
         this.saving.set(false);
-        // Saving never deploys, which is easy to forget when the change is who may get in: the
-        // host keeps the old rules until the next deployment.
-        this.notifications.success(
-          existing ? 'Site updated' : 'Site created',
-          `${site.domain}: deploy it to apply the change on its host.`,
-        );
+        this.notifications.success(existing ? 'Site updated' : 'Site created', savedNote(site, deploy));
         this.router.navigate(['/sites', site.id]);
       },
       error: (problem) => {
@@ -340,6 +339,21 @@ export class SiteForm implements OnInit {
       },
     });
   }
+}
+
+/**
+ * What became of the change on the host. Without a deployment it is either already there, because
+ * nothing the host serves changed, or behind one that was already under way; the site page tells
+ * which, so this does not guess.
+ */
+export function savedNote(site: Site, deploy: boolean): string {
+  if (site.deploymentId) {
+    return `${site.domain}: deploying the change to its host.`;
+  }
+  if (!deploy) {
+    return `${site.domain}: saved without deploying. The host keeps the old configuration until the next deployment.`;
+  }
+  return `${site.domain}: nothing to deploy now. If the host still needs the change, the site page says so.`;
 }
 
 /** One basic authentication user as edited; existing users have a password the form never sees. */

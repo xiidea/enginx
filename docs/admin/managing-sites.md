@@ -19,6 +19,33 @@ dispatcher                      ->  render from current state under a per-instan
                                 ->  nginx -s reload
 ```
 
+### Deploying on save
+
+The console deploys when a save changes what the host serves, and says so. A save that changes
+nothing there, such as a renamed site, deploys nothing. *Save without deploying* keeps the change
+for the next deployment, so several edits can go out as one.
+
+The API does the same only when asked, so existing scripts behave as before:
+
+```
+PUT  /proxy-sites/{id}?deploy=auto                ->  200, with deploymentId when one was queued
+POST /proxy-sites?deploy=auto                     ->  201, always queues one
+POST /proxy-sites/{id}/enable|disable|renew|sign-out-everyone?deploy=auto
+DELETE /proxy-sites/{id}/expiration?deploy=auto
+```
+
+The save and the request for a deployment are one transaction, under the instance's lock. A
+deployment still waiting to start renders from current state, so quick saves share it: the
+response names that deployment. One already rendering would not carry the change, and only one
+deployment per instance runs at a time, so the save is kept and no deployment is promised: the
+response has no `deploymentId`, and the site page shows the change as not on the host yet. A save
+is never refused because a deployment is running.
+
+"Changes what the host serves" is decided by the site's spec, the only input to the renderer: a
+save deploys when the spec differs from before in anything but its name. A new password is a new
+hash in the spec, so it deploys; enabling, disabling and a new expiry or start change whether the
+site is rendered, so they deploy too.
+
 ### Why it is shaped this way
 
 **The unit is the instance, not the site.** `nginx -t` validates a tree, not a file. A per-site

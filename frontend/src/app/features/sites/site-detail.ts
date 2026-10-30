@@ -329,10 +329,7 @@ export class SiteDetail implements OnInit {
     }
     const request = site.enabled ? this.api.disable(site.id) : this.api.enable(site.id);
     request.subscribe({
-      next: (updated) => {
-        this.site.set(updated);
-        this.notifications.success(`Site ${updated.enabled ? 'enabled' : 'disabled'}`);
-      },
+      next: (updated) => this.applied(updated, `Site ${updated.enabled ? 'enabled' : 'disabled'}`),
       error: (problem) => this.notifications.problem(problem),
     });
   }
@@ -397,16 +394,33 @@ export class SiteDetail implements OnInit {
     return hours >= 24 && hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? '' : 's'}` : `${hours} hours`;
   }
 
-  /** Rotates the gate key, then deploys, since sessions only end once the host has the new key. */
+  /** Rotates the gate key, which the platform deploys: sessions end once the host has the new key. */
   signOutEveryone(): void {
     const site = this.site();
     if (!site || !confirm(`Sign everyone out of ${site.domain}? Everyone will have to sign in again once the site is redeployed, which happens now.`)) {
       return;
     }
     this.api.signOutEveryone(site.id).subscribe({
-      next: () => this.deploy(),
+      next: (updated) => this.applied(updated, 'Signing everyone out'),
       error: (problem) => this.notifications.problem(problem),
     });
+  }
+
+  /**
+   * Shows a change the platform has saved, and deployed when it alters what the host serves.
+   * Without a deployment the banner is checked again: a change saved while another deployment was
+   * already under way waits for the next one, and the banner is what says so.
+   */
+  private applied(updated: Site, title: string, detail?: string): void {
+    this.site.set(updated);
+    if (!updated.deploymentId) {
+      this.notifications.success(title, detail);
+      this.checkUndeployed(updated.domain);
+      return;
+    }
+    this.notifications.success(title, [detail, 'Deploying to its host.'].filter(Boolean).join(' '));
+    // Give the dispatcher a moment, then show what happened rather than leaving a stale list.
+    setTimeout(() => this.load(), 2500);
   }
 
   deploy(): void {
@@ -431,9 +445,8 @@ export class SiteDetail implements OnInit {
     }
     this.api.renew(site.id, new Date(value).toISOString(), site.version).subscribe({
       next: (updated) => {
-        this.site.set(updated);
         this.renewUntil.set('');
-        this.notifications.success('Expiry extended', `Now expires ${new Date(updated.expiresAt!).toLocaleString()}`);
+        this.applied(updated, 'Expiry extended', `Now expires ${new Date(updated.expiresAt!).toLocaleString()}.`);
       },
       error: (problem) => this.notifications.problem(problem),
     });
@@ -441,10 +454,7 @@ export class SiteDetail implements OnInit {
 
   removeExpiry(): void {
     this.api.removeExpiry(this.id()).subscribe({
-      next: (updated) => {
-        this.site.set(updated);
-        this.notifications.success('Expiry removed', 'This site no longer expires.');
-      },
+      next: (updated) => this.applied(updated, 'Expiry removed', 'This site no longer expires.'),
       error: (problem) => this.notifications.problem(problem),
     });
   }

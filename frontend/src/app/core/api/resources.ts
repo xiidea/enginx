@@ -56,6 +56,11 @@ export interface SiteQuery {
   sort?: string[];
 }
 
+/** Asks the API to deploy a change that alters what the host serves. Other API clients opt in. */
+function onSave(deploy: boolean): string {
+  return deploy ? '?deploy=auto' : '';
+}
+
 @Injectable({ providedIn: 'root' })
 export class SitesApi {
   private readonly api = inject(ApiService);
@@ -68,12 +73,16 @@ export class SitesApi {
     return this.api.get(`/proxy-sites/${id}`);
   }
 
-  create(request: SiteRequest): Observable<Site> {
-    return this.api.post('/proxy-sites', request);
+  create(request: SiteRequest, deploy = true): Observable<Site> {
+    return this.api.post(`/proxy-sites${onSave(deploy)}`, request);
   }
 
-  update(id: string, request: SiteRequest, version: number): Observable<Site> {
-    return this.api.put(`/proxy-sites/${id}`, request, version);
+  /**
+   * Saves, and by default deploys when the change alters what the host serves: the response then
+   * carries the deployment's id. Without deploy the change waits for the next deployment.
+   */
+  update(id: string, request: SiteRequest, version: number, deploy = true): Observable<Site> {
+    return this.api.put(`/proxy-sites/${id}${onSave(deploy)}`, request, version);
   }
 
   remove(id: string, version: number): Observable<void> {
@@ -97,7 +106,7 @@ export class SitesApi {
   }
 
   enable(id: string): Observable<Site> {
-    return this.api.post(`/proxy-sites/${id}/enable`);
+    return this.api.post(`/proxy-sites/${id}/enable${onSave(true)}`);
   }
 
   /** Which protection modes the platform can serve, and why not the others. */
@@ -105,21 +114,21 @@ export class SitesApi {
     return this.api.get('/proxy-sites/protection-modes');
   }
 
-  /** Replaces the site's gate key. Sessions end once the site is next deployed. */
+  /** Replaces the site's gate key, and deploys it: sessions end once that deployment is live. */
   signOutEveryone(id: string): Observable<Site> {
-    return this.api.post(`/proxy-sites/${id}/sign-out-everyone`);
+    return this.api.post(`/proxy-sites/${id}/sign-out-everyone${onSave(true)}`);
   }
 
   disable(id: string): Observable<Site> {
-    return this.api.post(`/proxy-sites/${id}/disable`);
+    return this.api.post(`/proxy-sites/${id}/disable${onSave(true)}`);
   }
 
   renew(id: string, expiresAt: string, version: number): Observable<Site> {
-    return this.api.post(`/proxy-sites/${id}/renew`, { expiresAt });
+    return this.api.post(`/proxy-sites/${id}/renew${onSave(true)}`, { expiresAt });
   }
 
   removeExpiry(id: string): Observable<Site> {
-    return this.api.delete(`/proxy-sites/${id}/expiration`);
+    return this.api.delete(`/proxy-sites/${id}/expiration${onSave(true)}`);
   }
 
   clone(id: string, name: string, domain: string): Observable<Site> {

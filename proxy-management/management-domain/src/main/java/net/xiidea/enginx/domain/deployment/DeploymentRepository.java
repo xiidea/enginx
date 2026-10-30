@@ -22,4 +22,7 @@ public interface DeploymentRepository {
 
     /** Whether a deployment is already queued or running for this instance. */
     boolean hasActiveDeployment(UUID nginxInstanceId);
+
+    /** The instance's pending or in-progress deployment, if it has one. */
+    Optional<Deployment> findActiveForInstance(UUID nginxInstanceId);
 }

@@ -7,6 +7,7 @@ import net.xiidea.enginx.api.proxy.dto.ProxySiteRequest;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteResponse;
 import net.xiidea.enginx.api.proxy.dto.ProxySiteSummaryResponse;
 import net.xiidea.enginx.api.proxy.dto.RenewRequest;
+import net.xiidea.enginx.application.proxy.ProxySiteChanges;
 import net.xiidea.enginx.application.proxy.ProxySiteCommands;
 import net.xiidea.enginx.application.notification.SiteNotificationService;
 import net.xiidea.enginx.application.proxy.ProxySiteService;
@@ -18,6 +19,7 @@ import net.xiidea.enginx.domain.shared.DomainName;
 import net.xiidea.enginx.domain.shared.SortDirection;
 import net.xiidea.enginx.domain.shared.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -51,13 +53,18 @@ import java.util.UUID;
 @Tag(name = "Proxy sites", description = "Reverse-proxy site management")
 public class ProxySiteController {
 
+    /** The value of ?deploy= that asks for a change to be deployed when it changes what the host serves. */
+    static final String DEPLOY_AUTO = "auto";
+
     private final ProxySiteService service;
+    private final ProxySiteChanges changes;
     private final ProxySiteDtoMapper mapper;
     private final SiteNotificationService notifications;
 
-    public ProxySiteController(ProxySiteService service, ProxySiteDtoMapper mapper,
+    public ProxySiteController(ProxySiteService service, ProxySiteChanges changes, ProxySiteDtoMapper mapper,
                                SiteNotificationService notifications) {
         this.service = service;
+        this.changes = changes;
         this.mapper = mapper;
         this.notifications = notifications;
     }
@@ -164,16 +171,24 @@ public class ProxySiteController {
     @PostMapping
     @Operation(summary = "Create a proxy site")
     public ResponseEntity<ProxySiteResponse> create(@Valid @RequestBody ProxySiteRequest request,
+                                                    @Parameter(description = DEPLOY_DESCRIPTION)
+                                                    @RequestParam(required = false) String deploy,
                                                     UriComponentsBuilder uriBuilder) {
-        ProxySite created = service.create(new ProxySiteCommands.Create(
+        ProxySiteCommands.Create command = new ProxySiteCommands.Create(
                 mapper.toSpec(request), mapper.toAdminState(request.enabled()),
-                mapper.toProtectionInput(request.protection())));
+                mapper.toProtectionInput(request.protection()));
+        ProxySiteChanges.Result result = auto(deploy)
+                ? changes.create(command)
+                : new ProxySiteChanges.Result(service.create(command), null);
 
-        URI location = uriBuilder.path("/api/v1/proxy-sites/{id}").buildAndExpand(created.id()).toUri();
+        URI location = uriBuilder.path("/api/v1/proxy-sites/{id}").buildAndExpand(result.site().id()).toUri();
         return ResponseEntity.created(location)
-                .eTag(EntityVersion.toETag(created.version()))
-                .body(mapper.toResponse(created));
+                .eTag(EntityVersion.toETag(result.site().version()))
+                .body(body(result));
     }
+
+    static final String DEPLOY_DESCRIPTION = "auto: deploy in the same request when the change alters what the "
+            + "host serves (a name-only edit does not). Omitted, nothing is deployed, as before.";
 
     @PutMapping("/{id}")
     @Operation(summary = "Replace a proxy site",
@@ -182,12 +197,14 @@ public class ProxySiteController {
     public ResponseEntity<ProxySiteResponse> update(
             @PathVariable UUID id,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody ProxySiteRequest request) {
+            @Valid @RequestBody ProxySiteRequest request,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
 
-        return ok(service.update(new ProxySiteCommands.Update(
+        ProxySiteCommands.Update command = new ProxySiteCommands.Update(
                 id, mapper.toSpec(request), EntityVersion.parseIfMatch(ifMatch),
                 mapper.toProtectionInput(request.protection()),
-                request.locations() == null)));
+                request.locations() == null);
+        return ok(auto(deploy) ? changes.update(command) : new ProxySiteChanges.Result(service.update(command), null));
     }
 
     @DeleteMapping("/{id}")
@@ -202,22 +219,26 @@ public class ProxySiteController {
 
     @PostMapping("/{id}/enable")
     @Operation(summary = "Enable a proxy site")
-    public ResponseEntity<ProxySiteResponse> enable(@PathVariable UUID id) {
-        return ok(service.enable(id));
+    public ResponseEntity<ProxySiteResponse> enable(@PathVariable UUID id,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
+        return ok(auto(deploy) ? changes.enable(id) : new ProxySiteChanges.Result(service.enable(id), null));
     }
 
     @PostMapping("/{id}/sign-out-everyone")
-    @Operation(summary = "End every email sign-in session",
+    @Operation(summary = "End every gate sign-in session",
             description = "Replaces the site's gate key. Sessions signed with the old key stop working once the "
-                    + "site is next deployed.")
-    public ResponseEntity<ProxySiteResponse> signOutEveryone(@PathVariable UUID id) {
-        return ok(service.signOutEveryone(id));
+                    + "site is next deployed; with deploy=auto, that is now.")
+    public ResponseEntity<ProxySiteResponse> signOutEveryone(@PathVariable UUID id,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
+        return ok(auto(deploy) ? changes.signOutEveryone(id)
+                : new ProxySiteChanges.Result(service.signOutEveryone(id), null));
     }
 
     @PostMapping("/{id}/disable")
     @Operation(summary = "Disable a proxy site")
-    public ResponseEntity<ProxySiteResponse> disable(@PathVariable UUID id) {
-        return ok(service.disable(id));
+    public ResponseEntity<ProxySiteResponse> disable(@PathVariable UUID id,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
+        return ok(auto(deploy) ? changes.disable(id) : new ProxySiteChanges.Result(service.disable(id), null));
     }
 
     @PostMapping("/{id}/renew")
@@ -225,16 +246,20 @@ public class ProxySiteController {
     public ResponseEntity<ProxySiteResponse> renew(
             @PathVariable UUID id,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody RenewRequest request) {
+            @Valid @RequestBody RenewRequest request,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
 
-        return ok(service.renew(new ProxySiteCommands.Renew(
-                id, request.expiresAt(), EntityVersion.parseIfMatch(ifMatch))));
+        ProxySiteCommands.Renew command = new ProxySiteCommands.Renew(
+                id, request.expiresAt(), EntityVersion.parseIfMatch(ifMatch));
+        return ok(auto(deploy) ? changes.renew(command) : new ProxySiteChanges.Result(service.renew(command), null));
     }
 
     @DeleteMapping("/{id}/expiration")
     @Operation(summary = "Remove the expiry so the site never expires")
-    public ResponseEntity<ProxySiteResponse> removeExpiry(@PathVariable UUID id) {
-        return ok(service.removeExpiry(id));
+    public ResponseEntity<ProxySiteResponse> removeExpiry(@PathVariable UUID id,
+            @Parameter(description = DEPLOY_DESCRIPTION) @RequestParam(required = false) String deploy) {
+        return ok(auto(deploy) ? changes.removeExpiry(id)
+                : new ProxySiteChanges.Result(service.removeExpiry(id), null));
     }
 
     @PostMapping("/{id}/clone")
@@ -250,6 +275,28 @@ public class ProxySiteController {
         return ResponseEntity.created(location)
                 .eTag(EntityVersion.toETag(clone.version()))
                 .body(mapper.toResponse(clone));
+    }
+
+    private static boolean auto(String deploy) {
+        if (deploy == null || deploy.isBlank()) {
+            return false;
+        }
+        if (!DEPLOY_AUTO.equalsIgnoreCase(deploy.trim())) {
+            throw new ValidationException("deploy",
+                    "'" + deploy + "' is not valid. Expected: auto, or leave it out");
+        }
+        return true;
+    }
+
+    private ProxySiteResponse body(ProxySiteChanges.Result result) {
+        ProxySiteResponse response = mapper.toResponse(result.site());
+        return result.deployment() == null ? response : response.withDeployment(result.deployment().id());
+    }
+
+    private ResponseEntity<ProxySiteResponse> ok(ProxySiteChanges.Result result) {
+        return ResponseEntity.ok()
+                .eTag(EntityVersion.toETag(result.site().version()))
+                .body(body(result));
     }
 
     private ResponseEntity<ProxySiteResponse> ok(ProxySite site) {

@@ -32,4 +32,7 @@ public interface DeploymentJpaRepository extends JpaRepository<DeploymentEntity,
     Optional<DeploymentEntity> findFirstByNginxInstanceIdAndIdNotOrderByCreatedAtDesc(UUID nginxInstanceId, UUID id);
 
     boolean existsByNginxInstanceIdAndStatusIn(UUID nginxInstanceId, List<DeploymentStatus> statuses);
+
+    Optional<DeploymentEntity> findFirstByNginxInstanceIdAndStatusInOrderByCreatedAtDesc(
+            UUID nginxInstanceId, List<DeploymentStatus> statuses);
 }

@@ -98,6 +98,14 @@ public class DeploymentRepositoryAdapter implements DeploymentRepository {
                 List.of(DeploymentStatus.PENDING, DeploymentStatus.IN_PROGRESS));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Deployment> findActiveForInstance(UUID nginxInstanceId) {
+        return repository.findFirstByNginxInstanceIdAndStatusInOrderByCreatedAtDesc(nginxInstanceId,
+                        List.of(DeploymentStatus.PENDING, DeploymentStatus.IN_PROGRESS))
+                .map(DeploymentRepositoryAdapter::toDomain);
+    }
+
     private static Deployment toDomain(DeploymentEntity entity) {
         List<DeploymentEvent> events = entity.getEvents().stream()
                 .map(event -> new DeploymentEvent(event.getId(), entity.getId(), event.getPhase(),

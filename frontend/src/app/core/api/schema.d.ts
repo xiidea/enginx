@@ -1123,8 +1123,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * End every email sign-in session
-         * @description Replaces the site's gate key. Sessions signed with the old key stop working once the site is next deployed.
+         * End every gate sign-in session
+         * @description Replaces the site's gate key. Sessions signed with the old key stop working once the site is next deployed; with deploy=auto, that is now.
          */
         post: operations["proxySite_signOutEveryone"];
         delete?: never;
@@ -1836,6 +1836,11 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             createdBy: string;
+            /**
+             * Format: uuid
+             * @description The deployment this request queued, when it was made with deploy=auto and changed what the host serves; absent otherwise.
+             */
+            deploymentId?: string;
             domain: string;
             enabled: boolean;
             /** Format: date-time */
@@ -3862,7 +3867,10 @@ export interface operations {
     };
     proxySite_create: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3955,7 +3963,10 @@ export interface operations {
     };
     proxySite_update: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -4089,7 +4100,10 @@ export interface operations {
     };
     proxySite_disable: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -4120,7 +4134,10 @@ export interface operations {
     };
     proxySite_enable: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -4151,7 +4168,10 @@ export interface operations {
     };
     proxySite_removeExpiry: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -4279,7 +4299,10 @@ export interface operations {
     };
     proxySite_renew: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -4316,7 +4339,10 @@ export interface operations {
     };
     proxySite_signOutEveryone: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before. */
+                deploy?: string;
+            };
             header?: never;
             path: {
                 id: string;

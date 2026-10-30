@@ -141,6 +141,17 @@ public record ProxySiteSpec(
                 sslCertificateId, loadBalancingMethod, timeouts, upstreams, headers, locations, null);
     }
 
+    /**
+     * Whether this spec renders differently from another, so that saving it needs a deployment.
+     *
+     * <p>The spec is the renderer's only input, so this is exact rather than a list of fields to
+     * keep in step: every component counts except the display name, which no rendered file
+     * contains. A changed password, allow-list or access rule counts, through the protection.
+     */
+    public boolean rendersDifferentlyFrom(ProxySiteSpec other) {
+        return other == null || !equals(other.withIdentity(name, other.domain()));
+    }
+
     public ProxySiteSpec withIdentity(String newName, DomainName newDomain) {
         return new ProxySiteSpec(newName, newDomain, nginxInstanceId, window, sslEnabled, forceHttps,
                 hstsEnabled, websocketEnabled, sslCertificateId, loadBalancingMethod, timeouts,

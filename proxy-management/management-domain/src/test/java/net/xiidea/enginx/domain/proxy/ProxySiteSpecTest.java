@@ -41,6 +41,21 @@ class ProxySiteSpecTest {
     }
 
     @Test
+    @DisplayName("a change needs a deployment exactly when it changes what is rendered: never for the name alone")
+    void rendersDifferently() {
+        UUID certificate = UUID.randomUUID();
+        ProxySiteSpec base = spec().ssl(true, certificate).forceHttps(true).build();
+
+        assertThat(base.rendersDifferentlyFrom(base)).isFalse();
+        assertThat(base.withIdentity("Another name", base.domain()).rendersDifferentlyFrom(base)).isFalse();
+        assertThat(spec().build().rendersDifferentlyFrom(base)).isTrue();
+        assertThat(base.withProtection(SiteProtection.basic(List.of(new BasicAuthUser("alice",
+                "$6$fixturesalt0001$nTLkJQUNn08kFVHCPBxOSfCbqF3lA60ZVOdyzJeqdQv4MeAjTOPRztNt1OcbBALrB.AcE2mRt.mh8cHpEl2UD1"))))
+                .rendersDifferentlyFrom(base)).isTrue();
+        assertThat(base.rendersDifferentlyFrom(null)).isTrue();
+    }
+
+    @Test
     void defaultsToUnprotected() {
         assertThat(spec().build().protection()).isEqualTo(SiteProtection.none());
     }

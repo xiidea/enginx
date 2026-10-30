@@ -37,5 +37,16 @@ public record ProxySiteResponse(
         Instant createdAt,
         String updatedBy,
         Instant updatedAt,
-        long version) {
+        long version,
+        @Schema(description = "The deployment this request queued, when it was made with deploy=auto and changed "
+                + "what the host serves; absent otherwise.")
+        UUID deploymentId) {
+
+    public ProxySiteResponse withDeployment(UUID deploymentId) {
+        return new ProxySiteResponse(id, name, domain, nginxInstanceId, status, enabled, activeFrom, expiresAt,
+                secondsUntilExpiry, sslEnabled, forceHttps, hstsEnabled, websocketEnabled, sslCertificateId,
+                loadBalancingMethod, connectTimeoutSeconds, readTimeoutSeconds, sendTimeoutSeconds, maxBodySizeBytes,
+                upstreams, headers, locations, protection, createdBy, createdAt, updatedBy, updatedAt, version,
+                deploymentId);
+    }
 }

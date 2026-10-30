@@ -42,6 +42,7 @@ public class DeploymentService {
     private static final String RESOURCE_TYPE = "DEPLOYMENT";
 
     private final DeploymentRepository deployments;
+    private final InstanceLock lock;
     private final ConfigBundleRepository bundles;
     private final ProxySiteRepository sites;
     private final NginxInstanceRepository instances;
@@ -59,7 +60,9 @@ public class DeploymentService {
                              OutboxRepository outbox,
                              AuditRecorder audit,
                              ActorProvider actorProvider,
+                             InstanceLock lock,
                              Clock clock) {
+        this.lock = lock;
         this.deployments = deployments;
         this.bundles = bundles;
         this.sites = sites;
@@ -86,6 +89,33 @@ public class DeploymentService {
 
         return queue(site.nginxInstanceId(), DeploymentTrigger.MANUAL,
                 Map.of("proxySiteId", siteId.toString(), "domain", site.domain().value()));
+    }
+
+    /**
+     * A deployment that will include whatever the caller's transaction has just saved for this
+     * site, or empty when none can be promised now.
+     *
+     * <p>For a change that deploys itself, where refusing because another deployment is in flight
+     * would roll the change back with it. Takes the instance's lock first, so a deployment already
+     * rendering finishes before this looks; after that, one still pending has not rendered, and
+     * will render after this transaction commits, so it is reused rather than refused. The one case
+     * left is a pull host's deployment that has rendered and is waiting for the host: it cannot
+     * include the change, a second may not run beside it, and the change stays saved and shown as
+     * not yet deployed.
+     */
+    @Transactional
+    public java.util.Optional<Deployment> requestSiteDeployment(UUID siteId) {
+        ProxySite site = sites.findById(siteId)
+                .orElseThrow(() -> new NotFoundException("PROXY_SITE", siteId));
+        permissions.requireSiteAccess(site, PermissionLevel.OPERATE);
+        lock.lockForUpdate(site.nginxInstanceId());
+
+        java.util.Optional<Deployment> active = deployments.findActiveForInstance(site.nginxInstanceId());
+        if (active.isEmpty()) {
+            return java.util.Optional.of(queue(site.nginxInstanceId(), DeploymentTrigger.MANUAL,
+                    Map.of("proxySiteId", siteId.toString(), "domain", site.domain().value(), "onSave", true)));
+        }
+        return active.get().status() == DeploymentStatus.PENDING ? active : java.util.Optional.empty();
     }
 
     @Transactional

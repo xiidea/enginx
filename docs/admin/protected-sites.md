@@ -132,7 +132,9 @@ them in for the session length set on the site, after which they are asked again
 - The upstream receives the signed-in address as `X-Enginx-Email`, and as `X-Enginx-User`. NGINX
   always sets both, so a client cannot send its own, and the application can trust them.
 - **Sign everyone out** (on the site page, or `POST /proxy-sites/{id}/sign-out-everyone`) replaces
-  the site's key; the console then deploys, and every existing session stops working.
+  the site's key and deploys it, and every existing session stops working once that deployment is
+  live. Through the API, add `?deploy=auto` to have it deploy; without it the key waits for the next
+  deployment.
 
 ### What it needs
 
@@ -228,8 +230,9 @@ for, or to a page saying their account may not enter.
   their next sign-in; to take effect at once, **sign everyone out**. A change to the site's own
   rules takes effect at once when the site is deployed: every session was issued under the rules
   of its time, and a session issued under other rules sends its visitor to sign in again.
-- **Saving the site does not deploy it.** As for every site setting, a changed access rule reaches
-  the host with the next deployment.
+- **A changed access rule reaches the host when it is deployed.** The console deploys on save,
+  unless *Save without deploying* is used; the API deploys only with `?deploy=auto` (see
+  [deploying on save](managing-sites.md#deploying-on-save)).
 
 ### What it needs
 

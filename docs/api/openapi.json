@@ -1848,6 +1848,11 @@
           "createdBy": {
             "type": "string"
           },
+          "deploymentId": {
+            "description": "The deployment this request queued, when it was made with deploy=auto and changed what the host serves; absent otherwise.",
+            "format": "uuid",
+            "type": "string"
+          },
           "domain": {
             "type": "string"
           },
@@ -5052,6 +5057,17 @@
       },
       "post": {
         "operationId": "proxySite_create",
+        "parameters": [
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5227,6 +5243,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -5375,6 +5400,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -5417,6 +5451,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -5457,6 +5500,15 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -5646,6 +5698,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -5688,7 +5749,7 @@
     },
     "/api/v1/proxy-sites/{id}/sign-out-everyone": {
       "post": {
-        "description": "Replaces the site's gate key. Sessions signed with the old key stop working once the site is next deployed.",
+        "description": "Replaces the site's gate key. Sessions signed with the old key stop working once the site is next deployed; with deploy=auto, that is now.",
         "operationId": "proxySite_signOutEveryone",
         "parameters": [
           {
@@ -5697,6 +5758,15 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "auto: deploy in the same request when the change alters what the host serves (a name-only edit does not). Omitted, nothing is deployed, as before.",
+            "in": "query",
+            "name": "deploy",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -5723,7 +5793,7 @@
             "description": "Unauthorized"
           }
         },
-        "summary": "End every email sign-in session",
+        "summary": "End every gate sign-in session",
         "tags": [
           "Proxy sites"
         ]

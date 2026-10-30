@@ -9,6 +9,15 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 
 ## Unreleased
 
+- **Saving deploys, when the change needs it.** A saved change the host did not have yet looked like
+  one that did not work, so the console now deploys on save whenever the change alters what the host
+  serves: protection, users and passwords, routing, TLS, enabling, disabling, expiry, and signing
+  everyone out. A name-only edit deploys nothing. *Save without deploying* keeps a change for the
+  next deployment, to send several out together. Quick saves share one deployment, and a save made
+  while a deployment is already rendering is kept, with the site page showing it as not deployed.
+  The API is unchanged unless asked: add `?deploy=auto` to create, update, enable, disable, renew,
+  remove-expiry and sign-out-everyone, and the response carries the queued `deploymentId`
+  ([managing sites](docs/admin/managing-sites.md#deploying-on-save)).
 - **The site page says when saved changes are not deployed.** Saving never deploys, and a saved change
   the host does not have yet — a new user, a changed password, a narrower access rule — looked
   exactly like one that did not work. The page now shows a banner, with *Deploy now*, whenever the

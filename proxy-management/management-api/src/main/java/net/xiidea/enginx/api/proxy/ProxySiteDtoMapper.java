@@ -185,7 +185,8 @@ public class ProxySiteDtoMapper {
                 site.createdAt(),
                 site.updatedBy(),
                 site.updatedAt(),
-                site.version());
+                site.version(),
+                null);
     }
 
     public ProxySiteSummaryResponse toSummary(ProxySite site) {

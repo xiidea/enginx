@@ -2,8 +2,12 @@
   [title]="editing() ? 'Edit proxy site' : 'New proxy site'"
   subtitle="Configuration is generated from these fields. Raw NGINX directives are never accepted.">
   <a class="btn" routerLink="/sites">Cancel</a>
+  <button class="btn" type="button" [disabled]="saving()" (click)="save(false)"
+    title="Save now and deploy later, for example to send several edits out together">
+    {{ editing() ? 'Save without deploying' : 'Create without deploying' }}
+  </button>
   <button class="btn btn-primary" type="button" [disabled]="saving()" (click)="save()">
-    {{ saving() ? 'Saving…' : editing() ? 'Save changes' : 'Create site' }}
+    {{ saving() ? 'Saving…' : editing() ? 'Save and deploy' : 'Create and deploy' }}
   </button>
 </app-page-header>
 
