@@ -7,7 +7,11 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
-## Unreleased
+## 0.2.2
+
+Locations that route, public paths on protected sites, sign-ins in the audit trail, and VERIFY on
+pull hosts. Every change is additive: existing API clients, scripts and configuration keep working
+unchanged.
 
 - **Deleting a site takes it off its host.** Deleting used to leave the site served until the next
   deployment, which deploy-on-save in 0.2.1 had made easy to forget. The console now deploys when
@@ -39,6 +43,16 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 - **Patch releases may add features.** Non-breaking features now ship in 0.2.x; breaking changes
   wait for a minor release with an upgrade note ([versioning](docs/releases.md#versioning-and-compatibility)).
   The roadmap lists what is open, in that order ([backlog](docs/roadmap.md#backlog)).
+
+**Upgrading.** Agents first, then the management server and console, as always
+([production guide](docs/admin/production.md)).
+
+- Migration `004-location-settings` adds optional columns and two tables; it runs on start and only
+  adds.
+- **Deploy basic and identity-provider sites once after upgrading.** Their gate files now carry the
+  relay address, so the gate can report sign-ins; until they are deployed the site page shows
+  undeployed changes, and their sign-ins stay in the gate's log only.
+- Pull hosts verify deployments from agent 0.2.2; an older agent keeps the "skipped" note.
 
 ## 0.2.1
 
