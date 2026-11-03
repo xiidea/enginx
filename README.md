@@ -25,6 +25,7 @@ configuration is ever activated before `nginx -t` has accepted it.
 | [Configuration](docs/admin/configuration.md) | Every setting, the database schema, key management |
 | [Managing proxy sites](docs/admin/managing-sites.md) | Creating and deploying sites, expiry, verification, drift |
 | [Protected sites](docs/admin/protected-sites.md) | Putting a sign-in in front of a site: basic authentication, email codes, or the identity provider |
+| [Using the gate without the platform](docs/admin/standalone-gate.md) | Running the sign-in gate beside an NGINX you configure by hand; experimental |
 | [The agent](docs/admin/agent.md) | Running the node agent, and choosing how it reaches the platform |
 | [Certificates](docs/admin/certificates.md) | ACME, renewal, wildcards and DNS-01, agent certificates |
 | [Access control](docs/admin/access-control.md) | The permission model, and granting without over-granting |

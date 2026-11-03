@@ -15,6 +15,9 @@ needs them: ACME HTTP-01 challenges, so the site's certificate can still renew, 
 | `EMAIL_OTP` | Enters an allowed email address, then the code mailed to it | available |
 | `OIDC` | Signs in at the platform's identity provider, and is let in if the site allows them | available |
 
+The gate can also be run beside an NGINX the platform does not manage, configured by hand; that
+is experimental, and described in [Using the gate without the platform](standalone-gate.md).
+
 ## Requirements
 
 - **HTTPS with the redirect on.** A protected site must have SSL enabled *and* the HTTP to HTTPS

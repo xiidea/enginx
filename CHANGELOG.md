@@ -7,6 +7,13 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
+## Unreleased
+
+- **A guide to running the gate without the platform**, beside an NGINX configured by hand: a login
+  page or identity provider sign-in for a site the platform does not manage. Experimental, and
+  the site file format may change; the caveats are in the guide
+  ([standalone gate](docs/admin/standalone-gate.md)).
+
 ## 0.2.2
 
 Locations that route, public paths on protected sites, sign-ins in the audit trail, and VERIFY on
