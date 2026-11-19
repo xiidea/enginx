@@ -19,7 +19,7 @@ COPY frontend/ ./
 RUN npx ng build
 
 # ---- run ------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.30-alpine AS runtime
 
 # OCI labels, so `docker inspect` answers the version question without starting the container.
 ARG VERSION=dev

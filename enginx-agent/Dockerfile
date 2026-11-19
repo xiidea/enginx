@@ -26,7 +26,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 # ---- run ------------------------------------------------------------------
 # The agent ships in the same image as NGINX. It has to signal the NGINX process, and a process
 # in another container cannot be signalled, so co-location is a requirement of the design.
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.30-alpine AS runtime
 
 # OCI labels, so `docker inspect` answers the version question without starting the container.
 ARG VERSION=dev

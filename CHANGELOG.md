@@ -9,6 +9,13 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
 
 ## Unreleased
 
+- **Security: NGINX 1.30 in every image**, for
+  [CVE-2026-123633](https://nginx.org/en/security_advisories.html) (use-after-free in HTTP/2,
+  medium) and [CVE-2026-123007](https://nginx.org/en/security_advisories.html) (memory corruption
+  in HTTP/2 flow control, major), both fixed in 1.30.7. The agent image, which serves every site
+  over HTTP/2, and the console image moved from NGINX 1.27; the production Compose file's `edge`
+  and the self-managed guide's from 1.29. They track `nginx:1.30-alpine`, so a rebuild picks up
+  later stable fixes.
 - **A guide to running the gate without the platform**, beside an NGINX configured by hand: a login
   page or identity provider sign-in for a site the platform does not manage. Experimental, and
   the site file format may change; the caveats are in the guide

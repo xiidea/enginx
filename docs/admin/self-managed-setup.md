@@ -383,7 +383,7 @@ services:
   # console:80, and sets X-Forwarded-* so the API recovers the true client address. Any reverse
   # proxy does this; the platform only requires that ENGINX_TRUSTED_PROXIES above matches it.
   edge:
-    image: nginx:1.29-alpine
+    image: nginx:1.30-alpine
     restart: unless-stopped
     ports: ["443:443", "80:80"]
     volumes:
