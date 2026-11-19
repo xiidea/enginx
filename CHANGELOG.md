@@ -7,7 +7,10 @@ so a change pushed without one is still announced.
 Versions follow the policy in [`docs/releases.md`](docs/releases.md#versioning-and-compatibility):
 before 1.0, a minor release may break compatibility and says so here; a patch release never does.
 
-## Unreleased
+## 0.2.3
+
+A security release: NGINX 1.30.7 in every image, for two HTTP/2 vulnerabilities. Nothing else
+changes in the API, the configuration or the schema.
 
 - **Security: NGINX 1.30 in every image**, for
   [CVE-2026-123633](https://nginx.org/en/security_advisories.html) (use-after-free in HTTP/2,
@@ -20,6 +23,11 @@ before 1.0, a minor release may break compatibility and says so here; a patch re
   page or identity provider sign-in for a site the platform does not manage. Experimental, and
   the site file format may change; the caveats are in the guide
   ([standalone gate](docs/admin/standalone-gate.md)).
+
+**Upgrading.** Pull the new agent and console images, agents first, and restart them; a host that
+runs its own NGINX rather than the agent image should upgrade that NGINX to 1.30.7 or 1.31.9. If
+you run the `edge` from the production Compose file or the self-managed guide, update its image to
+`nginx:1.30-alpine` too.
 
 ## 0.2.2
 
